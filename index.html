@@ -774,8 +774,18 @@ function renderCloudSettings(){
   const body = document.getElementById("cloudBody");
   if(supabaseReady()){
     body.innerHTML = `
-      <div class="hint" style="margin:8px 0 10px;">Espace connecté. La connexion par GitHub, Google, Outlook ou e-mail est active, et vos données sont synchronisées sur tous vos appareils.</div>
-      <button class="btn line" id="cfgReset" style="padding:7px 12px;font-size:12px;">Déconnecter l'espace de synchronisation</button>`;
+      <div class="hint" style="margin:8px 0 10px;">Espace connecté (${esc(cfg.url)}). La connexion par GitHub, Google, Outlook ou e-mail est active, et vos données sont synchronisées sur tous vos appareils.</div>
+      <div class="row">
+        <button class="btn line" id="cfgEdit" style="padding:7px 12px;font-size:12px;">Modifier l'URL ou la clé</button>
+        <button class="btn line" id="cfgReset" style="padding:7px 12px;font-size:12px;">Déconnecter</button>
+      </div>`;
+    document.getElementById("cfgEdit").addEventListener("click", ()=>{
+      cfg = { url: "", key: "" };
+      localStorage.removeItem(CFG_KEY);
+      sb = null; session = null;
+      renderAll();
+      openAuthModal();
+    });
     document.getElementById("cfgReset").addEventListener("click", ()=>{
       cfg = { url: "", key: "" };
       localStorage.removeItem(CFG_KEY);
