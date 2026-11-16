@@ -125,6 +125,35 @@
   .chat .bub.user{align-self:flex-end; background:var(--raise); border:1px solid var(--line2); color:var(--ink);}
   .chat .bub.boss{align-self:flex-start; background:var(--surface); border:1px solid var(--line2); border-left:2px solid var(--signal); color:var(--dim);}
   .chat .bub .who{display:block; font-family:var(--mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); margin-bottom:4px;}
+  .viewtoggle{display:flex; border:1px solid var(--line2); border-radius:9px; overflow:hidden; margin-right:10px;}
+  .viewtoggle button{background:none; border:none; color:var(--faint); font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; padding:8px 12px; cursor:pointer;}
+  .viewtoggle button.on{background:var(--raise); color:var(--signal);}
+  .office{display:none; margin-bottom:14px;}
+  .office.show{display:block;}
+  .floor{background:var(--surface); border:1px solid var(--line2); border-radius:16px; padding:18px; position:relative; overflow:hidden;}
+  .floor::before{content:''; position:absolute; inset:0; background-image:radial-gradient(var(--line) 1px, transparent 1px); background-size:22px 22px; opacity:.5; pointer-events:none;}
+  .bosszone{display:flex; justify-content:center; margin-bottom:14px; position:relative;}
+  .desk{background:var(--raise); border:1px solid var(--line2); border-radius:12px; padding:10px 12px; position:relative; z-index:1;}
+  .desk.boss{width:min(360px,100%); border-color:var(--signal); box-shadow:0 0 0 1px rgba(198,245,66,.12);}
+  .desk .dtop{display:flex; align-items:center; gap:7px; margin-bottom:6px;}
+  .desk .dname{font-family:var(--disp); font-weight:600; font-size:13px; color:var(--ink);}
+  .desk .drole{font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); margin-left:auto; display:flex; align-items:center; gap:4px;}
+  .desk .drole svg{width:11px; height:11px;}
+  .desk .dhead{font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); display:flex; align-items:center; gap:4px; margin-left:auto;}
+  .desk .dhead svg{width:11px; height:11px;}
+  .desk .dscreen{height:44px; background:var(--bg); border:1px solid var(--line); border-radius:8px; display:grid; place-items:center; margin-bottom:6px;}
+  .desk .dscreen svg{width:16px; height:16px; color:var(--faint);}
+  .desk.busy .dscreen{border-color:var(--amber);}
+  .desk.busy .dscreen svg{color:var(--amber); animation:barpulse 1.2s ease-in-out infinite;}
+  .desk .dtask{font-family:var(--mono); font-size:9.5px; color:var(--faint); line-height:1.5; min-height:28px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;}
+  .desk .dbtns{position:absolute; top:8px; right:8px; display:none; gap:4px; z-index:2;}
+  .desk:hover .dbtns{display:flex;}
+  .desks{display:grid; grid-template-columns:repeat(auto-fill, minmax(175px,1fr)); gap:10px; margin-bottom:14px;}
+  .amenities{display:grid; grid-template-columns:repeat(auto-fit, minmax(230px,1fr)); gap:10px;}
+  .desk.amenity{cursor:pointer;}
+  .coffeeList{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;}
+  .coffeeList .cup{font-family:var(--mono); font-size:9.5px; color:var(--amber); border:1px dashed var(--line2); border-radius:8px; padding:4px 8px; display:inline-flex; align-items:center; gap:5px;}
+  .coffeeList .cup svg{width:10px; height:10px;}
   .queue{font-family:var(--mono); font-size:10.5px; color:var(--faint); line-height:1.6;}
   .agent .log{max-height:110px; font-size:10.5px;}
   .empty{
@@ -173,6 +202,10 @@
       <small>centre de contrôle</small>
     </div>
   </div>
+  <div class="viewtoggle">
+    <button id="vtOffice">Bureau</button>
+    <button id="vtList">Liste</button>
+  </div>
   <div class="chips">
     <span class="chip" id="chipMode"><span class="led"></span>simulation</span>
     <span class="chip" id="chipAuto"><span class="led"></span>autonome off</span>
@@ -214,8 +247,9 @@
       <div class="panel-head" id="hireHead">Embaucher un agent <span class="right" id="agentCount"></span></div>
       <div class="row">
         <input type="text" id="agentNameInput" placeholder="Nom (ex : Nova)">
-        <input type="text" id="agentRoleInput" placeholder="Spécialité (ex : rédaction)">
+        <select id="agentRoleSelect"></select>
       </div>
+      <input type="text" id="agentRoleCustom" placeholder="Précisez la spécialité..." style="display:none; margin-top:8px;">
       <div class="hint" id="agentHint" style="margin:6px 0 10px;"></div>
       <button class="btn wide" id="addAgentBtn"></button>
     </div>
@@ -249,6 +283,30 @@
   </div>
 
   <div>
+    <div class="office" id="officeView">
+      <div class="floor">
+        <div class="bosszone">
+          <div class="desk boss">
+            <div class="dtop"><span class="led idle" id="bossLed"></span><span class="dname">LE PATRON</span><span class="dhead" id="bossRole"></span></div>
+            <div class="dtask" id="bossStatus">prêt</div>
+            <div class="dtask" id="bossTask">Aucun objectif en distribution.</div>
+          </div>
+        </div>
+        <div class="desks" id="deskGrid"></div>
+        <div class="amenities">
+          <div class="desk amenity" id="pcDesk" title="Récupérer vos fichiers (livrables)">
+            <div class="dtop"><span class="dicon" id="pcIcon"></span><span class="dname">VOTRE PC</span><span class="dhead" id="pcCount"></span></div>
+            <div class="dscreen" id="pcScreen"></div>
+            <div class="dtask">Cliquez pour récupérer les fichiers produits par vos agents.</div>
+          </div>
+          <div class="desk amenity" id="coffeeDesk" title="Les agents en pause viennent ici">
+            <div class="dtop"><span class="dicon" id="coffeeIcon"></span><span class="dname">COIN CAFÉ</span><span class="dhead" id="coffeeCount"></span></div>
+            <div class="coffeeList" id="coffeeList"></div>
+            <div class="dtask" id="coffeeHint">Mettez un agent en pause : il vient se reposer ici.</div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="kpis">
       <div class="kpi"><b id="kpiAgents">0</b><span>Agents</span></div>
       <div class="kpi"><b id="kpiBusy">0</b><span>En cours</span></div>
@@ -307,6 +365,16 @@ add: P('<path d="M20.4142 10.5147C20.789 10.889 21.0003 11.4314 21.0004 12C21.00
   tasks: P('<path fill-rule="evenodd" clip-rule="evenodd" d="M12.0002 3.00012C13.4833 3.00013 14.7483 3.07262 15.8049 3.17883C18.5278 3.45259 20.5476 5.47159 20.8215 8.19446C20.9277 9.25118 21.0002 10.5168 21.0002 12.0001C21.0002 13.4832 20.9277 14.7482 20.8215 15.8048C20.5477 18.5279 18.5279 20.5476 15.8049 20.8214C14.7483 20.9276 13.4833 21.0001 12.0002 21.0001C10.5169 21.0001 9.25124 20.9277 8.19452 20.8214C5.47162 20.5475 3.45265 18.5278 3.17889 15.8048C3.07268 14.7482 3.00019 13.4832 3.00018 12.0001C3.00018 10.5168 3.07266 9.25118 3.17889 8.19446C3.4528 5.47171 5.47175 3.4527 8.19452 3.17883C9.25124 3.07259 10.5169 3.00012 12.0002 3.00012ZM17.6291 7.22278C17.1997 6.87551 16.5702 6.94195 16.2228 7.37122L10.4504 14.507L8.23651 12.2931L8.16034 12.2247C7.76757 11.9044 7.18856 11.927 6.82245 12.2931C6.43195 12.6836 6.43193 13.3166 6.82245 13.7072L9.03632 15.921C9.87617 16.7608 11.2591 16.6882 12.006 15.7648L17.7775 8.62903C18.1248 8.19971 18.0583 7.57014 17.6291 7.22278Z" fill="currentColor"/>'),
   trash: P('<path d="M14.876 10.2891C17.2815 10.2054 18.4841 10.1634 19.1094 10.876C19.7347 11.5886 19.5423 12.7465 19.1562 15.0625L18.835 16.9863C18.4359 19.3808 18.2367 20.5781 17.3975 21.2891C16.5582 22 15.3444 22 12.917 22H11.082C8.65486 22 7.44074 22 6.60156 21.2891C5.76256 20.5781 5.5631 19.3805 5.16406 16.9863L4.84375 15.0625C4.45778 12.7467 4.26459 11.5886 4.88965 10.876C5.51497 10.1633 6.71833 10.2054 9.12402 10.2891C10.0581 10.3216 11.0413 10.3428 12 10.3428C12.9587 10.3428 13.9418 10.3216 14.876 10.2891ZM8.5 12C7.94775 12 7.50001 12.4477 7.5 13V19C7.5 19.5523 7.94774 20 8.5 20C9.05215 19.9998 9.5 19.5522 9.5 19V13C9.49999 12.4478 9.05215 12.0002 8.5 12ZM12 12C11.4477 12 11 12.4477 11 13V19C11 19.5523 11.4477 20 12 20C12.5522 19.9998 13 19.5522 13 19V13C13 12.4478 12.5521 12.0002 12 12ZM15.5 12C14.9477 12 14.5 12.4477 14.5 13V19C14.5 19.5523 14.9477 20 15.5 20C16.0522 19.9998 16.5 19.5522 16.5 19V13C16.5 12.4478 16.0521 12.0002 15.5 12ZM12 2C13.2752 2 14.271 2.27648 14.9707 2.85449C15.6924 3.45088 15.9479 4.2418 15.9922 4.93652C16.0162 5.31286 15.9793 5.67654 15.9189 6H18.6494C19.3953 6.00014 19.9999 6.60474 20 7.35059C20 8.01305 19.5206 8.57368 18.8623 8.64746C17.5465 8.79493 15.1509 9 12 9C8.8491 9 6.4535 8.79493 5.1377 8.64746C4.47935 8.57368 4 8.01305 4 7.35059C4.00014 6.60474 4.60474 6.00014 5.35059 6H8.08105C8.02072 5.67654 7.98384 5.31286 8.00781 4.93652C8.05208 4.2418 8.30763 3.45088 9.0293 2.85449C9.729 2.27648 10.7248 2 12 2ZM12 4C10.9822 4 10.5121 4.22356 10.3037 4.39551C10.1178 4.54906 10.0234 4.75842 10.0039 5.06348C9.9847 5.36497 10.0475 5.70063 10.1367 6H13.8633C13.9525 5.70063 14.0153 5.36497 13.9961 5.06348C13.9766 4.75842 13.8822 4.54906 13.6963 4.39551C13.4879 4.22356 13.0178 4 12 4Z" fill="currentColor" />'),
   user: P('<path d="M17 8C17 10.7614 14.7614 13 12 13C9.23858 13 7 10.7614 7 8C7 5.23858 9.23858 3 12 3C14.7614 3 17 5.23858 17 8Z" fill="currentColor"/><path d="M4.34542 18.5821C4.39658 18.224 4.42215 18.0449 4.43934 17.9545C4.8491 15.7994 6.4989 14.5405 8.68577 14.7142C8.77748 14.7215 9.03624 14.7541 9.55376 14.8193C10.4048 14.9265 11.2587 15 12 15C12.7413 15 13.5952 14.9265 14.4462 14.8193C14.9638 14.7541 15.2225 14.7215 15.3142 14.7142C17.5011 14.5405 19.1509 15.7994 19.5607 17.9545C19.5778 18.0449 19.6034 18.224 19.6546 18.5821C19.6722 18.7056 19.681 18.7673 19.6857 18.8178C19.7892 19.9495 18.9302 20.9399 17.7953 20.9974C17.7447 21 17.6823 21 17.5575 21H6.4425C6.31772 21 6.25533 21 6.2047 20.9974C5.06979 20.9399 4.21082 19.9495 4.31433 18.8178C4.31895 18.7673 4.32777 18.7056 4.34542 18.5821Z" fill="currentColor"/>'),
+  code: P('<path d="M7.89844 4.00888C8.41797 3.90461 8.98572 4.02996 9.45801 4.34482C9.93011 4.65974 10.2637 5.13577 10.3672 5.65537C10.4715 6.17558 10.3378 6.6978 10.0127 7.11826C9.93916 7.21355 9.86552 7.3091 9.79199 7.40439C8.60774 8.93905 7.42354 10.4742 6.23926 12.0089C7.42347 13.5434 8.60781 15.0788 9.79199 16.6134C9.86545 16.7086 9.93924 16.8043 10.0127 16.8995C10.3376 17.32 10.4716 17.8422 10.3672 18.3624C10.2636 18.882 9.93018 19.3581 9.45801 19.6729C8.9858 19.9877 8.41788 20.1131 7.89844 20.0089C7.37808 19.9052 6.94777 19.5799 6.68457 19.1183C6.62496 19.0138 6.5645 18.9092 6.50488 18.8048C5.42979 16.9218 4.35439 15.0374 3.2793 13.1544C3.21976 13.0501 3.16012 12.9452 3.10059 12.8409C2.99425 12.6543 2.93402 12.4428 2.91895 12.2257V11.7901C2.9341 11.5735 2.99449 11.3632 3.10059 11.1769C3.16018 11.0725 3.21971 10.9678 3.2793 10.8634C4.35444 8.98025 5.42974 7.09611 6.50488 5.21298C6.56456 5.10847 6.6249 5.00402 6.68457 4.89951C6.94774 4.43754 7.37788 4.1126 7.89844 4.00888Z" fill="currentColor"/> <path d="M13.9395 4.34482C14.4118 4.02991 14.9794 3.90451 15.499 4.00888C16.0195 4.11266 16.4498 4.43761 16.7129 4.89951C16.7725 5.0039 16.833 5.10859 16.8926 5.21298C17.9677 7.09599 19.0431 8.98037 20.1182 10.8634C20.1777 10.9676 20.2374 11.0726 20.2969 11.1769C20.4381 11.4251 20.4979 11.7166 20.4785 12.0079C20.4981 12.2997 20.4385 12.5923 20.2969 12.8409C20.2373 12.9452 20.1777 13.0501 20.1182 13.1544C19.0431 15.0374 17.9677 16.9217 16.8926 18.8048C16.833 18.9092 16.7725 19.0138 16.7129 19.1183C16.4497 19.5799 16.0193 19.9052 15.499 20.0089C14.9796 20.1132 14.4117 19.9876 13.9395 19.6729C13.4673 19.3582 13.1339 18.8819 13.0303 18.3624C12.9258 17.8421 13.0598 17.3201 13.3848 16.8995C13.4583 16.8043 13.532 16.7086 13.6055 16.6134C14.7897 15.0788 15.974 13.5435 17.1582 12.0089C15.9739 10.4743 14.7897 8.93902 13.6055 7.40439C13.532 7.3092 13.4582 7.21345 13.3848 7.11826C13.0597 6.69783 12.9261 6.17556 13.0303 5.65537C13.1338 5.13567 13.4672 4.65974 13.9395 4.34482Z" fill="currentColor"/>'),
+  search: P('<path fill-rule="evenodd" clip-rule="evenodd" d="M10 3C13.866 3 17 6.13401 17 10C17 11.591 16.4674 13.0568 15.5732 14.2324L19.6514 17.7803C20.9315 18.8943 20.1433 21 18.4463 21C17.8908 20.9999 17.3649 20.7481 17.0166 20.3154L13.5625 16.0244C12.5186 16.643 11.3013 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3ZM10 6C7.79086 6 6 7.79086 6 10C6 12.2091 7.79086 14 10 14C12.2091 14 14 12.2091 14 10C14 7.79086 12.2091 6 10 6Z" fill="currentColor"/>'),
+  pen: P('<path d="M12 5.42858C13.8278 5.42858 15.1586 5.45018 16.0338 5.47186C16.8865 5.49298 18 5.32502 18 4.47205C18 4.31594 17.9684 4.17836 17.919 4.05863C17.697 3.52049 17.045 3.36906 16.4669 3.30076C15.627 3.20154 14.1608 3.08075 12 3.08075C9.83921 3.08075 8.37298 3.20154 7.5331 3.30076C6.95497 3.36906 6.30302 3.52049 6.08097 4.05863C6.03157 4.17836 6 4.31594 6 4.47205C6 5.32502 7.11353 5.49298 7.96623 5.47186C8.84135 5.45018 10.1722 5.42858 12 5.42858Z" fill="currentColor"/> <path d="M12 7.42857C14.5892 7.42857 15.8838 7.42873 16.4725 7.78436C16.665 7.90068 16.7339 7.9537 16.8948 8.10831C17.3868 8.58096 17.5762 9.53652 17.9554 11.1197L18.6656 14.0819C18.951 15.2733 19.0929 15.8691 18.9334 16.4337C18.7739 16.9984 18.3377 17.4429 17.4646 18.3308L15.5074 20.32C15.4644 20.3638 15.422 20.4069 15.3801 20.4495C14.5946 21.2479 14.2018 21.6472 13.7049 21.4437C13.2081 21.2403 13.2081 20.6551 13.2081 19.4848V16.5894C13.9293 16.1867 14.4161 15.4373 14.4161 14.5763C14.4161 13.2908 13.3343 12.2484 12 12.2484C10.6657 12.2484 9.58395 13.2907 9.58386 14.5763C9.58386 15.4374 10.0706 16.1867 10.7919 16.5894V19.4848C10.7919 20.6558 10.7919 21.2413 10.2951 21.4448C9.79824 21.6482 9.40528 21.2489 8.61938 20.4501C8.57727 20.4073 8.53462 20.364 8.49141 20.32L6.53537 18.3308C5.66229 17.4429 5.22612 16.9984 5.06657 16.4337C4.90709 15.8691 5.04901 15.2733 5.33438 14.0819L6.04459 11.1197C6.42377 9.53653 6.61322 8.58096 7.10519 8.10831C7.26608 7.95375 7.33502 7.90066 7.52754 7.78436C8.11627 7.42878 9.41092 7.42857 12 7.42857Z" fill="currentColor"/>'),
+  palette: P('<path fill-rule="evenodd" clip-rule="evenodd" d="M12.2432 3.85718C17.3475 3.85745 22.5648 8.07142 20.5615 12.8572C19.1729 16.1744 14.1433 14.7708 12.7051 16.3572C11.0115 18.2256 15.4772 21.8572 9.93164 21.8572C5.10708 21.857 3 17.8276 3 12.8572C3 7.88661 7.13857 3.85718 12.2432 3.85718ZM8 13.8572C6.89543 13.8572 6 14.7526 6 15.8572C6 16.9617 6.89543 17.8572 8 17.8572C9.10457 17.8572 10 16.9617 10 15.8572C10 14.7526 9.10457 13.8572 8 13.8572ZM9 7.85718C7.89543 7.85718 7 8.75261 7 9.85718C7 10.9617 7.89543 11.8572 9 11.8572C10.1046 11.8572 11 10.9617 11 9.85718C11 8.75261 10.1046 7.85718 9 7.85718ZM15 6.85718C13.8954 6.85718 13 7.75261 13 8.85718C13 9.96175 13.8954 10.8572 15 10.8572C16.1046 10.8572 17 9.96175 17 8.85718C17 7.75261 16.1046 6.85718 15 6.85718Z" fill="currentColor"/>'),
+  newspaper: P('<path fill-rule="evenodd" clip-rule="evenodd" d="M5.95996 4.79896C6.34982 4.3725 7.02326 4.37816 7.40527 4.81166L9.33301 7.00013L10.5215 5.67494C11.2219 4.89377 11.5725 4.50308 12.0215 4.50502C12.4703 4.50723 12.8173 4.90068 13.5107 5.68763L14.667 7.00013L16.6318 4.80775C17.0189 4.37639 17.6946 4.37663 18.082 4.80775C19.3668 6.23734 20.2053 8.01318 20.4463 9.92006C20.7065 11.9791 21 14.6091 21 16.0001C21 16.6288 20.9403 17.1944 20.8506 17.6886C20.7087 18.4699 20.6372 18.861 19.9609 19.5275C19.2848 20.1938 18.7378 20.2856 17.6436 20.4679C16.0815 20.7282 13.9761 21.0001 12 21.0001C10.0239 21.0001 7.91847 20.7282 6.35645 20.4679C5.2622 20.2856 4.71517 20.1938 4.03906 19.5275C3.36282 18.861 3.29127 18.4699 3.14941 17.6886C3.0597 17.1944 3.00002 16.6288 3 16.0001C3 14.6168 3.2897 12.0081 3.54883 9.95424C3.79212 8.0261 4.64872 6.23338 5.95996 4.79896ZM7.59961 10.0001C7.48645 10.0001 7.30124 9.9977 7.1377 10.0197C6.94511 10.0456 6.64151 10.1203 6.38086 10.381C6.12034 10.6416 6.04543 10.9453 6.01953 11.1378C5.99761 11.3013 5.99999 11.4867 6 11.5997V14.4005C5.99999 14.5137 5.99759 14.6991 6.01953 14.8624C6.04547 15.055 6.12039 15.3588 6.38086 15.6193C6.64148 15.8798 6.94516 15.9547 7.1377 15.9806C7.30123 16.0026 7.48647 16.0001 7.59961 16.0001H10.4004C10.5135 16.0001 10.6988 16.0026 10.8623 15.9806C11.0548 15.9547 11.3585 15.8798 11.6191 15.6193C11.8797 15.3587 11.9545 15.055 11.9805 14.8624C12.0024 14.6991 12 14.5137 12 14.4005V11.5997C12 11.4867 12.0024 11.3013 11.9805 11.1378C11.9546 10.9453 11.8796 10.6416 11.6191 10.381C11.3585 10.1204 11.0549 10.0456 10.8623 10.0197C10.6987 9.9977 10.5135 10.0001 10.4004 10.0001H7.59961ZM15 14.0001C14.4478 14.0002 14 14.4479 14 15.0001C14.0002 15.5522 14.4479 16.0001 15 16.0001H17C17.5522 16.0001 17.9998 15.5522 18 15.0001C18 14.4479 17.5523 14.0001 17 14.0001H15ZM15 10.0001C14.4478 10.0002 14 10.4479 14 11.0001C14.0002 11.5522 14.4479 12.0001 15 12.0001H17C17.5522 12.0001 17.9998 11.5522 18 11.0001C18 10.4479 17.5523 10.0001 17 10.0001H15Z" fill="currentColor"/>'),
+  'piggy-bank': P('<path d="M17.0908 4.4668C17.7958 4.21474 18.441 4.85524 18.2578 5.58106C18.0835 6.27109 17.8653 7.13679 17.6279 8.07617C17.6231 8.0952 17.6272 8.1156 17.6406 8.12989C18.0533 8.56836 18.3874 9.08147 18.6211 9.64649C18.7627 9.98855 19.1298 10.1924 19.5 10.1924C20.9479 10.1926 21.9465 11.3419 21.9912 12.7891C21.9968 12.9719 22 13.1674 22 13.374C22 13.5804 21.9968 13.7753 21.9912 13.958C21.9468 15.4055 20.9481 16.5544 19.5 16.5547C19.3229 16.5547 19.152 16.5378 18.9893 16.5049C18.8524 16.4772 18.7138 16.5573 18.6787 16.6924C18.5933 17.0236 18.4364 17.3119 18.2285 17.5527C18.05 17.7595 17.949 18.0345 18.0215 18.2979C18.5139 20.0879 17.1669 21.8559 15.3105 21.8564C14.0447 21.8564 12.9344 21.0105 12.5986 19.79L12.4932 19.4111C12.3715 18.9703 11.9661 18.6694 11.5088 18.6738C11.3425 18.6755 11.1729 18.6758 11 18.6758C10.8269 18.6758 10.6567 18.6755 10.4902 18.6738C10.0323 18.6694 9.62697 18.9714 9.50586 19.4131L9.40234 19.79C9.06662 21.0104 7.95609 21.8562 6.69043 21.8564C4.83374 21.8563 3.48704 20.0881 3.97949 18.2979C4.0513 18.0345 3.94878 17.7596 3.77051 17.5527C3.56292 17.3118 3.40758 17.0233 3.32227 16.6924C3.14762 16.0147 3.00004 15.091 3 13.9043C3 13.7439 3.00272 13.5874 3.00781 13.4365C3.09292 10.923 5.26051 9.36118 7.77148 9.21875C8.16278 9.19659 8.58524 9.17829 9.03906 9.16407C9.39561 9.15289 9.71503 8.95175 9.92188 8.66114C10.6762 7.60054 11.8344 6.84682 13.1719 6.62403C13.4501 6.57769 13.7056 6.43852 13.9062 6.24024C14.7249 5.43124 16.0482 4.83963 17.0908 4.4668ZM9 11.2539C8.31464 11.2539 7.76906 11.2704 7.35449 11.291C6.68708 11.3242 6.00024 11.6454 6 12.3135C6 12.9818 6.68696 13.3037 7.35449 13.3369C7.76906 13.3575 8.31465 13.374 9 13.374C9.68535 13.374 10.2309 13.3575 10.6455 13.3369C11.313 13.3037 12 12.9818 12 12.3135C11.9998 11.6454 11.3129 11.3242 10.6455 11.291C10.2309 11.2704 9.68536 11.2539 9 11.2539Z" fill="currentColor"/>'),
+  'text-bubble': P('<path fill-rule="evenodd" clip-rule="evenodd" d="M12.5003 3C12.9251 3 13.3309 3.00598 13.7181 3.01758C17.8214 3.14057 20.8588 6.17892 20.9817 10.2822C20.9933 10.6694 21.0003 11.0752 21.0003 11.5C21.0003 11.9248 20.9933 12.3306 20.9817 12.7178C20.8588 16.8211 17.8214 19.8594 13.7181 19.9824C13.3309 19.994 12.9251 20 12.5003 20C12.0754 20 11.6688 19.994 11.2815 19.9824C10.5767 19.9613 9.90317 19.8532 9.2708 19.6689C8.7758 19.525 8.1667 19.6887 7.68681 19.877C7.37512 19.9992 6.96512 20.1196 6.44169 20.2734C5.14068 20.6557 4.48998 20.8465 4.09404 20.5645C4.00374 20.5001 3.92405 20.4213 3.85966 20.3311C3.57739 19.9351 3.76928 19.2837 4.15166 17.9824C4.3002 17.4769 4.41786 17.0766 4.53544 16.7686C4.69208 16.3581 4.74954 15.867 4.58427 15.46C4.24483 14.6243 4.04735 13.7016 4.01787 12.7178C4.00627 12.3306 4.00029 11.9248 4.00029 11.5C4.00029 11.0752 4.00627 10.6694 4.01787 10.2822C4.14084 6.17899 7.17834 3.14066 11.2815 3.01758C11.6688 3.00597 12.0754 3 12.5003 3ZM7.50029 10.5C6.67186 10.5 6.00029 11.1716 6.00029 12C6.00029 12.8284 6.67186 13.5 7.50029 13.5C8.32857 13.4998 9.00029 12.8283 9.00029 12C9.00029 11.1717 8.32857 10.5002 7.50029 10.5ZM12.5003 10.5C11.6719 10.5 11.0003 11.1716 11.0003 12C11.0003 12.8284 11.6719 13.5 12.5003 13.5C13.3286 13.4998 14.0003 12.8283 14.0003 12C14.0003 11.1717 13.3286 10.5002 12.5003 10.5ZM17.5003 10.5C16.6719 10.5 16.0003 11.1716 16.0003 12C16.0003 12.8284 16.6719 13.5 17.5003 13.5C18.3286 13.4998 19.0003 12.8283 19.0003 12C19.0003 11.1717 18.3286 10.5002 17.5003 10.5Z" fill="currentColor"/>'),
+  pie: P('<path d="M11 12C11 12.5523 11.4477 13 12 13H16.4767C18.5939 13 19.6525 13 20.2135 14.0743C20.7744 15.1485 20.3125 15.8119 19.3886 17.1385C17.763 19.4726 15.0602 21 12 21C7.02944 21 3 16.9706 3 12C3 8.93978 4.52746 6.23701 6.86153 4.61147C8.18817 3.68755 8.85149 3.22559 9.92574 3.78655C11 4.3475 11 5.4061 11 7.5233V12Z" fill="currentColor"/> <path d="M13 7.24725C13 5.47046 13 4.58207 13.8229 3.98301C13.935 3.90141 14.159 3.78005 14.2886 3.73073C15.2399 3.36867 15.7964 3.73157 16.9094 4.45736C17.9596 5.14221 18.8578 6.04046 19.5427 7.09067C20.2685 8.20367 20.6314 8.76016 20.2693 9.71145C20.22 9.84102 20.0986 10.065 20.017 10.1771C19.418 11 18.5296 11 16.7528 11C15.1064 11 14.2832 11 13.7295 10.5447C13.6295 10.4624 13.5377 10.3706 13.4554 10.2705C13 9.71687 13 8.89366 13 7.24725Z" fill="currentColor"/>'),
+  folder: P('<path d="M18.2951 12C19.7572 12 20.4886 12.0001 20.9132 12.373C21.1023 12.5392 21.247 12.7507 21.3331 12.9873C21.5261 13.5183 21.2604 14.1996 20.7296 15.5615C20.0195 17.3837 19.6643 18.2954 19.005 18.915C18.7039 19.198 18.3604 19.4325 17.9874 19.6104C17.1707 19.9998 16.1923 20 14.2365 20H9.83216C7.88742 20 6.91479 20.0001 6.10462 19.6182C5.68919 19.4222 5.31062 19.1555 4.98548 18.8311C4.35134 18.1983 4.02084 17.2832 3.36146 15.4531C2.89275 14.1522 2.65852 13.5012 2.83997 12.9941C2.93109 12.7397 3.0895 12.5147 3.29798 12.3428C3.71355 12.0002 4.40527 12 5.78822 12H18.2951Z" fill="currentColor"/> <path d="M8.70033 4C9.18415 4 9.42625 4.00031 9.64661 4.05078C10.0597 4.14544 10.4322 4.36852 10.7101 4.68848C10.8584 4.8592 10.9725 5.07288 11.2003 5.5C11.428 5.92693 11.5414 6.14083 11.6896 6.31152C11.9674 6.63143 12.3401 6.85454 12.7531 6.94922C12.9735 6.99971 13.2162 7 13.7003 7H17.0001C18.6569 7.00011 20.0001 8.34321 20.0001 10H4.00013V8.57129C4.00013 7.10682 4.00001 6.37442 4.25013 5.80078C4.55276 5.10714 5.10631 4.55267 5.79994 4.25C6.37366 3.99969 7.1065 4 8.57142 4H8.70033Z" fill="currentColor"/>'),
+  cutlery: P('<path d="M8.625 11.4706L9.48621 18.7655C9.6266 19.9548 8.69751 21 7.5 21C6.30249 21 5.3734 19.9548 5.51379 18.7655L6.375 11.4706C6.02675 11.4706 5.85262 11.4706 5.70595 11.4561C4.28162 11.3159 3.15473 10.189 3.01445 8.76464C3 8.61797 3 8.44384 3 8.09559V4.125C3 3.50368 3.50368 3 4.125 3C4.74632 3 5.25 3.50368 5.25 4.125V7.73162C5.25 8.04228 5.50184 8.29412 5.8125 8.29412C6.12316 8.29412 6.375 8.04228 6.375 7.73162V4.125C6.375 3.50368 6.87868 3 7.5 3C8.12132 3 8.625 3.50368 8.625 4.125V7.73162C8.625 8.04228 8.87684 8.29412 9.1875 8.29412C9.49816 8.29412 9.75 8.04228 9.75 7.73162V4.125C9.75 3.50368 10.2537 3 10.875 3C11.4963 3 12 3.50368 12 4.125V8.09559C12 8.44384 12 8.61797 11.9856 8.76464C11.8453 10.189 10.7184 11.3159 9.29405 11.4561C9.14738 11.4706 8.97325 11.4706 8.625 11.4706Z" fill="currentColor"/> <path d="M20 18.9036C20 18.9931 20 19.0378 19.9986 19.0757C19.959 20.1208 19.1208 20.959 18.0757 20.9986C18.0378 21 17.9931 21 17.9036 21C17.7915 21 17.7354 21 17.6916 20.9981C16.4579 20.9439 15.5676 19.7957 15.8224 18.5874C15.8314 18.5444 15.8454 18.4901 15.8733 18.3815L17 14C17 14 14 12.8143 14 8.65714C14 6.29124 15.9434 4.78597 17.6181 3.92804C18.5681 3.44135 19.0431 3.19801 19.5216 3.49048C20 3.78294 20 4.37581 20 5.56155V18.9036Z" fill="currentColor"/>'),
 
 };
 function icon(name){
@@ -727,17 +795,8 @@ function buildCard(a){
     <div class="log agentLog"></div>`;
   el.querySelector(".name").textContent = a.name;
   el.querySelector(".role").textContent = a.role || "polyvalent";
-  el.querySelector(".removeBtn").addEventListener("click", ()=>{
-    state.agents = state.agents.filter(x => x.id !== a.id);
-    cards.delete(a.id);
-    logGlobal("<b>" + esc(a.name) + "</b> a quitté l'équipe.", "Système");
-    renderAgents(); save();
-  });
-  el.querySelector(".pauseBtn").addEventListener("click", ()=>{
-    if(a.status === "paused") a.status = a.currentTask ? "busy" : "idle";
-    else a.status = "paused";
-    updateDynamicUI(); save();
-  });
+  el.querySelector(".removeBtn").addEventListener("click", ()=> removeAgent(a));
+  el.querySelector(".pauseBtn").addEventListener("click", ()=> togglePause(a));
   el.querySelector(".directForm").addEventListener("submit", e=>{
     e.preventDefault();
     const inp = e.target.querySelector("input");
@@ -769,7 +828,21 @@ function renderAgents(){
     return;
   }
   for(const a of state.agents) grid.appendChild(cards.get(a.id) || buildCard(a));
+  renderOffice();
   updateDynamicUI();
+}
+
+function togglePause(a){
+  if(a.status === "paused") a.status = a.currentTask ? "busy" : "idle";
+  else a.status = "paused";
+  logGlobal("<b>" + esc(a.name) + "</b> " + (a.status === "paused" ? "part se reposer au coin café." : "reprend le travail."), "Système");
+  updateDynamicUI(); save();
+}
+function removeAgent(a){
+  state.agents = state.agents.filter(x => x.id !== a.id);
+  cards.delete(a.id);
+  logGlobal("<b>" + esc(a.name) + "</b> a quitté l'équipe.", "Système");
+  renderAgents(); save();
 }
 
 function updateDynamicUI(){
@@ -791,6 +864,7 @@ function updateDynamicUI(){
     el.querySelector(".queue").textContent = a.queue.length ? "⏳ " + a.queue.length + " en attente : " + a.queue.join(" • ") : "";
     el.querySelector(".agentLog").innerHTML = a.log.map(l => "<div><span class='t'>[" + l.t + "]</span> " + esc(l.msg) + "</div>").join("");
   }
+  updateOffice();
 }
 
 function renderActivity(){
@@ -1074,10 +1148,10 @@ document.getElementById("addAgentBtn").addEventListener("click", ()=>{
   if(state.agents.length >= MAX_AGENTS) return;
   const names = ["Nova","Atlas","Zéphyr","Orion","Luna","Vega","Comet","Echo","Iris","Juno"];
   const name = document.getElementById("agentNameInput").value.trim() || names[state.agents.length % names.length] + "-" + (state.agents.length + 1);
-  const role = document.getElementById("agentRoleInput").value.trim();
+  const role = (roleSelect.value === "autre" ? document.getElementById("agentRoleCustom").value.trim() : roleSelect.value) || "polyvalent";
   state.agents.push({ id: uid(), name, role, status: "idle", currentTask: null, queue: [], log: [] });
   document.getElementById("agentNameInput").value = "";
-  document.getElementById("agentRoleInput").value = "";
+  document.getElementById("agentRoleCustom").value = "";
   logGlobal("<b>" + esc(name) + "</b> a rejoint l'équipe" + (role ? " (spécialité : " + esc(role) + ")" : "") + ".", "Système");
   renderAgents(); save();
 });
@@ -1112,6 +1186,102 @@ document.getElementById("speedSelect").addEventListener("change", e=>{
   state.speed = parseFloat(e.target.value); save();
 });
 
+/* ================= spécialités & bureau virtuel ================= */
+const SPECIALTIES = [
+  { value: "polyvalent", icon: "sparkles" },
+  { value: "code", icon: "code" },
+  { value: "recherche web", icon: "search" },
+  { value: "rédaction", icon: "pen" },
+  { value: "marketing", icon: "newspaper" },
+  { value: "ventes", icon: "piggy-bank" },
+  { value: "support client", icon: "text-bubble" },
+  { value: "analyse de données", icon: "pie" },
+  { value: "traduction", icon: "globe" },
+  { value: "design", icon: "palette" },
+  { value: "autre", icon: "gears" }
+];
+const roleSelect = document.getElementById("agentRoleSelect");
+roleSelect.innerHTML = SPECIALTIES.map(s => '<option value="' + s.value + '">' + s.value.charAt(0).toUpperCase() + s.value.slice(1) + '</option>').join("");
+roleSelect.addEventListener("change", ()=>{
+  document.getElementById("agentRoleCustom").style.display = roleSelect.value === "autre" ? "" : "none";
+});
+
+const deskRefs = new Map();
+function specialtyIcon(role){
+  const s = SPECIALTIES.find(x => x.value === (role || "polyvalent"));
+  return s ? s.icon : "gears";
+}
+function renderOffice(){
+  const grid = document.getElementById("deskGrid");
+  for(const [id, ref] of Array.from(deskRefs)){
+    if(!state.agents.find(a => a.id === id)){ ref.el.remove(); deskRefs.delete(id); }
+  }
+  for(const a of state.agents){
+    if(deskRefs.has(a.id)) continue;
+    const el = document.createElement("div");
+    el.className = "desk agent";
+    el.innerHTML = `
+      <div class="dbtns">
+        <button class="iconbtn dPause" title="Pause / reprise">${icon("pause")}</button>
+        <button class="iconbtn dRemove" title="Retirer l'agent">${icon("cross")}</button>
+      </div>
+      <div class="dtop"><span class="led idle"></span><span class="dname"></span><span class="drole"></span></div>
+      <div class="dscreen"></div>
+      <div class="dtask"></div>
+      <div class="bar"><div class="fill"></div></div>`;
+    el.querySelector(".dname").textContent = a.name;
+    el.querySelector(".drole").innerHTML = icon(specialtyIcon(a.role)) + " " + esc(a.role || "polyvalent");
+    el.querySelector(".dscreen").innerHTML = icon(specialtyIcon(a.role));
+    el.querySelector(".dPause").addEventListener("click", ()=> togglePause(a));
+    el.querySelector(".dRemove").addEventListener("click", ()=> removeAgent(a));
+    deskRefs.set(a.id, { el, task: el.querySelector(".dtask"), fill: el.querySelector(".fill"), led: el.querySelector(".led") });
+    grid.appendChild(el);
+  }
+  updateOffice();
+}
+function updateOffice(){
+  for(const a of state.agents){
+    const ref = deskRefs.get(a.id);
+    if(!ref) continue;
+    ref.el.classList.toggle("busy", a.status === "busy");
+    ref.led.className = "led " + a.status;
+    ref.task.textContent = a.currentTask ? "▸ " + a.currentTask.text : "";
+    let p = 0;
+    if(a.status === "busy" && a.currentTask){
+      if(a.currentTask.real){ p = 100; ref.fill.classList.add("pulse"); }
+      else p = Math.min(100, ((Date.now() - a.currentTask.startedAt) / 1000 / a.currentTask.duration) * 100);
+    }
+    if(!a.currentTask || !a.currentTask.real) ref.fill.classList.remove("pulse");
+    ref.fill.style.width = p.toFixed(1) + "%";
+  }
+  document.getElementById("bossLed").className = "led " + (bossBusy ? "busy" : "idle");
+  document.getElementById("bossStatus").textContent = bossBusy ? "organise le travail..." : "prêt — donnez-lui un objectif ou parlez-lui dans le chat.";
+  document.getElementById("bossTask").textContent = bossQueue.length ? bossQueue.length + " tâche(s) en distribution, prochaine : " + bossQueue[0] : "Aucun objectif en distribution.";
+  const done = (state.results || []).filter(r => r.status === "done").length;
+  document.getElementById("pcCount").innerHTML = icon("folder") + " " + done + " livrable" + (done > 1 ? "s" : "");
+  const paused = state.agents.filter(a => a.status === "paused");
+  document.getElementById("coffeeCount").innerHTML = icon("cutlery") + " " + (paused.length ? paused.length + " en pause" : "vide");
+  document.getElementById("coffeeList").innerHTML = paused.map(a => '<span class="cup">' + icon("pause") + " " + esc(a.name) + '</span>').join("");
+  document.getElementById("coffeeHint").style.display = paused.length ? "none" : "";
+}
+document.getElementById("pcIcon").innerHTML = icon("folder");
+document.getElementById("pcScreen").innerHTML = icon("folder");
+document.getElementById("coffeeIcon").innerHTML = icon("cutlery");
+document.getElementById("bossRole").innerHTML = icon("crown") + " direction";
+document.getElementById("pcDesk").addEventListener("click", ()=>{ renderResults(); resultsOverlay.classList.add("show"); });
+
+let viewMode = "office";
+try{ viewMode = localStorage.getItem("ac_view") || "office"; }catch(e){}
+function applyView(){
+  document.getElementById("officeView").classList.toggle("show", viewMode === "office");
+  document.querySelector(".agents-grid").style.display = viewMode === "office" ? "none" : "";
+  document.getElementById("vtOffice").classList.toggle("on", viewMode === "office");
+  document.getElementById("vtList").classList.toggle("on", viewMode !== "office");
+  try{ localStorage.setItem("ac_view", viewMode); }catch(e){}
+}
+document.getElementById("vtOffice").addEventListener("click", ()=>{ viewMode = "office"; applyView(); });
+document.getElementById("vtList").addEventListener("click", ()=>{ viewMode = "list"; applyView(); });
+
 /* ================= démarrage ================= */
 initSupabase();
 if(!session) loadLocal();
@@ -1119,6 +1289,7 @@ if(!state.results) state.results = [];
 renderAll();
 logGlobal("centre de contrôle démarré" + (supabaseReady() ? " (synchro prête)." : " en mode local."), "Système");
 if(session) startEngine(); else openAuthModal();
+applyView();
 (function(){
   const h = new URLSearchParams(location.hash.slice(1));
   const q = new URLSearchParams(location.search);
