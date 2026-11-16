@@ -4,6 +4,7 @@ import { icon } from "./icons.js";
 import { initAuth, openAuthModal, signOut, initAuthUI } from "./auth.js";
 import { applyTheme, renderSettings } from "./settings.js";
 import { renderDashboard } from "./dashboard.js";
+import { renderPatron } from "./patron.js";
 import { renderAssistants, openAssistantEditor, ensurePresets as ensureAssistantPresets } from "./assistants.js";
 import { renderConversations, renderHistory } from "./chat.js";
 import { renderSkills, ensurePresets as ensureSkillPresets } from "./skills.js";
@@ -13,6 +14,7 @@ import { viewHead, bindMenuBtn } from "./ui.js";
 
 const NAV = [
   ["dashboard",     "Dashboard",         "pie"],
+  ["patron",        "Le Patron",         "crown"],
   ["assistants",    "Mes assistants",    "user"],
   ["create",        "Créer un assistant","add"],
   ["conversations", "Conversations",     "text-bubble"],
@@ -51,6 +53,7 @@ function route(){
   const page = parts[0] || "dashboard";
   markNav(page);
   if(page === "dashboard") renderDashboard(view);
+  else if(page === "patron") renderPatron(view);
   else if(page === "assistants") renderAssistants(view);
   else if(page === "create"){ renderAssistants(view); openAssistantEditor(null); }
   else if(page === "conversations") renderConversations(view, parts[1]);

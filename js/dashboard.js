@@ -41,6 +41,7 @@ export function renderDashboard(container){
       '<div class="kpi"><span class="lbl">Modèles disponibles</span><b>' + modeles + '</b><span class="hint">' + (modeles ? "" : "chargez-les dans Modèles IA") + '</span></div>' +
       '<div class="kpi"><span class="lbl">Fournisseurs connectés</span><b>' + connexions.length + '</b></div>' +
     '</div>' +
+    onboarding() +
     '<div class="grid2">' +
       '<div class="panel"><div class="panel-head">' + icon("globe") + ' État des connexions</div>' + connRows +
         '<div class="hint" id="orUsage" style="margin-top:10px;"></div></div>' +
@@ -61,6 +62,28 @@ export function renderDashboard(container){
   }));
 
   refreshOpenRouterUsage(container);
+}
+
+function onboarding(){
+  const hasKey = PROVIDERS.some(p => getKey(p.id)) || connectedProviders().length > 0;
+  const hasModel = !!(state.defaultModel && state.defaultModel.model);
+  const step = (ok, num, label, page, btn) =>
+    '<div class="row" style="align-items:center;gap:10px;">' +
+      '<span class="led ' + (ok ? "on" : "off") + '"></span>' +
+      '<span style="flex:1;"><b>' + num + '.</b> ' + label + '</span>' +
+      (ok ? '' : '<a class="btn line small" href="#/' + page + '">' + btn + '</a>') +
+    '</div>';
+  const done = hasKey && hasModel;
+  return '<div class="panel" style="margin-bottom:16px;"><div class="panel-head">' + icon("sparkles") + ' Bien démarrer' + (done ? ' — tout est prêt ✓' : '') + '</div>' +
+    step(hasKey, 1, 'Collez votre clé API (ex. Groq, gratuit) dans Fournisseurs API.', 'providers', 'Fournisseurs API') +
+    step(hasModel, 2, 'Choisissez un modèle par défaut dans Modèles IA.', 'models', 'Modèles IA') +
+    '<div class="row" style="align-items:center;gap:10px;">' +
+      '<span class="led ' + (done ? "on" : "off") + '"></span>' +
+      '<span style="flex:1;"><b>3.</b> Donnez votre consigne au Patron : il distribue les tâches à vos assistants.</span>' +
+      '<a class="btn small" href="#/patron">' + icon("crown") + ' Le Patron</a>' +
+    '</div>' +
+    (done ? '' : '<div class="hint" style="margin-top:8px;">Sans clé et sans modèle, les assistants ne peuvent pas travailler — c\'est voulu : ici, rien ne simule.</div>') +
+  '</div>';
 }
 
 function logConnexion(pid){
