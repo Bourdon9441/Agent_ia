@@ -595,7 +595,7 @@ function icon(name){
 }
 
 /* ================= état ================= */
-const MAX_AGENTS = 10;
+const MAX_AGENTS = 20;
 const CFG_KEY = "ac_supabase_cfg";
 const MISTRAL_KEY_STORE = "ac_mistral_key";
 
@@ -1179,15 +1179,15 @@ function renderAgents(){
   const btn = document.getElementById("addAgentBtn");
   const hint = document.getElementById("agentHint");
   if(state.agents.length >= MAX_AGENTS){
-    btn.disabled = true; btn.innerHTML = icon("check") + " Équipe complète (10 agents)";
-    hint.textContent = "Maximum de 10 agents atteint.";
+    btn.disabled = true; btn.innerHTML = icon("check") + " Équipe complète (" + MAX_AGENTS + " agents)";
+    hint.textContent = "Maximum de " + MAX_AGENTS + " agents atteint.";
   } else {
     btn.disabled = false; btn.innerHTML = icon("add") + " Embaucher";
     hint.textContent = "";
   }
   grid.innerHTML = "";
   if(state.agents.length === 0){
-    grid.innerHTML = '<div class="empty">' + icon("ghost") + ' Aucun agent. Embauchez-en un (jusqu\'à 10) — le Patron leur distribuera les tâches.</div>';
+    grid.innerHTML = '<div class="empty">' + icon("ghost") + ' Aucun agent. Embauchez-en un (jusqu\'à ' + MAX_AGENTS + ') — le Patron leur distribuera les tâches.</div>';
     return;
   }
   for(const a of state.agents) grid.appendChild(cards.get(a.id) || buildCard(a));
@@ -1399,35 +1399,16 @@ function openAuthModal(){
     body.innerHTML = `
       <div class="oauth">
         <button class="btn line wide" data-p="github">${icon("github")} Continuer avec GitHub</button>
-        <button class="btn line wide" data-p="google">${icon("google")} Continuer avec Google (Gmail)</button>
-        <button class="btn line wide" data-p="azure">${icon("microsoft")} Continuer avec Microsoft (Outlook)</button>
-        <button class="btn line wide" data-p="discord">${icon("discord")} Continuer avec Discord</button>
-        <button class="btn line wide" data-p="apple">${icon("apple")} Continuer avec Apple</button>
       </div>
-      <div class="divider">ou par e-mail</div>
-      <input type="email" id="magicEmail" placeholder="votre@email.com" style="margin-bottom:10px;">
-      <button class="btn wide" id="magicBtn">${icon("mail")} Recevoir un lien de connexion</button>
-      <div class="divider">ou e-mail + mot de passe (le plus fiable)</div>
-      <input type="email" id="pwEmail" placeholder="votre@email.com" style="margin-bottom:8px;">
-      <input type="password" id="pwPass" placeholder="mot de passe (6 caractères minimum)" style="margin-bottom:10px;">
-      <button class="btn line wide" id="pwBtn">Créer un compte / Se connecter</button>
       <div class="msg" id="authMsg"></div>
-      <div class="hint" style="margin-top:14px;">Chaque bouton doit être activé une fois dans <a href="https://supabase.com/dashboard/project/${proj}/auth/providers" target="_blank" rel="noopener">Supabase → Authentication → Providers</a> :<br>
+      <div class="hint" style="margin-top:14px;">Le bouton GitHub doit être activé une fois dans <a href="https://supabase.com/dashboard/project/${proj}/auth/providers" target="_blank" rel="noopener">Supabase → Authentication → Providers</a> :<br>
       • <b>GitHub</b> : github.com/settings/developers → New OAuth App → Homepage = https://bourdon9441.github.io/Agent_ia/ → Callback = https://${proj}.supabase.co/auth/v1/callback → collez Client ID + Secret dans Supabase. Si vous avez révoqué l'application (sécurité), recréez-la : c'est la cause n°1 d'une connexion GitHub qui ne marche plus.<br>
-      • <b>Google</b> : console.cloud.google.com → Identifiants → ID client OAuth (application Web) → même URL de redirection autorisée → collez ID + Secret.<br>
-      • <b>Microsoft (Outlook)</b> : portal.azure.com → Inscriptions d'applications → URL de redirection Web = même callback → ID + Secret.<br>
-      • <b>Discord</b> : discord.com/developers/applications → OAuth2 → même redirection → ID + Secret.<br>
-      • <b>Apple</b> : nécessite un compte développeur Apple payant (99 $/an) — sinon utilisez Google ou l'e-mail.<br>
       Et dans <a href="https://supabase.com/dashboard/project/${proj}/auth/url-configuration" target="_blank" rel="noopener">URL Configuration</a> : Site URL = <b>https://bourdon9441.github.io/Agent_ia/</b> (pas localhost:3000).</div>
       <div class="divider">outil de réparation</div>
       <button class="btn line wide" id="diagBtn">${icon("gears")} Tester la configuration des fournisseurs</button>
       <div class="msg" id="diagMsg" style="display:none;"></div>
       <div class="row" style="margin-top:8px;"><button class="btn line" id="copyCb" style="flex:1;">Copier l'URL de redirection</button><button class="btn line" id="copySite" style="flex:1;">Copier l'URL du site</button></div>`;
     body.querySelectorAll("[data-p]").forEach(b => b.addEventListener("click", ()=> signInProvider(b.dataset.p)));
-    body.querySelector("#magicBtn").addEventListener("click", signInEmail);
-    body.querySelector("#magicEmail").addEventListener("keydown", e=>{ if(e.key === "Enter") signInEmail(); });
-    body.querySelector("#pwBtn").addEventListener("click", signInPassword);
-    body.querySelector("#pwPass").addEventListener("keydown", e=>{ if(e.key === "Enter") signInPassword(); });
     async function runProviderDiag(){
       const m = body.querySelector("#diagMsg");
       m.style.display = ""; m.className = "msg"; m.textContent = "Vérification en cours...";
@@ -1979,8 +1960,8 @@ async function openDrhDlg(){
   const backlogDesc = (state.backlog || []).slice(0, 15).map((t, i) => (i + 1) + ". " + t).join("\n") || "(aucune)";
   try{
     const rep = await enqueueLLM(()=> callLLM([
-      { role: "system", content: "Tu es la DRH d'une entreprise d'agents IA. Tu décides des embauches et des licenciements selon les besoins réels du travail à faire. Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, au format exact : {\"hire\":[{\"name\":\"Prénom\",\"role\":\"spécialité\"}],\"fire\":[\"Nom\"]}. Spécialités possibles : polyvalent, code, recherche web, rédaction, marketing, ventes, support client, analyse de données, traduction, design, ou une autre spécialité courte en français. Équipe maximum : 10 agents. Sois sobre : embauche seulement si une compétence manque pour la mission ou les tâches en attente ; ne propose de licencier que des agents en doublon dans une même spécialité, jamais un agent occupé. Noms : prénoms courts." },
-      { role: "user", content: "Mission de l'entreprise : " + (state.mission || "(non définie)") + "\n\nTâches en attente :\n" + backlogDesc + "\n\nÉquipe actuelle (" + state.agents.length + "/10) :\n" + agentsDesc + "\n\nPropose les mouvements de personnel nécessaires (peut être vide). Ne propose jamais de licencier un agent au nom original configuré par le patron." }
+      { role: "system", content: "Tu es la DRH d'une entreprise d'agents IA. Tu décides des embauches et des licenciements selon les besoins réels du travail à faire. Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, au format exact : {\"hire\":[{\"name\":\"Prénom\",\"role\":\"spécialité\"}],\"fire\":[\"Nom\"]}. Spécialités possibles : polyvalent, code, recherche web, rédaction, marketing, ventes, support client, analyse de données, traduction, design, ou une autre spécialité courte en français. Équipe maximum : 20 agents. Sois sobre : embauche seulement si une compétence manque pour la mission ou les tâches en attente ; ne propose de licencier que des agents en doublon dans une même spécialité, jamais un agent occupé. Noms : prénoms courts." },
+      { role: "user", content: "Mission de l'entreprise : " + (state.mission || "(non définie)") + "\n\nTâches en attente :\n" + backlogDesc + "\n\nÉquipe actuelle (" + state.agents.length + "/" + MAX_AGENTS + ") :\n" + agentsDesc + "\n\nPropose les mouvements de personnel nécessaires (peut être vide). Ne propose jamais de licencier un agent au nom original configuré par le patron." }
     ], 800));
     let prop = null;
     try{
@@ -2902,7 +2883,10 @@ function sync3D(){
       agent3d.delete(id);
     }
   }
-  const SLOTS = [[-6.2, -1.4], [-3.5, -1.4], [-0.8, -1.4], [1.9, -1.4], [4.6, -1.4], [-6.2, 1.6], [-3.5, 1.6], [-0.8, 1.6], [1.9, 1.6], [4.6, 1.6]];
+  const SLOTS = [];
+  [[-1.4, [-6.6, -4.4, -2.2, 0, 2.2, 4.4, 6.6]], [1.6, [-6.6, -4.4, -2.2, 0, 2.2, 4.4, 6.6]], [3.9, [-4.4, -2.2, 0, 2.2, 4.4]], [5.3, [-2.2, 0, 2.2]]].forEach(row => {
+    row[1].forEach(x => SLOTS.push([x, row[0]]));
+  });
   const clusters = [];
   state.agents.forEach(a => {
     const r = a.role || "polyvalent";
