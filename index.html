@@ -733,6 +733,37 @@ async function pumpLLM(){
   setTimeout(pumpLLM, 1500);
 }
 
+async function realWebResearch(query){
+  const q = (query || "").replace(/[\u00ab\u00bb"']/g, " ").split(/[.,;:!?]/)[0].trim().split(/\s+/).slice(0, 8).join(" ");
+  if(!q) return [];
+  const parts = [];
+  try{
+    const r = await fetch("https://api.duckduckgo.com/?format=json&no_html=1&skip_disambig=1&q=" + encodeURIComponent(q));
+    if(r.ok){
+      const d = await r.json();
+      if(d.AbstractText) parts.push("DuckDuckGo : " + d.AbstractText + (d.AbstractURL ? " (source : " + d.AbstractURL + ")" : ""));
+      for(const topic of (d.RelatedTopics || []).slice(0, 4)){
+        if(topic.Text) parts.push("\u2014 " + topic.Text + (topic.FirstURL ? " (source : " + topic.FirstURL + ")" : ""));
+      }
+    }
+  }catch(e){}
+  try{
+    const r = await fetch("https://fr.wikipedia.org/w/api.php?action=query&list=search&srlimit=3&format=json&origin=*&srsearch=" + encodeURIComponent(q));
+    if(r.ok){
+      const d = await r.json();
+      for(const hit of ((d.query || {}).search || []).slice(0, 3)){
+        try{
+          const s = await fetch("https://fr.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(hit.title));
+          if(s.ok){
+            const sd = await s.json();
+            if(sd.extract) parts.push("Wikip\u00e9dia \u2014 " + hit.title + " : " + sd.extract.slice(0, 600));
+          }
+        }catch(e){}
+      }
+    }
+  }catch(e){}
+  return parts;
+}
 async function executeTask(agent){
   const t = agent.currentTask;
   const rid = uid();
@@ -740,8 +771,19 @@ async function executeTask(agent){
   if(state.results.length > 50) state.results.length = 50;
   renderResults(); save();
   try{
+    let context = "";
+    if((agent.role || "") === "recherche web"){
+      logGlobal("<b>" + esc(agent.name) + "</b> cherche de vraies informations sur le web (Wikip\u00e9dia, DuckDuckGo)...", agent.name);
+      const found = await realWebResearch(t.text);
+      if(found.length){
+        context = "\n\nR\u00c9SULTATS WEB R\u00c9ELS trouv\u00e9s \u00e0 l'instant (appuie-toi dessus et cite les sources entre parenth\u00e8ses) :\n" + found.join("\n");
+        logGlobal("<b>" + esc(agent.name) + "</b> a trouv\u00e9 " + found.length + " source(s) web r\u00e9elle(s).", agent.name);
+      } else {
+        context = "\n\n(La recherche web en direct n'a rien renvoy\u00e9 : r\u00e9ponds avec tes connaissances et signale qu'aucune source en direct n'a pu \u00eatre consult\u00e9e.)";
+      }
+    }
     const out = await enqueueLLM(()=> callLLM([
-      {role:"system", content:"Tu es l'agent " + agent.name + " (spécialité : " + (agent.role || "polyvalent") + ") d'une équipe de travail. Exécute la tâche suivante et produis directement le livrable concret, en français, prêt à l'emploi (texte structuré, complet, actionnable). Pas d'introduction, pas de commentaire : uniquement le livrable."},
+      {role:"system", content:"Tu es l'agent " + agent.name + " (sp\u00e9cialit\u00e9 : " + (agent.role || "polyvalent") + ") d'une \u00e9quipe de travail. Ex\u00e9cute la t\u00e2che suivante et produis directement le livrable concret, en fran\u00e7ais, pr\u00eat \u00e0 l'emploi (texte structur\u00e9, complet, actionnable). Pas d'introduction, pas de commentaire : uniquement le livrable." + context},
       {role:"user", content: t.text}
     ], 3000));
     if(agent.currentTask !== t) return;
@@ -750,16 +792,16 @@ async function executeTask(agent){
     agent.currentTask = null;
     agent.status = "idle";
     state.doneCount++;
-    logAgent(agent, "Terminé : " + t.text);
-    logGlobal("<b>" + esc(agent.name) + "</b> rend compte au Patron : « " + esc(t.text) + " » terminé, livrable prêt.", agent.name);
+    logAgent(agent, "Termin\u00e9 : " + t.text);
+    logGlobal("<b>" + esc(agent.name) + "</b> rend compte au Patron : \u00ab " + esc(t.text) + " \u00bb termin\u00e9, livrable pr\u00eat.", agent.name);
   }catch(e){
     if(agent.currentTask !== t) return;
     const r = state.results.find(x=>x.id===rid);
-    if(r){ r.status = "error"; r.output = "Échec de la génération (" + e.message + "). Vérifiez la clé API et les limites du niveau gratuit."; }
+    if(r){ r.status = "error"; r.output = "\u00c9chec de la g\u00e9n\u00e9ration (" + e.message + "). V\u00e9rifiez la cl\u00e9 API et les limites du niveau gratuit."; }
     agent.currentTask = null;
     agent.status = "idle";
-    logAgent(agent, "Échec : " + t.text + " (" + e.message + ")");
-    logGlobal("échec de la tâche (« " + esc(e.message) + " »)", agent.name);
+    logAgent(agent, "\u00c9chec : " + t.text + " (" + e.message + ")");
+    logGlobal("\u00e9chec de la t\u00e2che (\u00ab " + esc(e.message) + " \u00bb)", agent.name);
   }
   renderResults(); updateDynamicUI(); updateKPIs(); save();
   dispatch();
@@ -830,7 +872,7 @@ async function decompose(objective){
       ? state.agents.map(a => a.name + " (spécialité : " + (a.role || "polyvalent") + (a.status === "paused" ? ", en pause" : "") + ")").join("; ")
       : "aucun";
     const reply = await callLLM([
-      {role:"system", content:"Tu es le Patron, un vrai manager d'équipe. Ton équipe d'agents : " + agentsDesc + ". Découpe l'objectif donné en sous-tâches courtes et actionnables (max 6), et délègue chaque tâche à l'agent le plus adapté à sa spécialité, comme dans la vraie vie. Réponds UNIQUEMENT avec un tableau JSON de chaînes en français au format exact \"Nom de l'agent : la tâche\", ex: [\"Nova : analyser le marché des cafés\",\"Atlas : rédiger le plan marketing\"]. Si aucun agent ne convient, utilise quand même le plus proche."},
+      {role:"system", content:"Tu es le Patron, un vrai manager d'équipe. Ton équipe d'agents : " + agentsDesc + ". Découpe l'objectif donné en sous-tâches courtes et actionnables (max 6) et répartis-les comme un vrai chef d'équipe : la recherche d'informations à l'agent spécialisé en recherche web, les textes à la rédaction, le développement au code, le visuel au design, la communication au marketing, etc. Chaque tâche doit aller à l'agent dont la spécialité correspond vraiment. Réponds UNIQUEMENT avec un tableau JSON de chaînes en français au format exact \"Nom de l'agent : la tâche\", ex: [\"Nova : analyser le marché des cafés\",\"Atlas : rédiger le plan marketing\"]. Si aucun agent ne convient, utilise quand même le plus proche."},
       {role:"user", content: objective}
     ], 1500);
     const m = reply.match(/\[[\s\S]*\]/);
@@ -1621,6 +1663,7 @@ async function launchSiteProject(desc){
     desc,
     steps: [
       { key: "plan", label: "Architecture du site", agent: pick("analyse de donn\u00e9es").name, status: "pending", output: "" },
+      { key: "design", label: "Charte graphique (design)", agent: pick("design").name, status: "pending", output: "" },
       { key: "code", label: "Code complet du site", agent: pick("code").name, status: "pending", output: "" },
       { key: "widget", label: "Assistant service client int\u00e9gr\u00e9", agent: pick("support client").name, status: "pending", output: "" }
     ],
@@ -1634,8 +1677,12 @@ async function launchSiteProject(desc){
       {role:"system", content:"Tu es un architecte web. Con\u00e7ois le plan d'un site en fran\u00e7ais. R\u00e9ponds UNIQUEMENT avec un JSON : {\"nom\": ..., \"description\": ..., \"style\": \"couleurs et ambiance\", \"sections\": [{\"titre\": ..., \"contenu\": ...}]} (max 6 sections)."},
       {role:"user", content: desc}
     ], 2000);
+    await buildSiteStep("design", [
+      {role:"system", content:"Tu es un designer web. D\u00e9finis la charte graphique du site (en fran\u00e7ais) : palette de couleurs (codes hex), typographies, ambiance, style des boutons et des images. R\u00e9ponds UNIQUEMENT avec un JSON : {\"couleurs\": {...}, \"polices\": [...], \"ambiance\": ..., \"details\": ...}."},
+      {role:"user", content: "Site \u00e0 cr\u00e9er : " + sp.desc + "\nPlan : " + ((sp.steps[0].output || "").slice(0, 2000))}
+    ], 2000);
     await buildSiteStep("code", [
-      {role:"system", content:"Tu es un d\u00e9veloppeur web senior. G\u00e9n\u00e8re un site web complet en UN SEUL fichier HTML (HTML + CSS + JS inline), moderne, responsive, professionnel, textes en fran\u00e7ais, sans d\u00e9pendance externe. Utilise ce plan : " + ((sp.steps[0].output || "").slice(0, 3000)) + ". R\u00e9ponds UNIQUEMENT avec le code HTML complet, sans explication."},
+      {role:"system", content:"Tu es un d\u00e9veloppeur web senior. G\u00e9n\u00e8re un site web complet en UN SEUL fichier HTML (HTML + CSS + JS inline), moderne, responsive, professionnel, textes en fran\u00e7ais, sans d\u00e9pendance externe. Respecte ce plan : " + ((sp.steps.find(s => s.key === "plan").output || "").slice(0, 3000)) + " ET cette charte graphique : " + ((sp.steps.find(s => s.key === "design").output || "").slice(0, 2000)) + ". R\u00e9ponds UNIQUEMENT avec le code HTML complet, sans explication."},
       {role:"user", content: "Site \u00e0 cr\u00e9er : " + sp.desc}
     ], 14000);
     await buildSiteStep("widget", [
