@@ -284,6 +284,7 @@ const CFG_KEY = "ac_supabase_cfg";
 const MISTRAL_KEY_STORE = "ac_mistral_key";
 
 let cfg = { url: "", key: "" };
+const DEFAULT_SUPABASE_URL = "https://rqbxvttqiinkcporqepm.supabase.co";
 try{ cfg = Object.assign(cfg, JSON.parse(localStorage.getItem(CFG_KEY) || "{}")); }catch(e){}
 
 let session = null;
@@ -735,7 +736,7 @@ function openAuthModal(){
       <div class="step"><div class="n">1</div><p>Créez un compte gratuit sur <a href="https://supabase.com" target="_blank" rel="noopener">supabase.com</a>, puis créez un projet (n'importe quel nom).</p></div>
       <div class="step"><div class="n">2</div><p>Ouvrez <b>SQL Editor</b> dans Supabase, collez et exécutez :<div class="sql" id="sqlBlock"></div><button class="btn line" id="copySql" style="padding:7px 12px;font-size:12px;">Copier le SQL</button></p></div>
       <div class="step"><div class="n">3</div><p>Dans <b>Project Settings → API</b>, copiez « Project URL » et « anon public key » ci-dessous :</p></div>
-      <input type="text" id="cfgUrl" placeholder="https://xxxx.supabase.co">
+      <input type="text" id="cfgUrl" placeholder="https://xxxx.supabase.co" value="${DEFAULT_SUPABASE_URL}">
       <input type="password" id="cfgKey" placeholder="anon key (eyJhbGci...)" style="margin-top:8px;">
       <button class="btn wide" id="cfgSave" style="margin-top:12px;">Enregistrer et activer la connexion</button>
       <div class="msg" id="authMsg"></div>`;
