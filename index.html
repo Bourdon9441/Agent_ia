@@ -11,7 +11,7 @@
   :root{
     --bg:#0b0d0a; --surface:#12150f; --raise:#191d15; --line:#262b1f; --line2:#333a2a;
     --ink:#eef2e4; --dim:#9aa38c; --faint:#5c6450;
-    --signal:#c6f542; --signal-ink:#0b0d0a; --amber:#ffb454; --red:#ff6b6b;
+    --signal:#c6f542; --signal-ink:#0b0d0a; --amber:#ffb454; --red:#ff6b6b; --signal-rgb:198,245,66;
     --mono:'IBM Plex Mono',monospace; --disp:'Space Grotesk',sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
@@ -38,8 +38,8 @@
     display:inline-flex; align-items:center; gap:6px;
   }
   .chip .led{width:6px;height:6px;border-radius:50%;background:var(--faint);}
-  .chip.on{color:var(--signal); border-color:rgba(198,245,66,.4);}
-  .chip.on .led{background:var(--signal); box-shadow:0 0 8px rgba(198,245,66,.7);}
+  .chip.on{color:var(--signal); border-color:rgba(var(--signal-rgb),.4);}
+  .chip.on .led{background:var(--signal); box-shadow:0 0 8px rgba(var(--signal-rgb),.7);}
   .account-btn{
     display:inline-flex; align-items:center; gap:8px; background:var(--raise); border:1px solid var(--line2);
     color:var(--ink); font-family:var(--mono); font-size:12px; padding:8px 14px; border-radius:9px; cursor:pointer;
@@ -81,8 +81,8 @@
   .switch{display:flex; align-items:center; gap:12px; margin-top:14px; cursor:pointer; user-select:none;}
   .switch .track{width:44px;height:24px;background:var(--bg);border:1px solid var(--line2);border-radius:99px;position:relative;transition:.2s;flex-shrink:0;}
   .switch .track::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;background:var(--faint);border-radius:50%;transition:.2s;}
-  .switch.on .track{background:rgba(198,245,66,.15);border-color:var(--signal);}
-  .switch.on .track::after{left:23px;background:var(--signal);box-shadow:0 0 8px rgba(198,245,66,.6);}
+  .switch.on .track{background:rgba(var(--signal-rgb),.15);border-color:var(--signal);}
+  .switch.on .track::after{left:23px;background:var(--signal);box-shadow:0 0 8px rgba(var(--signal-rgb),.6);}
   .switch .lbl{font-size:13.5px;}
   .log{
     background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px 12px;
@@ -102,7 +102,7 @@
     background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px;
     display:flex; flex-direction:column; gap:11px; position:relative; overflow:hidden;
   }
-  .agent.busy{border-color:rgba(198,245,66,.35);}
+  .agent.busy{border-color:rgba(var(--signal-rgb),.35);}
   .led{width:8px;height:8px;border-radius:50%;background:var(--faint);flex-shrink:0;}
   .led.idle{background:var(--signal);}
   .led.busy{background:var(--signal); animation:pulse 1.1s infinite;}
@@ -124,6 +124,9 @@
   .chat .bub{max-width:88%; padding:9px 12px; border-radius:12px; font-size:12.5px; line-height:1.55; white-space:pre-wrap; word-break:break-word;}
   .chat .bub.user{align-self:flex-end; background:var(--raise); border:1px solid var(--line2); color:var(--ink);}
   .chat .bub.boss{align-self:flex-start; background:var(--surface); border:1px solid var(--line2); border-left:2px solid var(--signal); color:var(--dim);}
+  .dots{display:flex; gap:9px; flex-wrap:wrap; padding-top:8px;}
+  .dot{width:24px; height:24px; border-radius:50%; border:2px solid var(--line2); cursor:pointer; padding:0;}
+  .dot.on{border-color:var(--ink); box-shadow:0 0 8px rgba(var(--signal-rgb),.5);}
   .chat .bub .who{display:block; font-family:var(--mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); margin-bottom:4px;}
   .viewtoggle{display:flex; border:1px solid var(--line2); border-radius:9px; overflow:hidden; margin-right:10px;}
   .viewtoggle button{background:none; border:none; color:var(--faint); font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; padding:8px 12px; cursor:pointer;}
@@ -134,7 +137,7 @@
   .floor::before{content:''; position:absolute; inset:0; background-image:radial-gradient(var(--line) 1px, transparent 1px); background-size:22px 22px; opacity:.5; pointer-events:none;}
   .bosszone{display:flex; justify-content:center; margin-bottom:14px; position:relative;}
   .desk{background:var(--raise); border:1px solid var(--line2); border-radius:12px; padding:10px 12px; position:relative; z-index:1;}
-  .desk.boss{width:min(360px,100%); border-color:var(--signal); box-shadow:0 0 0 1px rgba(198,245,66,.12);}
+  .desk.boss{width:min(360px,100%); border-color:var(--signal); box-shadow:0 0 0 1px rgba(var(--signal-rgb),.12);}
   .desk .dtop{display:flex; align-items:center; gap:7px; margin-bottom:6px;}
   .desk .dname{font-family:var(--disp); font-weight:600; font-size:13px; color:var(--ink);}
   .desk .drole{font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); margin-left:auto; display:flex; align-items:center; gap:4px;}
@@ -162,7 +165,7 @@
   .hud3d{position:absolute; top:10px; left:10px; z-index:5; font-family:var(--mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); background:rgba(11,13,10,.72); border:1px solid var(--line); border-radius:8px; padding:6px 10px; line-height:1.8; pointer-events:none;}
   .cambtn{position:absolute; top:10px; right:10px; z-index:6; background:var(--raise); border:1px solid var(--line2); color:var(--signal); font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; padding:8px 12px; border-radius:8px; cursor:pointer;}
   .cambtn:hover{background:var(--line);}
-  .fpscross{position:absolute; top:50%; left:50%; width:16px; height:16px; margin:-8px; border:1.5px solid rgba(198,245,66,.95); border-radius:50%; z-index:6; display:none; pointer-events:none; box-shadow:0 0 10px rgba(198,245,66,.55);}
+  .fpscross{position:absolute; top:50%; left:50%; width:16px; height:16px; margin:-8px; border:1.5px solid rgba(var(--signal-rgb),.95); border-radius:50%; z-index:6; display:none; pointer-events:none; box-shadow:0 0 10px rgba(var(--signal-rgb),.55);}
   .fpscross::after{content:''; position:absolute; top:50%; left:50%; width:3px; height:3px; margin:-1.5px; background:var(--signal); border-radius:50%;}
   .fpscross.show{display:block;}
   .fpsprompt{position:absolute; bottom:36px; left:50%; transform:translateX(-50%); z-index:6; display:none; background:rgba(11,13,10,.88); border:1px solid var(--line2); border-radius:10px; padding:10px 16px; font-family:var(--disp); font-size:13.5px; color:var(--ink); pointer-events:none; white-space:nowrap;}
@@ -287,6 +290,11 @@
       <details class="settings" id="cloudSettings">
         <summary id="cloudSummary">Connexion &amp; synchronisation</summary>
         <div id="cloudBody"></div>
+      </details>
+      <details class="settings">
+        <summary id="themeSummary">Couleur du bureau</summary>
+        <div class="dots" id="themeDots"></div>
+        <div class="hint" style="margin-top:8px;">La couleur est appliquée à toute la page et au bureau 3D (murs, enseigne, écrans, éclairage).</div>
       </details>
       <details class="settings">
         <summary id="aiSummary">IA réelle (optionnel)</summary>
@@ -1347,6 +1355,42 @@ function applyView(){
 document.getElementById("vtOffice").addEventListener("click", ()=>{ viewMode = "office"; applyView(); });
 document.getElementById("vtList").addEventListener("click", ()=>{ viewMode = "list"; applyView(); });
 
+/* ================= thèmes de couleur ================= */
+const THEMES = {
+  vert:   { label: "Vert lime", signal: "#c6f542", work: "#ffb454", rgb: "198,245,66" },
+  rouge:  { label: "Rouge",     signal: "#ff6b6b", work: "#ffd166", rgb: "255,107,107" },
+  bleu:   { label: "Bleu",      signal: "#5db8ff", work: "#ffb454", rgb: "93,184,255" },
+  jaune:  { label: "Jaune",     signal: "#ffd23f", work: "#ff8f5d", rgb: "255,210,63" },
+  orange: { label: "Orange",    signal: "#ff9f45", work: "#ffe066", rgb: "255,159,69" },
+  violet: { label: "Violet",    signal: "#b48cff", work: "#ffb454", rgb: "180,140,255" },
+  cyan:   { label: "Cyan",      signal: "#4fe3c1", work: "#ffb454", rgb: "79,227,193" },
+  rose:   { label: "Rose",      signal: "#ff7ac8", work: "#ffb454", rgb: "255,122,200" }
+};
+const THEME3D = { signal: 0xc6f542, work: 0xffb454 };
+const matRegistry = [];
+function applyTheme(name){
+  const t = THEMES[name] || THEMES.vert;
+  const r = document.documentElement.style;
+  r.setProperty("--signal", t.signal);
+  r.setProperty("--amber", t.work);
+  r.setProperty("--signal-rgb", t.rgb);
+  try{ localStorage.setItem("ac_theme", name); }catch(e){}
+  THEME3D.signal = parseInt(t.signal.slice(1), 16);
+  THEME3D.work = parseInt(t.work.slice(1), 16);
+  recolor3D();
+  renderThemeDots();
+}
+function renderThemeDots(){
+  const el = document.getElementById("themeDots");
+  if(!el) return;
+  let current = "vert";
+  try{ current = localStorage.getItem("ac_theme") || "vert"; }catch(e){}
+  el.innerHTML = Object.entries(THEMES).map(([k, t]) =>
+    '<button class="dot' + (k === current ? " on" : "") + '" data-t="' + k + '" title="' + t.label + '" style="background:' + t.signal + '"></button>'
+  ).join("");
+  el.querySelectorAll(".dot").forEach(d => d.addEventListener("click", ()=> applyTheme(d.dataset.t)));
+}
+
 /* ================= bureau 3D ================= */
 let three = null;
 let camMode = "orbit";
@@ -1429,7 +1473,10 @@ function makeLabel(text, sub){
   return spr;
 }
 function screenMat(hex, intensity){
-  return new THREE.MeshStandardMaterial({ color: 0x0b0d0a, emissive: hex, emissiveIntensity: intensity, roughness: .4 });
+  const m = new THREE.MeshStandardMaterial({ color: 0x0b0d0a, emissive: hex, emissiveIntensity: intensity, roughness: .4 });
+  const kind = hex === 0xc6f542 ? "signal" : hex === 0xffb454 ? "work" : null;
+  if(kind) matRegistry.push({ mat: m, kind });
+  return m;
 }
 function makeCharacter(bodyHex){
   const g = new THREE.Group();
@@ -1520,6 +1567,7 @@ function init3D(){
   scene.add(panelGroup);
   ceil.visible = panelGroup.visible = false;
   const stripeMat = new THREE.MeshStandardMaterial({ color: 0x0b0d0a, emissive: 0xc6f542, emissiveIntensity: .75 });
+  matRegistry.push({ mat: stripeMat, kind: "signal" });
   const stripeB = new THREE.Mesh(new THREE.BoxGeometry(16.6, .09, .06), stripeMat);
   stripeB.position.set(0, 2.9, -6.47); scene.add(stripeB);
   const stripeL = new THREE.Mesh(new THREE.BoxGeometry(.06, .09, 12.6), stripeMat);
@@ -1529,11 +1577,17 @@ function init3D(){
   const sc = document.createElement("canvas");
   sc.width = 1024; sc.height = 256;
   const sctx = sc.getContext("2d");
-  sctx.fillStyle = "#0b0d0a"; sctx.fillRect(0, 0, 1024, 256);
-  sctx.strokeStyle = "#333a2a"; sctx.lineWidth = 8; sctx.strokeRect(8, 8, 1008, 240);
-  sctx.fillStyle = "#c6f542"; sctx.font = "bold 120px monospace"; sctx.textAlign = "center";
-  sctx.fillText("AGENT_IA", 512, 160);
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc) }));
+  const signTex = new THREE.CanvasTexture(sc);
+  function drawSign(){
+    sctx.fillStyle = "#0b0d0a"; sctx.fillRect(0, 0, 1024, 256);
+    sctx.strokeStyle = "#333a2a"; sctx.lineWidth = 8; sctx.strokeRect(8, 8, 1008, 240);
+    sctx.fillStyle = "#" + THEME3D.signal.toString(16).padStart(6, "0");
+    sctx.font = "bold 120px monospace"; sctx.textAlign = "center";
+    sctx.fillText("AGENT_IA", 512, 160);
+    signTex.needsUpdate = true;
+  }
+  drawSign();
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshBasicMaterial({ map: signTex }));
   sign.position.set(0, 3.55, -6.48); scene.add(sign);
   const potMat = new THREE.MeshStandardMaterial({ color: 0x262b1f, roughness: .9 });
   const leafMat = new THREE.MeshStandardMaterial({ color: 0x2c3a22, roughness: .9 });
@@ -1674,7 +1728,7 @@ function init3D(){
     camera.updateProjectionMatrix();
   });
 
-  three = { scene, camera, renderer, bossChar, coffeeSlots };
+  three = { scene, camera, renderer, bossChar, coffeeSlots, limeLight, redrawSign: drawSign };
   const clock = new THREE.Clock();
   let lastT = performance.now();
   (function animate(){
@@ -1767,6 +1821,13 @@ function sync3D(){
   updateHud();
 }
 function update3D(){ if(!three) return; updateHud(); }
+function recolor3D(){
+  if(!three) return;
+  for(const e of matRegistry) e.mat.emissive.set(e.kind === "signal" ? THEME3D.signal : THEME3D.work);
+  if(three.limeLight) three.limeLight.color.set(THEME3D.signal);
+  if(three.redrawSign) three.redrawSign();
+}
+
 function updateHud(){
   if(!three) return;
   const done = (state.results || []).filter(r => r.status === "done").length;
@@ -1788,6 +1849,8 @@ logGlobal("centre de contrôle démarré" + (supabaseReady() ? " (synchro prête
 if(session) startEngine(); else openAuthModal();
 applyView();
 try{ init3D(); }catch(e){ console.warn("3D indisponible", e); }
+applyTheme((function(){ try{ return localStorage.getItem("ac_theme"); }catch(e){ return null; } })() || "vert");
+document.getElementById("themeSummary").insertAdjacentHTML("afterbegin", icon("palette"));
 (function(){
   const h = new URLSearchParams(location.hash.slice(1));
   const q = new URLSearchParams(location.search);
