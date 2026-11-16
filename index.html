@@ -319,6 +319,12 @@
     </div>
 
     <div class="panel">
+      <div class="panel-head" id="sitesHead">Vos sites web</div>
+      <div id="dashSites"></div>
+      <div class="hint">Construits dans le jeu : salle serveurs → votre PC → Serveurs. Aperçu, modification, suppression ici.</div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head" id="settingsHead">Réglages</div>
       <details class="settings" id="cloudSettings">
         <summary id="cloudSummary">Connexion &amp; synchronisation</summary>
@@ -428,6 +434,16 @@
       <textarea id="pcBacklog" placeholder="Surveiller les tendances du secteur&#10;Préparer le rapport hebdomadaire"></textarea>
       <label style="margin-top:16px;">Mission de l'entreprise</label>
       <input type="text" id="pcMission" placeholder="La mission de vos agents...">
+      <label style="margin-top:16px;">Tâches programmées <span style="text-transform:none;letter-spacing:0">(exécutées à l'heure choisie, page ouverte)</span></label>
+      <div class="row">
+        <input type="text" id="schedText" placeholder="Ex : envoyer les actualités du jour par email">
+        <input type="datetime-local" id="schedWhen" style="flex:0 0 auto;width:auto;background:var(--raise);border:1px solid var(--line);border-radius:9px;color:var(--ink);padding:9px 10px;font-family:var(--disp);">
+      </div>
+      <div class="row" style="margin-top:8px;align-items:center;">
+        <label style="margin:0;display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:11px;"><input type="checkbox" id="schedEmail" checked> Envoyer le résultat par email</label>
+        <button class="btn" id="schedAdd" style="flex:0 0 auto;margin-left:auto;">Programmer</button>
+      </div>
+      <div id="schedList" style="margin-top:10px;"></div>
     </div>
     <div class="pcpane" id="pane-chat" style="display:none;">
       <div class="chat" id="pcChatLog" style="max-height:44vh; border:1px solid var(--line); border-radius:12px; padding:12px;"></div>
@@ -468,6 +484,13 @@
       <div class="hint" style="margin-top:14px;">Coin café</div>
       <div class="row"><button class="btn line" id="pcCoffeeToggle" style="flex:0 0 auto;">Fermer la cafet</button></div>
       <div class="hint" id="pcCoffeeHint">Ouverte : les agents sans travail peuvent prendre une pause café.</div>
+      <div class="hint" style="margin-top:14px;">Notifications par email — via EmailJS (gratuit) : créez un compte sur emailjs.com, connectez-y votre boîte Outlook ou Gmail, créez un template avec les variables {{subject}} et {{message}}, puis collez vos identifiants ici. Les notifications arrivent dans votre boîte.</div>
+      <input type="text" id="ejServiceId" placeholder="Service ID EmailJS (service_...)">
+      <input type="text" id="ejTemplateId" placeholder="Template ID (template_...)">
+      <input type="text" id="ejPublicKey" placeholder="Public Key (clé publique EmailJS)">
+      <input type="text" id="ejTo" placeholder="Email de destination (votre gmail)">
+      <div class="row"><button class="btn line" id="ejTest" style="flex:0 0 auto;">Tester l'envoi</button></div>
+      <div class="hint" id="ejHint">Reste dans ce navigateur, comme votre clé API.</div>
       <div class="hint" id="pcSyncInfo" style="margin-top:14px;"></div>
     </div>
   </div>
@@ -557,12 +580,18 @@ function scopeKey(){
 }
 function freshState(){
   return { agents: [], mission: "", backlog: [], autonomous: false, speed: 1, doneCount: 0,
-           activity: [], results: [], chat: [], siteProject: null, coffeeClosed: false, meta: { syncedAt: null } };
+           activity: [], results: [], chat: [], sites: [], scheduled: [], coffeeClosed: false, meta: { syncedAt: null } };
 }
 let state = freshState();
 const PERSONAS = ["efficace et direct","créatif et imaginatif","rigoureux et méthodique","enthousiaste et positif","pédagogue et clair","analytique et critique","chaleureux et diplomate","pragmatique, orienté résultats"];
 function ensurePersonas(){
   state.agents.forEach((a, i) => { if(!a.persona) a.persona = PERSONAS[i % PERSONAS.length]; });
+  if(!state.sites) state.sites = [];
+  if(!state.scheduled) state.scheduled = [];
+  if(state.siteProject){
+    state.sites.push(Object.assign({ id: uid(), name: (state.siteProject.desc || "site").slice(0, 40), createdAt: new Date().toLocaleString("fr-FR") }, state.siteProject));
+    delete state.siteProject;
+  }
 }
 
 /* ================= persistance locale ================= */
@@ -666,7 +695,7 @@ function autoBreaks(){
 
 const SPECIALTY_KEYWORDS = [
   ["code", ["code", "programme", "script", "bug", "site", "application", "développ", "html", "css", "javascript", "api"]],
-  ["recherche web", ["recherche", "chercher", "trouve", "internet", "web", "concurrent", "marché", "étude"]],
+  ["recherche web", ["recherche", "chercher", "trouve", "internet", "web", "concurrent", "marché", "étude", "actualit", "news", "veille"]],
   ["rédaction", ["rédige", "écris", "article", "texte", "blog", "lettre", "mail", "courrier", "conte", "histoire"]],
   ["marketing", ["marketing", "campagne", "publicit", "réseaux sociaux", "instagram", "facebook", "communiqu"]],
   ["ventes", ["vente", "vendre", "client potentiel", "prospect", "devis", "prix", "commercial", "chiffre d'affaires"]],
@@ -997,7 +1026,7 @@ async function pullRemote(force){
     if(data && data.data){
       const remoteNewer = !state.meta.syncedAt || (data.updated_at > state.meta.syncedAt);
       if((remoteNewer && !pendingLocal) || force){
-        const keep = { results: state.results, chat: state.chat, siteProject: state.siteProject };
+        const keep = { results: state.results, chat: state.chat, sites: state.sites, scheduled: state.scheduled };
         state = Object.assign(freshState(), data.data, keep, { meta: { syncedAt: data.updated_at } });
         ensurePersonas();
         renderAll(); save();
@@ -1227,6 +1256,7 @@ function renderAll(){
   renderAgents();
   renderActivity();
   renderResults();
+  renderDashSites();
   renderChatLog();
   updateKPIs();
   refreshAccountUI();
@@ -1605,47 +1635,84 @@ function renderPcTasks(){
   document.getElementById("pcMission").value = state.mission || "";
   const auto = document.getElementById("pcAuto");
   auto.innerHTML = icon(state.autonomous ? "pause" : "play") + " Mode autonome : " + (state.autonomous ? "ACTIVÉ — cliquez pour arrêter" : "arrêté — cliquez pour activer");
+  renderPcSched();
+}
+function renderSitesList(){
+  return state.sites.map(st => {
+    const ok = st.built && st.html;
+    return '<div class="hrrow"><div><div class="hrname">' + esc(st.name || st.desc) + '</div><div class="hrole">' + icon("globe") + " " + esc(st.createdAt || "") + (ok ? "" : " · en construction") + '</div></div>' +
+      (ok ? '<button class="iconbtn stPrev" data-id="' + st.id + '" title="Aperçu du site">' + icon("globe") + '</button>' +
+      '<button class="iconbtn stDl" data-id="' + st.id + '" title="Télécharger index.html">' + icon("folder") + '</button>' +
+      '<button class="iconbtn stMod" data-id="' + st.id + '" title="Demander une modification">' + icon("pen") + '</button>' : "") +
+      '<button class="iconbtn stDel" data-id="' + st.id + '" title="Supprimer le site">' + icon("trash") + '</button></div>';
+  }).join("");
+}
+function wireSiteActions(root){
+  root.querySelectorAll(".stPrev").forEach(b => b.addEventListener("click", ()=>{
+    const st = state.sites.find(x => x.id === b.dataset.id);
+    if(st && st.html) window.open(URL.createObjectURL(new Blob([st.html], { type: "text/html" })), "_blank");
+  }));
+  root.querySelectorAll(".stDl").forEach(b => b.addEventListener("click", ()=>{
+    const st = state.sites.find(x => x.id === b.dataset.id);
+    if(!st || !st.html) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([st.html], { type: "text/html" }));
+    a.download = "index.html";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }));
+  root.querySelectorAll(".stMod").forEach(b => b.addEventListener("click", ()=>{
+    const st = state.sites.find(x => x.id === b.dataset.id);
+    if(!st || !st.html) return;
+    const txt = window.prompt("Quelle modification pour « " + (st.name || st.desc) + " » ?");
+    if(txt && txt.trim()) siteModify(txt.trim(), st.id);
+  }));
+  root.querySelectorAll(".stDel").forEach(b => b.addEventListener("click", ()=>{
+    const st = state.sites.find(x => x.id === b.dataset.id);
+    if(!st) return;
+    if(!window.confirm("Supprimer définitivement « " + (st.name || st.desc) + " » ?")) return;
+    state.sites = state.sites.filter(x => x.id !== st.id);
+    logGlobal("site supprimé : « " + esc(st.name || st.desc) + " ».", "Patron");
+    renderPcServers(); renderDashSites(); save();
+  }));
+}
+function renderDashSites(){
+  const box = document.getElementById("dashSites");
+  if(!box) return;
+  if(!state.sites.length){
+    box.innerHTML = '<div class="hint">Aucun site pour le moment. Dans le jeu : salle serveurs → votre PC → Serveurs.</div>';
+    return;
+  }
+  box.innerHTML = renderSitesList();
+  wireSiteActions(box);
 }
 function renderPcServers(){
   document.getElementById("srvLaunch").innerHTML = icon("code") + " Lancer la production du site";
   const box = document.getElementById("srvProject");
   const modWrap = document.getElementById("srvModWrap");
-  const sp = state.siteProject;
-  if(!sp){ box.innerHTML = ""; modWrap.style.display = "none"; return; }
-  const ST = { pending: ["en attente", "var(--faint)"], building: ["en cours...", "var(--amber)"], done: ["termin\u00e9", "var(--signal)"], error: ["\u00e9chec", "var(--red)"] };
-  let h = '<div class="hint" style="margin-bottom:8px;">Projet en cours : <b style="color:var(--ink)">' + esc(sp.desc) + '</b></div>';
-  h += sp.steps.map(s => {
-    const pair = ST[s.status] || ST.pending;
-    return '<div class="hrrow"><div><div class="hrname">' + esc(s.label) + '</div><div class="hrole">' + icon("user") + " " + esc(s.agent) + '</div></div><span class="hstat" style="color:' + pair[1] + ';">' + pair[0] + '</span></div>';
-  }).join("");
-  if(sp.built && sp.html){
-    h += '<div class="row" style="margin-top:6px;"><button class="btn line" id="srvPreview">Aper\u00e7u du site</button><button class="btn line" id="srvDownload">T\u00e9l\u00e9charger index.html</button><button class="btn line" id="srvCopy">Copier le code</button></div>';
-    modWrap.style.display = "";
-  } else modWrap.style.display = "none";
+  modWrap.style.display = "none";
+  const sp = currentSite();
+  let h = "";
+  if(sp && sp.steps && sp.steps.some(st => st.status !== "done")){
+    const ST = { pending: ["en attente", "var(--faint)"], building: ["en cours...", "var(--amber)"], done: ["termin\u00e9", "var(--signal)"], error: ["\u00e9chec", "var(--red)"] };
+    h += '<div class="hint" style="margin-bottom:8px;">Production en cours : <b style="color:var(--ink)">' + esc(sp.desc) + '</b></div>';
+    h += sp.steps.map(s => {
+      const pair = ST[s.status] || ST.pending;
+      return '<div class="hrrow"><div><div class="hrname">' + esc(s.label) + '</div><div class="hrole">' + icon("user") + " " + esc(s.agent) + '</div></div><span class="hstat" style="color:' + pair[1] + ';">' + pair[0] + '</span></div>';
+    }).join("");
+  }
+  if(state.sites.length) h += '<div class="hint" style="margin:10px 0 8px;">Vos sites (' + state.sites.length + ') — modifiables et supprimables :</div>' + renderSitesList();
+  else if(!h) h = '<div class="hint">Aucun site pour l\'instant : décrivez-le ci-dessus et lancez la production.</div>';
   box.innerHTML = h;
-  const prev = document.getElementById("srvPreview");
-  if(prev) prev.addEventListener("click", ()=>{
-    const blob = new Blob([state.siteProject.html], { type: "text/html" });
-    window.open(URL.createObjectURL(blob), "_blank");
-  });
-  const dl = document.getElementById("srvDownload");
-  if(dl) dl.addEventListener("click", ()=>{
-    const blob = new Blob([state.siteProject.html], { type: "text/html" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "index.html";
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
-  const cp = document.getElementById("srvCopy");
-  if(cp) cp.addEventListener("click", ()=> navigator.clipboard.writeText(state.siteProject.html));
+  wireSiteActions(box);
 }
+function currentSite(){ return state.sites && state.sites.length ? state.sites[state.sites.length - 1] : null; }
 function stripFence(out){
   const m = (out || "").match(/```(?:html)?\s*([\s\S]*?)```/);
   return (m ? m[1] : out || "").trim();
 }
 async function buildSiteStep(key, prompt, maxTokens){
-  const sp = state.siteProject;
+  const sp = currentSite();
   const entry = sp.steps.find(s => s.key === key);
   entry.status = "building";
   renderPcServers(); save();
@@ -1672,10 +1739,10 @@ async function buildSiteStep(key, prompt, maxTokens){
     logGlobal("\u00e9chec (\u00ab " + esc(entry.label) + " \u00bb : " + esc(e.message) + ") \u2014 v\u00e9rifiez la cl\u00e9 API ou relancez la production (limite gratuite Groq possible).", entry.agent);
     throw e;
   }
-  renderPcServers(); save();
+  renderPcServers(); renderDashSites(); save();
 }
 function assembleSite(){
-  const sp = state.siteProject;
+  const sp = currentSite();
   const code = stripFence((sp.steps.find(s => s.key === "code") || {}).output);
   const widget = stripFence((sp.steps.find(s => s.key === "widget") || {}).output);
   let html = code;
@@ -1690,8 +1757,12 @@ async function launchSiteProject(desc){
   if(!hasKey()){ logGlobal("cl\u00e9 IA requise : ajoutez votre cl\u00e9 Groq dans R\u00e9glages. Aucune simulation.", "Patron"); return; }
   if(state.agents.length === 0){ logGlobal("impossible : embauchez au moins un agent (DRH).", "Patron"); return; }
   const pick = (role) => state.agents.find(a => (a.role || "polyvalent") === role) || state.agents[0];
-  state.siteProject = {
+  if(currentSite() && currentSite().steps && currentSite().steps.some(st => st.status === "building")){ logGlobal("une production de site est déjà en cours : attendez la fin.", "Patron"); return; }
+  const site = {
+    id: uid(),
+    name: (desc || "site").slice(0, 40),
     desc,
+    createdAt: new Date().toLocaleString("fr-FR"),
     steps: [
       { key: "plan", label: "Architecture du site", agent: pick("analyse de donn\u00e9es").name, status: "pending", output: "" },
       { key: "design", label: "Charte graphique (design)", agent: pick("design").name, status: "pending", output: "" },
@@ -1700,9 +1771,10 @@ async function launchSiteProject(desc){
     ],
     html: "", built: false
   };
+  state.sites.push(site);
   logGlobal("projet site lanc\u00e9 : \u00ab " + esc(desc) + " \u00bb \u2014 le Patron mobilise ses agents.", "Patron");
   renderPcServers(); save();
-  const sp = state.siteProject;
+  const sp = site;
   try{
     await buildSiteStep("plan", [
       {role:"system", content:"Tu es un architecte web. Con\u00e7ois le plan d'un site en fran\u00e7ais. R\u00e9ponds UNIQUEMENT avec un JSON : {\"nom\": ..., \"description\": ..., \"style\": \"couleurs et ambiance\", \"sections\": [{\"titre\": ..., \"contenu\": ...}]} (max 6 sections)."},
@@ -1730,10 +1802,10 @@ async function launchSiteProject(desc){
   }catch(e){
     logGlobal("production du site interrompue \u2014 relancez \u00ab Lancer la production du site \u00bb depuis votre PC \u2192 Serveurs.", "Patron");
   }
-  renderPcServers(); save();
+  renderPcServers(); renderDashSites(); save();
 }
-async function siteModify(text){
-  const sp = state.siteProject;
+async function siteModify(text, siteId){
+  const sp = siteId ? state.sites.find(x => x.id === siteId) : currentSite();
   if(!sp || !sp.html){ logGlobal("aucun site construit : lancez d'abord sa production.", "Patron"); return; }
   if(!hasKey()){ logGlobal("cl\u00e9 IA requise : ajoutez votre cl\u00e9 Groq dans R\u00e9glages. Aucune simulation.", "Patron"); return; }
   const btn = document.getElementById("srvModBtn");
@@ -1751,7 +1823,7 @@ async function siteModify(text){
     logGlobal("\u00e9chec de la modification (" + esc(e.message) + ") \u2014 v\u00e9rifiez la cl\u00e9 API.", "Patron");
   }
   btn.disabled = false;
-  renderPcServers(); save();
+  renderPcServers(); renderDashSites(); save();
 }
 document.getElementById("srvLaunch").addEventListener("click", ()=>{
   const inp = document.getElementById("srvDesc");
@@ -1845,6 +1917,7 @@ function renderPcSettings(){
   if(keyEl && document.activeElement !== keyEl) keyEl.value = mistralKey();
   renderThemeDots();
   syncCoffeeUI();
+  renderPcEmail();
   const info = document.getElementById("pcSyncInfo");
   if(info){
     if(session && session.user) info.textContent = "Connecté : " + (session.user.email || session.user.id) + " — vos données suivent votre compte sur tous vos appareils.";
@@ -1960,6 +2033,115 @@ function syncCoffeeUI(){
 }
 document.getElementById("coffeeToggle").addEventListener("click", ()=> setCoffeeClosed(!state.coffeeClosed));
 document.getElementById("pcCoffeeToggle").addEventListener("click", ()=> setCoffeeClosed(!state.coffeeClosed));
+
+/* ===== notifications email (EmailJS) ===== */
+const EJ_STORE = "ac_emailjs_cfg";
+function emailCfg(){ try{ return JSON.parse(localStorage.getItem(EJ_STORE) || "{}"); }catch(e){ return {}; } }
+async function sendEmail(subject, message){
+  const c = emailCfg();
+  if(!c.serviceId || !c.templateId || !c.publicKey) throw new Error("email non configuré (PC → Réglages → Notifications par email)");
+  const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ service_id: c.serviceId, template_id: c.templateId, user_id: c.publicKey,
+      template_params: Object.assign({ subject, message }, c.to ? { to_email: c.to } : {}) })
+  });
+  if(!res.ok){ const t = await res.text(); throw new Error("envoi email refusé (" + res.status + ") " + t.slice(0, 140)); }
+}
+function renderPcEmail(){
+  const c = emailCfg();
+  const ids = ["ejServiceId", "ejTemplateId", "ejPublicKey", "ejTo"];
+  const keys = ["serviceId", "templateId", "publicKey", "to"];
+  ids.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if(el && document.activeElement !== el) el.value = c[keys[i]] || "";
+  });
+}
+["ejServiceId", "ejTemplateId", "ejPublicKey", "ejTo"].forEach((id, i) => {
+  document.getElementById(id).addEventListener("input", e=>{
+    const c = emailCfg();
+    c[["serviceId", "templateId", "publicKey", "to"][i]] = e.target.value.trim();
+    try{ localStorage.setItem(EJ_STORE, JSON.stringify(c)); }catch(err){}
+  });
+});
+document.getElementById("ejTest").addEventListener("click", async ()=>{
+  const b = document.getElementById("ejTest");
+  b.disabled = true;
+  try{
+    await sendEmail("Test Agent_ia", "Notification de test : la connexion email de vos agents fonctionne. — " + new Date().toLocaleString("fr-FR"));
+    logGlobal("email de test envoyé vers " + esc(emailCfg().to || "votre boîte") + ".", "Système");
+  }catch(e){ logGlobal("échec de l'email de test : " + esc(e.message), "Système"); }
+  b.disabled = false;
+});
+
+/* ===== tâches programmées ===== */
+function renderPcSched(){
+  const el = document.getElementById("schedList");
+  if(!el) return;
+  const ST = { pending: ["programmée", "var(--faint)"], running: ["en cours...", "var(--amber)"], sent: ["travail lancé...", "var(--amber)"], done: ["terminée", "var(--signal)"], error: ["échec", "var(--red)"] };
+  el.innerHTML = (state.scheduled || []).map(sc => {
+    const pair = ST[sc.status] || ST.pending;
+    return '<div class="hrrow"><div><div class="hrname">' + esc(sc.text) + '</div><div class="hrole">' + icon("clock") + " " + esc(new Date(sc.due).toLocaleString("fr-FR")) + (sc.email ? " · email" : "") + '</div></div><span class="hstat" style="color:' + pair[1] + ';">' + pair[0] + '</span><button class="iconbtn schedDel" data-id="' + sc.id + '" title="Annuler">' + icon("cross") + '</button></div>';
+  }).join("") || '<div class="hint">Aucune tâche programmée.</div>';
+  el.querySelectorAll(".schedDel").forEach(b => b.addEventListener("click", ()=>{
+    state.scheduled = state.scheduled.filter(x => x.id !== b.dataset.id);
+    renderPcSched(); save();
+  }));
+}
+document.getElementById("schedAdd").addEventListener("click", ()=>{
+  const text = document.getElementById("schedText").value.trim();
+  const when = document.getElementById("schedWhen").value;
+  const wantEmail = document.getElementById("schedEmail").checked;
+  if(!text){ logGlobal("décrivez la tâche programmée.", "Patron"); return; }
+  if(!when){ logGlobal("choisissez la date et l'heure d'exécution.", "Patron"); return; }
+  const due = new Date(when).getTime();
+  if(due <= Date.now()){ logGlobal("l'heure choisie est passée : choisissez une heure future.", "Patron"); return; }
+  state.scheduled.push({ id: uid(), text, due, email: wantEmail, status: "pending" });
+  document.getElementById("schedText").value = "";
+  logGlobal("tâche programmée : « " + esc(text) + " » le " + esc(new Date(due).toLocaleString("fr-FR")) + (wantEmail ? " (résultat envoyé par email)" : "") + ".", "Patron");
+  renderPcSched(); save();
+});
+async function processSchedule(){
+  if(!state.scheduled || !state.scheduled.length) return;
+  const now = Date.now();
+  for(const sc of state.scheduled){
+    if(sc.status === "pending" && now >= sc.due){
+      if(!hasKey() || !state.agents.length){ sc.status = "error"; sc.note = "clé API ou agent manquant"; logGlobal("tâche programmée impossible (« " + esc(sc.text) + " ») : clé API ou agent manquant.", "Patron"); continue; }
+      const late = now - sc.due > 5 * 60000;
+      sc.status = "running";
+      logGlobal("tâche programmée : « " + esc(sc.text) + " »" + (late ? " (exécutée en retard — la page était fermée à l'heure prévue)" : "") + ".", "Patron");
+      const agent = bestMatchAgent(sc.text) || state.agents[0];
+      sc.agentName = agent.name;
+      assignTask(agent, sc.text, "tâche programmée");
+      sc.status = "sent";
+      save();
+    }
+    if(sc.status === "sent" && !sc.rid){
+      const taken = state.scheduled.filter(x => x.rid).map(x => x.rid);
+      const r = (state.results || []).find(x => x.task === sc.text && (x.status === "done" || x.status === "error") && !taken.includes(x.id));
+      if(r){
+        sc.rid = r.id;
+        if(r.status === "done" && sc.email){
+          try{
+            await sendEmail(sc.text, r.output);
+            sc.status = "done"; sc.note = "envoyé par email";
+            logGlobal("livrable de la tâche programmée <b>envoyé par email</b> vers " + esc(emailCfg().to || "votre boîte") + ".", "Système");
+          }catch(e){
+            sc.status = "done"; sc.note = "email échoué : " + e.message;
+            logGlobal("livrable prêt mais <b>envoi email échoué</b> : " + esc(e.message), "Système");
+          }
+        } else if(r.status === "done"){
+          sc.status = "done"; sc.note = "terminée";
+        } else {
+          sc.status = "error"; sc.note = "la tâche a échoué";
+        }
+        renderPcSched(); save();
+      }
+    }
+  }
+}
+setInterval(processSchedule, 15000);
+setTimeout(processSchedule, 3000);
 document.getElementById("bossRole").innerHTML = icon("crown") + " direction";
 document.getElementById("pcDesk").addEventListener("click", ()=> openPc("files"));
 
