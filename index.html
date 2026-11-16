@@ -1653,14 +1653,23 @@ async function buildSiteStep(key, prompt, maxTokens){
     const worker = state.agents.find(a => a.name === entry.agent);
     const prompts = prompt.map(m => ({ role: m.role, content: m.content }));
     if(worker) prompts[0].content += " Style personnel de " + worker.name + " à respecter dans le rendu : " + (worker.persona || "professionnel") + ".";
-    const out = await enqueueLLM(()=> callLLM(prompts, maxTokens));
+    let out;
+    try{
+      out = await enqueueLLM(()=> callLLM(prompts, maxTokens));
+    }catch(e1){
+      logGlobal("nouvel essai pour « " + esc(entry.label) + " » (" + esc(e1.message) + ")...", entry.agent);
+      entry.status = "building";
+      renderPcServers(); save();
+      await new Promise(r => setTimeout(r, 4000));
+      out = await enqueueLLM(()=> callLLM(prompts, maxTokens));
+    }
     entry.output = out;
     entry.status = "done";
     logGlobal("<b>" + esc(entry.agent) + "</b> rend compte au Patron : \u00ab " + esc(entry.label) + " \u00bb termin\u00e9.", entry.agent);
   }catch(e){
     entry.status = "error";
     entry.output = e.message;
-    logGlobal("\u00e9chec (\u00ab " + esc(entry.label) + " \u00bb : " + esc(e.message) + ") \u2014 v\u00e9rifiez la cl\u00e9 API.", entry.agent);
+    logGlobal("\u00e9chec (\u00ab " + esc(entry.label) + " \u00bb : " + esc(e.message) + ") \u2014 v\u00e9rifiez la cl\u00e9 API ou relancez la production (limite gratuite Groq possible).", entry.agent);
     throw e;
   }
   renderPcServers(); save();
@@ -1707,13 +1716,20 @@ async function launchSiteProject(desc){
       {role:"system", content:"Tu es un d\u00e9veloppeur web senior. G\u00e9n\u00e8re un site web complet en UN SEUL fichier HTML (HTML + CSS + JS inline), moderne, responsive, professionnel, textes en fran\u00e7ais, sans d\u00e9pendance externe. EXIGENCES DE DESIGN OBLIGATOIRES (rendu propre et \u00e9l\u00e9gant, digne d'un studio web professionnel, jamais moche) : palette limit\u00e9e (2-3 couleurs + neutres) strictement coh\u00e9rente avec la charte graphique fournie ; beaucoup d'espace blanc, sections a\u00e9r\u00e9es ; typographie hi\u00e9rarchis\u00e9e (grands titres marqu\u00e9s, textes lisibles, interligne confortable) ; cartes avec coins arrondis et ombres douces ; boutons soign\u00e9s avec effet hover ; bandeau h\u00e9ros avec titre fort et bouton d'action ; navigation sobre et lisible ; ic\u00f4nes et illustrations r\u00e9alis\u00e9es en CSS/SVG inline (jamais d'URL d'image externe) ; pied de page propre ; parfaitement responsive sur mobile. Respecte ce plan : " + ((sp.steps.find(s => s.key === "plan").output || "").slice(0, 3000)) + " ET cette charte graphique : " + ((sp.steps.find(s => s.key === "design").output || "").slice(0, 2000)) + ". R\u00e9ponds UNIQUEMENT avec le code HTML complet, sans explication."},
       {role:"user", content: "Site \u00e0 cr\u00e9er : " + sp.desc}
     ], 14000);
+    try{
     await buildSiteStep("widget", [
       {role:"system", content:"Tu es un d\u00e9veloppeur web senior. Cr\u00e9e un widget de chat \"Service client\" autonome (HTML + CSS + JS, aucun framework) \u00e0 coller avant </body> d'un site : bulle fixe en bas \u00e0 droite, panneau de discussion qui s'ouvre, r\u00e9ponses r\u00e9elles via l'API Groq (https://api.groq.com/openai/v1/chat/completions, mod\u00e8le openai/gpt-oss-120b), cl\u00e9 API lue depuis localStorage('sc_groq_key') avec un petit bouton r\u00e9glages \u2699 qui demande la cl\u00e9 (prompt) et la stocke. Ton : professionnel et aimable, en fran\u00e7ais. Si aucune cl\u00e9 n'est configur\u00e9e, invite poliment \u00e0 la saisir via le bouton \u2699. R\u00e9ponds UNIQUEMENT avec le code du widget."},
       {role:"user", content: "Site concern\u00e9 : " + sp.desc}
     ], 7000);
+    }catch(eW){
+      logGlobal("l'assistant service client n'a pas pu \u00eatre ajout\u00e9 (" + esc(eW.message) + ") \u2014 le site est construit et utilisable sans lui.", "Patron");
+    }
     assembleSite();
-    logGlobal("<b>site termin\u00e9</b> : ouvrez votre PC \u2192 Serveurs pour l'aper\u00e7u, le t\u00e9l\u00e9charger ou demander des modifications.", "Patron");
-  }catch(e){ /* \u00e9chec d\u00e9j\u00e0 journalis\u00e9 */ }
+    if(sp.html) logGlobal("<b>site termin\u00e9</b> : ouvrez votre PC \u2192 Serveurs pour l'aper\u00e7u, le t\u00e9l\u00e9charger ou demander des modifications.", "Patron");
+    else logGlobal("la production du site a \u00e9chou\u00e9 \u00e0 l'\u00e9tape du code \u2014 relancez \u00ab Lancer la production du site \u00bb.", "Patron");
+  }catch(e){
+    logGlobal("production du site interrompue \u2014 relancez \u00ab Lancer la production du site \u00bb depuis votre PC \u2192 Serveurs.", "Patron");
+  }
   renderPcServers(); save();
 }
 async function siteModify(text){
