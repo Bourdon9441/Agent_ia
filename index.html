@@ -249,6 +249,7 @@
   .hredit input, .hredit select{background:var(--raise); border:1px solid var(--line); border-radius:8px; color:var(--ink); font-family:var(--disp); font-size:12px; padding:6px 8px; outline:none; min-width:0;}
   .hredit input:focus, .hredit select:focus{border-color:var(--signal);}
   .hredit input.hePersona{flex:1; min-width:150px;}
+  .pvstat{font-size:10px; font-family:var(--mono); color:var(--dim); text-transform:none; letter-spacing:0; margin-left:auto;}
   .hrrow .hrole svg{width:11px; height:11px;}
   .hrrow .hstat{font-family:var(--mono); font-size:9.5px; text-transform:uppercase; letter-spacing:.1em; margin-left:auto;}
   .hrrow .hstat.busy{color:var(--amber);} .hrrow .hstat.idle{color:var(--signal);} .hrrow .hstat.paused{color:var(--faint);}
@@ -484,11 +485,8 @@
       <div class="hint" style="margin-top:14px;">Coin café</div>
       <div class="row"><button class="btn line" id="pcCoffeeToggle" style="flex:0 0 auto;">Fermer la cafet</button></div>
       <div class="hint" id="pcCoffeeHint">Ouverte : les agents sans travail peuvent prendre une pause café.</div>
-      <div class="hint" style="margin-top:14px;">Notifications par email — via EmailJS (gratuit) : créez un compte sur emailjs.com, connectez-y votre boîte Outlook ou Gmail, créez un template avec les variables {{subject}} et {{message}}, puis collez vos identifiants ici. Les notifications arrivent dans votre boîte.</div>
-      <input type="text" id="ejServiceId" placeholder="Service ID EmailJS (service_...)">
-      <input type="text" id="ejTemplateId" placeholder="Template ID (template_...)">
-      <input type="text" id="ejPublicKey" placeholder="Public Key (clé publique EmailJS)">
-      <input type="text" id="ejTo" placeholder="Email de destination (votre gmail)">
+      <div class="hint" style="margin-top:14px;">Notifications par email — entrez simplement votre adresse (Gmail, Outlook…) : au premier envoi, FormSubmit vous envoie un email d'activation, cliquez une seule fois sur le lien qu'il contient. Ensuite, toutes les notifications et tâches programmées arrivent dans votre boîte. Aucun compte à créer.</div>
+      <input type="text" id="ejTo" placeholder="Votre email (ex : vous@gmail.com)">
       <div class="row"><button class="btn line" id="ejTest" style="flex:0 0 auto;">Tester l'envoi</button></div>
       <div class="hint" id="ejHint">Reste dans ce navigateur, comme votre clé API.</div>
       <div class="hint" id="pcSyncInfo" style="margin-top:14px;"></div>
@@ -1396,7 +1394,7 @@ function openAuthModal(){
     body.querySelector("#magicEmail").addEventListener("keydown", e=>{ if(e.key === "Enter") signInEmail(); });
     body.querySelector("#pwBtn").addEventListener("click", signInPassword);
     body.querySelector("#pwPass").addEventListener("keydown", e=>{ if(e.key === "Enter") signInPassword(); });
-    body.querySelector("#diagBtn").addEventListener("click", async ()=>{
+    async function runProviderDiag(){
       const m = body.querySelector("#diagMsg");
       m.style.display = ""; m.className = "msg"; m.textContent = "Vérification en cours...";
       try{
@@ -1413,8 +1411,14 @@ function openAuthModal(){
         }
         m.className = "msg ok";
         m.textContent = txt;
+        body.querySelectorAll("[data-p]").forEach(b => {
+          const on = ext[b.dataset.p] && ext[b.dataset.p].enabled;
+          if(!b.querySelector(".pvstat")) b.insertAdjacentHTML("beforeend", ' <span class="pvstat">' + (on ? "✓ prêt" : "✗ à activer") + "</span>");
+        });
       }catch(e){ m.className = "msg err"; m.textContent = "Diagnostic impossible : " + e.message; }
-    });
+    }
+    body.querySelector("#diagBtn").addEventListener("click", runProviderDiag);
+    runProviderDiag();
     body.querySelector("#copyCb").addEventListener("click", function(){
       navigator.clipboard.writeText(cfg.url + "/auth/v1/callback");
       this.textContent = "Copié ✓";
@@ -2090,42 +2094,38 @@ function syncCoffeeUI(){
 document.getElementById("coffeeToggle").addEventListener("click", ()=> setCoffeeClosed(!state.coffeeClosed));
 document.getElementById("pcCoffeeToggle").addEventListener("click", ()=> setCoffeeClosed(!state.coffeeClosed));
 
-/* ===== notifications email (EmailJS) ===== */
+/* ===== notifications email (FormSubmit — aucun compte à créer) ===== */
 const EJ_STORE = "ac_emailjs_cfg";
 function emailCfg(){ try{ return JSON.parse(localStorage.getItem(EJ_STORE) || "{}"); }catch(e){ return {}; } }
 async function sendEmail(subject, message){
   const c = emailCfg();
-  if(!c.serviceId || !c.templateId || !c.publicKey) throw new Error("email non configuré (PC → Réglages → Notifications par email)");
-  const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+  if(!c.to) throw new Error("email de destination non configuré (PC → Réglages → Notifications par email)");
+  const res = await fetch("https://formsubmit.co/ajax/" + encodeURIComponent(c.to), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ service_id: c.serviceId, template_id: c.templateId, user_id: c.publicKey,
-      template_params: Object.assign({ subject, message }, c.to ? { to_email: c.to } : {}) })
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify({ subject: subject, message: message, _template: "box", _captcha: "false" })
   });
   if(!res.ok){ const t = await res.text(); throw new Error("envoi email refusé (" + res.status + ") " + t.slice(0, 140)); }
+  const j = await res.json().catch(()=>({}));
+  if(j.success === "false" || j.success === false) throw new Error(j.message || "envoi refusé par FormSubmit");
+  return j.message || "";
 }
 function renderPcEmail(){
   const c = emailCfg();
-  const ids = ["ejServiceId", "ejTemplateId", "ejPublicKey", "ejTo"];
-  const keys = ["serviceId", "templateId", "publicKey", "to"];
-  ids.forEach((id, i) => {
-    const el = document.getElementById(id);
-    if(el && document.activeElement !== el) el.value = c[keys[i]] || "";
-  });
+  const el = document.getElementById("ejTo");
+  if(el && document.activeElement !== el) el.value = c.to || "";
 }
-["ejServiceId", "ejTemplateId", "ejPublicKey", "ejTo"].forEach((id, i) => {
-  document.getElementById(id).addEventListener("input", e=>{
-    const c = emailCfg();
-    c[["serviceId", "templateId", "publicKey", "to"][i]] = e.target.value.trim();
-    try{ localStorage.setItem(EJ_STORE, JSON.stringify(c)); }catch(err){}
-  });
+document.getElementById("ejTo").addEventListener("input", e=>{
+  const c = emailCfg();
+  c.to = e.target.value.trim();
+  try{ localStorage.setItem(EJ_STORE, JSON.stringify(c)); }catch(err){}
 });
 document.getElementById("ejTest").addEventListener("click", async ()=>{
   const b = document.getElementById("ejTest");
   b.disabled = true;
   try{
-    await sendEmail("Test Agent_ia", "Notification de test : la connexion email de vos agents fonctionne. — " + new Date().toLocaleString("fr-FR"));
-    logGlobal("email de test envoyé vers " + esc(emailCfg().to || "votre boîte") + ".", "Système");
+    const note = await sendEmail("Test Agent_ia", "Notification de test : la connexion email de vos agents fonctionne. — " + new Date().toLocaleString("fr-FR"));
+    logGlobal("email de test envoyé vers " + esc(emailCfg().to || "votre boîte") + "." + (note ? " (" + esc(note) + ")" : ""), "Système");
   }catch(e){ logGlobal("échec de l'email de test : " + esc(e.message), "Système"); }
   b.disabled = false;
 });
