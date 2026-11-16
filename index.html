@@ -197,6 +197,9 @@
   .pnode.off{opacity:.45;}
   .pn-out{position:absolute; right:-7px; top:50%; margin-top:-7px; width:14px; height:14px; border-radius:50%; background:var(--raise); border:1.5px solid var(--line2); cursor:crosshair;}
   .pn-out:hover{border-color:var(--signal); background:var(--signal);}
+  .pn-del{position:absolute; top:5px; right:5px; width:18px; height:18px; border-radius:6px; border:1px solid var(--line2); background:var(--raise); color:var(--faint); font-size:12px; line-height:1; cursor:pointer; display:none; align-items:center; justify-content:center; padding:0; font-family:var(--mono);}
+  .pnode:hover .pn-del{display:flex;}
+  .pn-del:hover{color:#fff; background:#c0392b; border-color:#c0392b;}
   .planPalette{position:absolute; top:10px; right:10px; z-index:7; width:158px; background:rgba(11,13,10,.85); border:1px solid var(--line2); border-radius:10px; padding:8px;}
   .pp-head{font-family:var(--mono); font-size:9px; letter-spacing:.12em; color:var(--faint); text-transform:uppercase; margin-bottom:6px;}
   .pp-item{display:flex; align-items:center; gap:7px; width:100%; background:transparent; border:1px solid var(--line2); border-radius:8px; color:var(--ink); font-family:var(--disp); font-size:12px; padding:7px 9px; margin-bottom:5px; cursor:pointer; text-align:left;}
@@ -2924,6 +2927,7 @@ function renderPlan(){
       '<div class="pn-head"><span class="pn-ic">' + icon(n.icon) + '</span><span class="pn-title">' + esc(n.title) + '</span>' +
       (n.dot ? '<span class="pn-dot ' + n.dot + '"></span>' : "") + '</div>' +
       '<div class="pn-sub">' + esc(n.sub) + '</div>' + chips +
+      (n.custom ? '<button class="pn-del" title="Supprimer ce bloc">×</button>' : "") +
       '<span class="pn-out" title="Glisser vers un autre bloc pour relier"></span></div>';
   }
   nodesEl.innerHTML = html;
@@ -2975,7 +2979,7 @@ function updatePlanHud(){
   if(!el) return;
   const busy = state.agents.filter(a => a.status === "busy").length;
   const paused = state.agents.filter(a => a.status === "paused").length;
-  el.innerHTML = "plan de l'entreprise · glisser le fond : déplacer · molette : zoom · ● : relier · cliquer un fil : le supprimer · clic droit sur un bloc : le supprimer" +
+  el.innerHTML = "plan de l'entreprise · glisser le fond : déplacer · molette : zoom · ● : relier · cliquer un fil : le supprimer · × ou clic droit : supprimer un bloc ajouté" +
     "<br>" + state.agents.length + " agent(s) · " + busy + " au travail · " + paused + " au self · " + bossQueue.length + " tâche(s) à distribuer";
 }
 
@@ -3056,7 +3060,7 @@ function openChooserInPalette(tp, anchor){
   if(!pal) return;
   pal.innerHTML = '<div class="pp-head">Blocs à ajouter</div>' + PLAN_TEMPLATES.map(tp =>
     '<button class="pp-item" data-t="' + tp.t + '">' + icon(tp.icon) + " " + tp.label + '</button>').join("") +
-    '<div class="pp-hint">Cliquez un bloc pour l\'ouvrir · clic droit : supprimer le bloc · glissez le point d\'un bloc vers un autre pour relier · cliquez un fil pour le supprimer.</div>';
+    '<div class="pp-hint">Cliquez un bloc pour l\'ouvrir · survolez un bloc ajouté puis × (ou clic droit) : supprimer · glissez le point d\'un bloc vers un autre pour relier · cliquez un fil pour le supprimer.</div>';
   pal.querySelectorAll(".pp-item").forEach(b => b.addEventListener("click", e => {
     const tp = PLAN_TEMPLATES.find(x => x.t === b.dataset.t);
     if(!tp) return;
@@ -3089,10 +3093,21 @@ function openChooserInPalette(tp, anchor){
     if(!nodeEl || !nodeEl.dataset.id) return;
     e.preventDefault();
     const b = (state.planBlocks || []).find(x => x.id === nodeEl.dataset.id);
-    if(!b) return;
+    if(!b){ planOpenNode(nodeEl.dataset.id); return; }
     state.planBlocks = state.planBlocks.filter(x => x.id !== b.id);
     state.planLinks = (state.planLinks || []).filter(l => l.from !== b.id && l.to !== b.id);
     logGlobal("bloc « " + esc(b.title) + " » supprimé du plan (clic droit).", "Système");
+    save(); renderPlan();
+  });
+  world.addEventListener("click", e => {
+    const del = e.target.closest ? e.target.closest(".pn-del") : null;
+    if(!del) return;
+    const nodeEl = del.closest(".pnode");
+    const b = nodeEl && (state.planBlocks || []).find(x => x.id === nodeEl.dataset.id);
+    if(!b) return;
+    state.planBlocks = state.planBlocks.filter(x => x.id !== b.id);
+    state.planLinks = (state.planLinks || []).filter(l => l.from !== b.id && l.to !== b.id);
+    logGlobal("bloc « " + esc(b.title) + " » supprimé du plan.", "Système");
     save(); renderPlan();
   });
   world.addEventListener("wheel", e => {
@@ -3132,7 +3147,7 @@ function openChooserInPalette(tp, anchor){
       return;
     }
     const nodeEl = e.target.closest ? e.target.closest(".pnode") : null;
-    if(nodeEl && !e.target.closest(".pn-chip")){
+    if(nodeEl && !e.target.closest(".pn-chip") && !e.target.closest(".pn-del")){
       const n = planData.nodes.find(x => x.id === nodeEl.dataset.id);
       if(!n) return;
       planDrag = { kind: "node", id: n.id, el: nodeEl, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, moved: false };
