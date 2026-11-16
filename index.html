@@ -635,6 +635,27 @@ async function signInEmail(){
   }catch(e){ showAuthMsg(e.message, true); }
 }
 
+async function signInPassword(){
+  const email = document.getElementById("pwEmail").value.trim();
+  const pass = document.getElementById("pwPass").value;
+  const btn = document.getElementById("pwBtn");
+  if(!email || pass.length < 6){ showAuthMsg("Entrez un e-mail valide et un mot de passe de 6 caractères minimum.", true); return; }
+  btn.disabled = true;
+  try{
+    let { error } = await sb.auth.signInWithPassword({ email, password: pass });
+    if(error && /invalid login credentials/i.test(error.message)){
+      const created = await sb.auth.signUp({ email, password: pass });
+      if(created.error){ showAuthMsg(created.error.message, true); btn.disabled = false; return; }
+      if(created.data && created.data.session){ btn.disabled = false; return; }
+      showAuthMsg("Compte créé ! Un e-mail de confirmation vous attend : cliquez son lien (peu importe la page où il mène), puis revenez ici et reconnectez-vous avec ce mot de passe.", false);
+      btn.disabled = false;
+      return;
+    }
+    if(error) showAuthMsg(error.message, true);
+  }catch(e){ showAuthMsg(e.message, true); }
+  btn.disabled = false;
+}
+
 async function signOut(){
   if(sb) await sb.auth.signOut();
   session = null;
@@ -839,11 +860,17 @@ function openAuthModal(){
       <div class="divider">ou par e-mail</div>
       <input type="email" id="magicEmail" placeholder="votre@email.com" style="margin-bottom:10px;">
       <button class="btn wide" id="magicBtn">${icon("mail")} Recevoir un lien de connexion</button>
+      <div class="divider">ou e-mail + mot de passe (le plus fiable)</div>
+      <input type="email" id="pwEmail" placeholder="votre@email.com" style="margin-bottom:8px;">
+      <input type="password" id="pwPass" placeholder="mot de passe (6 caractères minimum)" style="margin-bottom:10px;">
+      <button class="btn line wide" id="pwBtn">Créer un compte / Se connecter</button>
       <div class="msg" id="authMsg"></div>
       <div class="hint" style="margin-top:14px;">Si la connexion GitHub / Google / Outlook échoue, vérifiez dans le <a href="https://supabase.com/dashboard/project/${proj}/auth/providers" target="_blank" rel="noopener">tableau de bord Supabase</a> : 1) le fournisseur est activé dans Authentication → Providers, et 2) <a href="https://supabase.com/dashboard/project/${proj}/auth/url-configuration" target="_blank" rel="noopener">Site URL</a> vaut <b>https://bourdon9441.github.io/Agent_ia/</b> (pas localhost:3000).</div>`;
     body.querySelectorAll("[data-p]").forEach(b => b.addEventListener("click", ()=> signInProvider(b.dataset.p)));
     body.querySelector("#magicBtn").addEventListener("click", signInEmail);
     body.querySelector("#magicEmail").addEventListener("keydown", e=>{ if(e.key === "Enter") signInEmail(); });
+    body.querySelector("#pwBtn").addEventListener("click", signInPassword);
+    body.querySelector("#pwPass").addEventListener("keydown", e=>{ if(e.key === "Enter") signInPassword(); });
   } else {
     document.getElementById("authSub").textContent = "Pour vous connecter avec GitHub, Gmail ou Outlook et retrouver vos agents sur tous vos appareils, reliez d'abord un espace de synchronisation Supabase (gratuit, 2 minutes) :";
     body.innerHTML = `
