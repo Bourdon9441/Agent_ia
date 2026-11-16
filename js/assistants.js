@@ -89,7 +89,7 @@ export function renderAssistants(container){
         const out = await enqueueLLM(()=> chat({ ...resolveModelFor(a), messages: [
           { role: "system", content: buildSystemPrompt(a) },
           { role: "user", content: "Réponds exactement : prêt à travailler." }
-        ], temperature: 0.2, maxTokens: 40 }));
+        ], temperature: 0.2, maxTokens: 500 }));
         toast(a.name + " répond : " + out.slice(0, 60));
       }catch(err){ toast(err.message, true); }
       btn.disabled = false;

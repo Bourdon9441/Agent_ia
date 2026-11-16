@@ -7,6 +7,7 @@ import { renderMarkdown, highlightIn, attachCopyButtons } from "./markdown.js";
 import { toast } from "./ui.js";
 
 let running = false;
+const normName = s => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
 export async function runCollaboration(objective, container){
   if(running){ toast("Une collaboration est déjà en cours.", true); return; }
@@ -37,7 +38,7 @@ export async function runCollaboration(objective, container){
     steps.lastElementChild.remove();
     let context = "Objectif : " + objective;
     for(const step of plan.slice(0, 5)){
-      const a = getAssistant((state.assistants.find(x => x.name.toLowerCase() === String(step.assistant || "").toLowerCase()) || {}).id) || state.assistants[0];
+      const a = getAssistant((state.assistants.find(x => normName(x.name) === normName(step.assistant)) || {}).id) || state.assistants[0];
       const outEl = addStep(a.name, step.task, "en cours");
       const am = resolveModelFor(a);
       if(!am.model){ outEl.textContent = "ignoré : aucun modèle configuré."; continue; }

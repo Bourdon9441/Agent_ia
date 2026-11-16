@@ -80,17 +80,30 @@ export async function chat({ providerId, model, messages, temperature = 0.7, max
   }
 
   const body = { model, messages, temperature, max_tokens: maxTokens, stream: !!onDelta };
-  const res = await fetch(base + "/chat/completions", {
-    method: "POST", headers: headersFor(p), body: JSON.stringify(body), signal
-  });
-  if(!res.ok){
+  if(p.id === "groq" && /gpt-oss/i.test(model)) body.reasoning_format = "hidden";
+  let res, lastErr = "";
+  for(let attempt = 0; attempt < 3; attempt++){
+    if(attempt > 0) await new Promise(r => setTimeout(r, 2000 * attempt));
+    res = await fetch(base + "/chat/completions", {
+      method: "POST", headers: headersFor(p), body: JSON.stringify(body), signal
+    });
+    if(res.ok) break;
     let detail = "";
     try{ const j = await res.json(); detail = (j.error && (j.error.message || j.error)) || ""; }catch(e){}
-    throw new Error("HTTP " + res.status + (detail ? " — " + detail : ""));
+    lastErr = "HTTP " + res.status + (detail ? " — " + detail : "");
+    const ra = res.headers.get("retry-after");
+    if(res.status === 429 || res.status >= 500){
+      if(ra) await new Promise(r => setTimeout(r, (parseFloat(ra) || 2) * 1000));
+      continue;
+    }
+    throw new Error(lastErr);
   }
+  if(!res.ok) throw new Error(lastErr + " ( après 3 essais — le fournisseur est saturé, réessayez dans un instant )");
   if(!onDelta){
     const j = await res.json();
-    return j.choices[0].message.content;
+    const out = (j.choices[0].message || {}).content || "";
+    if(!out && (j.choices[0].message || {}).reasoning) throw new Error("le modèle n’a renvoyé que du raisonnement interne — augmentez « Tokens max » de l’assistant");
+    return out;
   }
   const reader = res.body.getReader();
   const dec = new TextDecoder();
@@ -174,5 +187,5 @@ async function pump(){
   const item = queue.shift();
   try{ item.resolve(await item.job()); }catch(e){ item.reject(e); }
   busy = false;
-  setTimeout(pump, 400);
+  setTimeout(pump, 1500);
 }

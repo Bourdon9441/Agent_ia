@@ -7,6 +7,7 @@ import { renderMarkdown, highlightIn, attachCopyButtons } from "./markdown.js";
 import { toast, viewHead, bindMenuBtn } from "./ui.js";
 
 let busy = false;
+const normName = s => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
 const PATRON_PROMPT = "Tu es le Patron d’une entreprise d’assistants IA. C’est toi qui décides comment le travail est réparti. Tu réponds en français, de façon claire et brève.";
 
@@ -121,7 +122,7 @@ async function sendToPatron(container, text){
       const steps = container.querySelector("#patronSteps") || pend;
       let context = "Demande du client : " + text;
       for(const t of plan.taches.slice(0, 5)){
-        const a = state.assistants.find(x => x.name.toLowerCase() === String(t.assistant || "").toLowerCase() && x.enabled !== false) || state.assistants.find(x => x.enabled !== false && x.id !== patron.id);
+        const a = state.assistants.find(x => normName(x.name) === normName(t.assistant) && x.enabled !== false) || state.assistants.find(x => x.enabled !== false && x.id !== patron.id);
         if(!a){ continue; }
         steps.insertAdjacentHTML("beforeend", '<div class="team-step"><div class="head">' + icon("user") + ' <b>' + esc(a.name) + '</b><span class="badge">en cours</span></div><div class="out">' + esc(t.task || "") + '</div></div>');
         log.scrollTop = log.scrollHeight;
