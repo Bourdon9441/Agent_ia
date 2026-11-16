@@ -444,7 +444,15 @@
       <label>Salle serveurs — site internet à produire</label>
       <textarea id="srvDesc" placeholder="Décrivez le site à créer. Ex : site vitrine pour ma boulangerie avec menu, horaires et formulaire de contact"></textarea>
       <button class="btn wide" id="srvLaunch" style="margin-top:10px;"></button>
-      <div class="hint" style="margin-top:12px;">Le Patron découpe le projet et le confie à vos agents (code, rédaction, design…). Les livrables (code du site, textes, structure) apparaissent dans l'onglet Fichiers dès qu'ils ont terminé.</div>
+      <div id="srvProject" style="margin-top:14px;"></div>
+      <div id="srvModWrap" style="display:none;">
+        <label style="margin-top:18px;">Demander une modification au Patron <span style="text-transform:none;letter-spacing:0">(ex : ajoute un service client, change les couleurs, ajoute une page tarifs)</span></label>
+        <div class="row">
+          <input type="text" id="srvModInput" placeholder="Ex : ajoute un service client avec chat">
+          <button class="btn" id="srvModBtn" style="flex:0 0 auto;">Appliquer</button>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:12px;">Vos agents construisent un vrai site : architecture, code complet, assistant service client intégré (il discute vraiment, avec votre clé Groq configurée dans le site). Ensuite, demandez des modifications : le Patron les fait appliquer par vos agents.</div>
     </div>
     <div class="pcpane" id="pane-settings" style="display:none;">
       <label>Clé API Groq ou Mistral — reste dans ce navigateur</label>
@@ -541,7 +549,7 @@ function scopeKey(){
 }
 function freshState(){
   return { agents: [], mission: "", backlog: [], autonomous: false, speed: 1, doneCount: 0,
-           activity: [], results: [], chat: [], meta: { syncedAt: null } };
+           activity: [], results: [], chat: [], siteProject: null, meta: { syncedAt: null } };
 }
 let state = freshState();
 
@@ -735,7 +743,7 @@ async function executeTask(agent){
     const out = await enqueueLLM(()=> callLLM([
       {role:"system", content:"Tu es l'agent " + agent.name + " (spécialité : " + (agent.role || "polyvalent") + ") d'une équipe de travail. Exécute la tâche suivante et produis directement le livrable concret, en français, prêt à l'emploi (texte structuré, complet, actionnable). Pas d'introduction, pas de commentaire : uniquement le livrable."},
       {role:"user", content: t.text}
-    ]));
+    ], 3000));
     if(agent.currentTask !== t) return;
     const r = state.results.find(x=>x.id===rid);
     if(r){ r.output = out; r.status = "done"; }
@@ -824,7 +832,7 @@ async function decompose(objective){
     const reply = await callLLM([
       {role:"system", content:"Tu es le Patron, un vrai manager d'équipe. Ton équipe d'agents : " + agentsDesc + ". Découpe l'objectif donné en sous-tâches courtes et actionnables (max 6), et délègue chaque tâche à l'agent le plus adapté à sa spécialité, comme dans la vraie vie. Réponds UNIQUEMENT avec un tableau JSON de chaînes en français au format exact \"Nom de l'agent : la tâche\", ex: [\"Nova : analyser le marché des cafés\",\"Atlas : rédiger le plan marketing\"]. Si aucun agent ne convient, utilise quand même le plus proche."},
       {role:"user", content: objective}
-    ]);
+    ], 1500);
     const m = reply.match(/\[[\s\S]*\]/);
     if(m){
       const arr = JSON.parse(m[0]);
@@ -861,7 +869,7 @@ function mistralKey(){
   try{ return localStorage.getItem(MISTRAL_KEY_STORE) || ""; }catch(e){ return ""; }
 }
 
-async function callLLM(messages){
+async function callLLM(messages, maxTokens){
   const key = mistralKey();
   const isGroq = key.startsWith("gsk_");
   const url = isGroq
@@ -871,7 +879,7 @@ async function callLLM(messages){
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
-    body: JSON.stringify({ model, messages, temperature: 0.4, max_tokens: 500 })
+    body: JSON.stringify({ model, messages, temperature: 0.4, max_tokens: maxTokens || 700 })
   });
   if(!res.ok) throw new Error("HTTP " + res.status);
   const data = await res.json();
@@ -933,7 +941,8 @@ async function pullRemote(force){
     if(data && data.data){
       const remoteNewer = !state.meta.syncedAt || (data.updated_at > state.meta.syncedAt);
       if((remoteNewer && !pendingLocal) || force){
-        state = Object.assign(freshState(), data.data, { meta: { syncedAt: data.updated_at } });
+        const keep = { results: state.results, chat: state.chat, siteProject: state.siteProject };
+        state = Object.assign(freshState(), data.data, keep, { meta: { syncedAt: data.updated_at } });
         renderAll(); save();
       }
     } else if(!data){
@@ -1538,38 +1547,148 @@ function renderPcTasks(){
 }
 function renderPcServers(){
   document.getElementById("srvLaunch").innerHTML = icon("code") + " Lancer la production du site";
+  const box = document.getElementById("srvProject");
+  const modWrap = document.getElementById("srvModWrap");
+  const sp = state.siteProject;
+  if(!sp){ box.innerHTML = ""; modWrap.style.display = "none"; return; }
+  const ST = { pending: ["en attente", "var(--faint)"], building: ["en cours...", "var(--amber)"], done: ["termin\u00e9", "var(--signal)"], error: ["\u00e9chec", "var(--red)"] };
+  let h = '<div class="hint" style="margin-bottom:8px;">Projet en cours : <b style="color:var(--ink)">' + esc(sp.desc) + '</b></div>';
+  h += sp.steps.map(s => {
+    const pair = ST[s.status] || ST.pending;
+    return '<div class="hrrow"><div><div class="hrname">' + esc(s.label) + '</div><div class="hrole">' + icon("user") + " " + esc(s.agent) + '</div></div><span class="hstat" style="color:' + pair[1] + ';">' + pair[0] + '</span></div>';
+  }).join("");
+  if(sp.built && sp.html){
+    h += '<div class="row" style="margin-top:6px;"><button class="btn line" id="srvPreview">Aper\u00e7u du site</button><button class="btn line" id="srvDownload">T\u00e9l\u00e9charger index.html</button><button class="btn line" id="srvCopy">Copier le code</button></div>';
+    modWrap.style.display = "";
+  } else modWrap.style.display = "none";
+  box.innerHTML = h;
+  const prev = document.getElementById("srvPreview");
+  if(prev) prev.addEventListener("click", ()=>{
+    const blob = new Blob([state.siteProject.html], { type: "text/html" });
+    window.open(URL.createObjectURL(blob), "_blank");
+  });
+  const dl = document.getElementById("srvDownload");
+  if(dl) dl.addEventListener("click", ()=>{
+    const blob = new Blob([state.siteProject.html], { type: "text/html" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "index.html";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  const cp = document.getElementById("srvCopy");
+  if(cp) cp.addEventListener("click", ()=> navigator.clipboard.writeText(state.siteProject.html));
 }
-document.getElementById("pcLaunch").addEventListener("click", ()=>{
-  const inp = document.getElementById("pcObjective");
-  launchObjective(inp.value);
-  inp.value = "";
-});
-document.getElementById("pcObjective").addEventListener("keydown", e=>{
-  if(e.key === "Enter"){ launchObjective(e.target.value); e.target.value = ""; }
-});
-document.getElementById("pcAuto").addEventListener("click", ()=>{
-  if(!state.autonomous && !hasKey()){ logGlobal("mode autonome impossible sans clé IA — ajoutez votre clé Groq dans Réglages.", "Patron"); return; }
-  state.autonomous = !state.autonomous;
-  renderChips(); renderPcTasks(); save();
-  logGlobal("mode autonome " + (state.autonomous ? "ACTIVÉ — le Patron suit votre liste de tâches." : "désactivé."), "Patron");
-});
-document.getElementById("pcBacklog").addEventListener("input", e=>{
-  state.backlog = e.target.value.split("\n").map(s=>s.trim()).filter(Boolean);
-  document.getElementById("backlogInput").value = e.target.value;
-  save();
-});
-document.getElementById("pcMission").addEventListener("input", e=>{
-  state.mission = e.target.value;
-  document.getElementById("missionInput").value = e.target.value;
-  save();
-});
+function stripFence(out){
+  const m = (out || "").match(/```(?:html)?\s*([\s\S]*?)```/);
+  return (m ? m[1] : out || "").trim();
+}
+async function buildSiteStep(key, prompt, maxTokens){
+  const sp = state.siteProject;
+  const entry = sp.steps.find(s => s.key === key);
+  entry.status = "building";
+  renderPcServers(); save();
+  try{
+    const out = await enqueueLLM(()=> callLLM(prompt, maxTokens));
+    entry.output = out;
+    entry.status = "done";
+    logGlobal("<b>" + esc(entry.agent) + "</b> rend compte au Patron : \u00ab " + esc(entry.label) + " \u00bb termin\u00e9.", entry.agent);
+  }catch(e){
+    entry.status = "error";
+    entry.output = e.message;
+    logGlobal("\u00e9chec (\u00ab " + esc(entry.label) + " \u00bb : " + esc(e.message) + ") \u2014 v\u00e9rifiez la cl\u00e9 API.", entry.agent);
+    throw e;
+  }
+  renderPcServers(); save();
+}
+function assembleSite(){
+  const sp = state.siteProject;
+  const code = stripFence((sp.steps.find(s => s.key === "code") || {}).output);
+  const widget = stripFence((sp.steps.find(s => s.key === "widget") || {}).output);
+  let html = code;
+  if(widget){
+    if(/<\/body>/i.test(html)) html = html.replace(/<\/body>/i, widget + "\n</body>");
+    else html += "\n" + widget;
+  }
+  sp.html = html;
+  sp.built = !!html;
+}
+async function launchSiteProject(desc){
+  if(!hasKey()){ logGlobal("cl\u00e9 IA requise : ajoutez votre cl\u00e9 Groq dans R\u00e9glages. Aucune simulation.", "Patron"); return; }
+  if(state.agents.length === 0){ logGlobal("impossible : embauchez au moins un agent (DRH).", "Patron"); return; }
+  const pick = (role) => state.agents.find(a => (a.role || "polyvalent") === role) || state.agents[0];
+  state.siteProject = {
+    desc,
+    steps: [
+      { key: "plan", label: "Architecture du site", agent: pick("analyse de donn\u00e9es").name, status: "pending", output: "" },
+      { key: "code", label: "Code complet du site", agent: pick("code").name, status: "pending", output: "" },
+      { key: "widget", label: "Assistant service client int\u00e9gr\u00e9", agent: pick("support client").name, status: "pending", output: "" }
+    ],
+    html: "", built: false
+  };
+  logGlobal("projet site lanc\u00e9 : \u00ab " + esc(desc) + " \u00bb \u2014 le Patron mobilise ses agents.", "Patron");
+  renderPcServers(); save();
+  const sp = state.siteProject;
+  try{
+    await buildSiteStep("plan", [
+      {role:"system", content:"Tu es un architecte web. Con\u00e7ois le plan d'un site en fran\u00e7ais. R\u00e9ponds UNIQUEMENT avec un JSON : {\"nom\": ..., \"description\": ..., \"style\": \"couleurs et ambiance\", \"sections\": [{\"titre\": ..., \"contenu\": ...}]} (max 6 sections)."},
+      {role:"user", content: desc}
+    ], 2000);
+    await buildSiteStep("code", [
+      {role:"system", content:"Tu es un d\u00e9veloppeur web senior. G\u00e9n\u00e8re un site web complet en UN SEUL fichier HTML (HTML + CSS + JS inline), moderne, responsive, professionnel, textes en fran\u00e7ais, sans d\u00e9pendance externe. Utilise ce plan : " + ((sp.steps[0].output || "").slice(0, 3000)) + ". R\u00e9ponds UNIQUEMENT avec le code HTML complet, sans explication."},
+      {role:"user", content: "Site \u00e0 cr\u00e9er : " + sp.desc}
+    ], 14000);
+    await buildSiteStep("widget", [
+      {role:"system", content:"Tu es un d\u00e9veloppeur web senior. Cr\u00e9e un widget de chat \"Service client\" autonome (HTML + CSS + JS, aucun framework) \u00e0 coller avant </body> d'un site : bulle fixe en bas \u00e0 droite, panneau de discussion qui s'ouvre, r\u00e9ponses r\u00e9elles via l'API Groq (https://api.groq.com/openai/v1/chat/completions, mod\u00e8le openai/gpt-oss-120b), cl\u00e9 API lue depuis localStorage('sc_groq_key') avec un petit bouton r\u00e9glages \u2699 qui demande la cl\u00e9 (prompt) et la stocke. Ton : professionnel et aimable, en fran\u00e7ais. Si aucune cl\u00e9 n'est configur\u00e9e, invite poliment \u00e0 la saisir via le bouton \u2699. R\u00e9ponds UNIQUEMENT avec le code du widget."},
+      {role:"user", content: "Site concern\u00e9 : " + sp.desc}
+    ], 7000);
+    assembleSite();
+    logGlobal("<b>site termin\u00e9</b> : ouvrez votre PC \u2192 Serveurs pour l'aper\u00e7u, le t\u00e9l\u00e9charger ou demander des modifications.", "Patron");
+  }catch(e){ /* \u00e9chec d\u00e9j\u00e0 journalis\u00e9 */ }
+  renderPcServers(); save();
+}
+async function siteModify(text){
+  const sp = state.siteProject;
+  if(!sp || !sp.html){ logGlobal("aucun site construit : lancez d'abord sa production.", "Patron"); return; }
+  if(!hasKey()){ logGlobal("cl\u00e9 IA requise : ajoutez votre cl\u00e9 Groq dans R\u00e9glages. Aucune simulation.", "Patron"); return; }
+  const btn = document.getElementById("srvModBtn");
+  btn.disabled = true;
+  logGlobal("modification demand\u00e9e \u00e0 l'\u00e9quipe : \u00ab " + esc(text) + " \u00bb", "Patron");
+  try{
+    const out = await enqueueLLM(()=> callLLM([
+      {role:"system", content:"Voici le code HTML actuel d'un site. Applique EXACTEMENT la modification demand\u00e9e (en fran\u00e7ais) en gardant tout le reste identique. R\u00e9ponds UNIQUEMENT avec le code HTML complet mis \u00e0 jour, sans explication."},
+      {role:"user", content: "Code actuel :\n" + sp.html + "\n\nModification demand\u00e9e : " + text}
+    ], 14000));
+    sp.html = stripFence(out);
+    sp.built = true;
+    logGlobal("<b>modification appliqu\u00e9e</b> au site \u2014 aper\u00e7u ou t\u00e9l\u00e9chargement dans votre PC \u2192 Serveurs.", "Patron");
+  }catch(e){
+    logGlobal("\u00e9chec de la modification (" + esc(e.message) + ") \u2014 v\u00e9rifiez la cl\u00e9 API.", "Patron");
+  }
+  btn.disabled = false;
+  renderPcServers(); save();
+}
 document.getElementById("srvLaunch").addEventListener("click", ()=>{
   const inp = document.getElementById("srvDesc");
   const desc = inp.value.trim();
-  if(!desc){ logGlobal("décrivez d'abord le site à créer dans la salle serveurs.", "Patron"); return; }
+  if(!desc){ logGlobal("d\u00e9crivez d'abord le site \u00e0 cr\u00e9er dans la salle serveurs.", "Patron"); return; }
   inp.value = "";
-  launchObjective("Créer un site internet : " + desc);
-  logGlobal("projet site internet envoyé à la salle serveurs : « " + esc(desc) + " »", "Patron");
+  launchSiteProject(desc);
+});
+document.getElementById("srvModBtn").addEventListener("click", ()=>{
+  const inp = document.getElementById("srvModInput");
+  const text = inp.value.trim();
+  if(!text) return;
+  inp.value = "";
+  siteModify(text);
+});
+document.getElementById("srvModInput").addEventListener("keydown", e=>{
+  if(e.key === "Enter"){
+    const text = e.target.value.trim();
+    if(!text) return;
+    e.target.value = "";
+    siteModify(text);
+  }
 });
 
 const hrRoleEl = document.getElementById("hrRole");
