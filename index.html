@@ -1386,12 +1386,45 @@ function openAuthModal(){
       • <b>Microsoft (Outlook)</b> : portal.azure.com → Inscriptions d'applications → URL de redirection Web = même callback → ID + Secret.<br>
       • <b>Discord</b> : discord.com/developers/applications → OAuth2 → même redirection → ID + Secret.<br>
       • <b>Apple</b> : nécessite un compte développeur Apple payant (99 $/an) — sinon utilisez Google ou l'e-mail.<br>
-      Et dans <a href="https://supabase.com/dashboard/project/${proj}/auth/url-configuration" target="_blank" rel="noopener">URL Configuration</a> : Site URL = <b>https://bourdon9441.github.io/Agent_ia/</b> (pas localhost:3000).</div>`;
+      Et dans <a href="https://supabase.com/dashboard/project/${proj}/auth/url-configuration" target="_blank" rel="noopener">URL Configuration</a> : Site URL = <b>https://bourdon9441.github.io/Agent_ia/</b> (pas localhost:3000).</div>
+      <div class="divider">outil de réparation</div>
+      <button class="btn line wide" id="diagBtn">${icon("gears")} Tester la configuration des fournisseurs</button>
+      <div class="msg" id="diagMsg" style="display:none;"></div>
+      <div class="row" style="margin-top:8px;"><button class="btn line" id="copyCb" style="flex:1;">Copier l'URL de redirection</button><button class="btn line" id="copySite" style="flex:1;">Copier l'URL du site</button></div>`;
     body.querySelectorAll("[data-p]").forEach(b => b.addEventListener("click", ()=> signInProvider(b.dataset.p)));
     body.querySelector("#magicBtn").addEventListener("click", signInEmail);
     body.querySelector("#magicEmail").addEventListener("keydown", e=>{ if(e.key === "Enter") signInEmail(); });
     body.querySelector("#pwBtn").addEventListener("click", signInPassword);
     body.querySelector("#pwPass").addEventListener("keydown", e=>{ if(e.key === "Enter") signInPassword(); });
+    body.querySelector("#diagBtn").addEventListener("click", async ()=>{
+      const m = body.querySelector("#diagMsg");
+      m.style.display = ""; m.className = "msg"; m.textContent = "Vérification en cours...";
+      try{
+        const res = await fetch(cfg.url + "/auth/v1/settings", { headers: { apikey: cfg.key } });
+        if(!res.ok) throw new Error("Supabase a répondu " + res.status);
+        const j = await res.json();
+        const ext = j.external || {};
+        const names = [["github", "GitHub"], ["google", "Google"], ["azure", "Microsoft/Outlook"], ["discord", "Discord"], ["apple", "Apple"], ["email", "E-mail"]];
+        let txt = names.map(x => x[1] + " : " + (ext[x[0]] && ext[x[0]].enabled ? "activé ✓" : "désactivé ✗")).join("  |  ");
+        if(ext.github && ext.github.enabled){
+          txt += " — GitHub est bien activé côté Supabase. Si la connexion GitHub échoue quand même, l'application GitHub de votre compte a été révoquée ou supprimée : recréez-la sur github.com/settings/developers (New OAuth App), avec Callback = " + cfg.url + "/auth/v1/callback, puis recollez le Client ID et le Secret dans Supabase → Authentication → Providers → GitHub.";
+        } else {
+          txt += " — GitHub est désactivé : activez-le dans Supabase → Authentication → Providers → GitHub.";
+        }
+        m.className = "msg ok";
+        m.textContent = txt;
+      }catch(e){ m.className = "msg err"; m.textContent = "Diagnostic impossible : " + e.message; }
+    });
+    body.querySelector("#copyCb").addEventListener("click", function(){
+      navigator.clipboard.writeText(cfg.url + "/auth/v1/callback");
+      this.textContent = "Copié ✓";
+      setTimeout(()=>{ this.textContent = "Copier l'URL de redirection"; }, 1500);
+    });
+    body.querySelector("#copySite").addEventListener("click", function(){
+      navigator.clipboard.writeText("https://bourdon9441.github.io/Agent_ia/");
+      this.textContent = "Copié ✓";
+      setTimeout(()=>{ this.textContent = "Copier l'URL du site"; }, 1500);
+    });
   } else {
     document.getElementById("authSub").textContent = "Pour vous connecter avec GitHub, Gmail ou Outlook et retrouver vos agents sur tous vos appareils, reliez d'abord un espace de synchronisation Supabase (gratuit, 2 minutes) :";
     body.innerHTML = `
