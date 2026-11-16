@@ -3,249 +3,367 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Centre de contrôle — Agents IA</title>
+<title>Agent_IA — Centre de contrôle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#0b0f17; --panel:#131a26; --panel2:#1a2333; --border:#26314a;
-    --txt:#e8edf7; --muted:#8b97ad; --accent:#5b8cff; --ok:#3ecf8e; --warn:#ffb454; --busy:#c792ea; --err:#ff6b6b;
+    --bg:#0b0d0a; --surface:#12150f; --raise:#191d15; --line:#262b1f; --line2:#333a2a;
+    --ink:#eef2e4; --dim:#9aa38c; --faint:#5c6450;
+    --signal:#c6f542; --signal-ink:#0b0d0a; --amber:#ffb454; --red:#ff6b6b;
+    --mono:'IBM Plex Mono',monospace; --disp:'Space Grotesk',sans-serif;
   }
-  *{box-sizing:border-box; margin:0; padding:0;}
-  body{background:var(--bg); color:var(--txt); font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh;}
-  header{padding:18px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
-  header h1{font-size:20px; letter-spacing:.5px;}
-  header .sub{color:var(--muted); font-size:13px;}
-  .badge{font-size:11px; padding:3px 10px; border-radius:20px; border:1px solid var(--border); color:var(--muted);}
-  .badge.on{color:var(--ok); border-color:var(--ok);}
-  main{display:grid; grid-template-columns:340px 1fr; gap:16px; padding:16px 24px; max-width:1400px; margin:0 auto;}
-  @media(max-width:900px){ main{grid-template-columns:1fr;} }
-  .panel{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px;}
-  .panel h2{font-size:14px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;}
-  label{display:block; font-size:12px; color:var(--muted); margin:10px 0 4px;}
-  input[type=text], input[type=password], select, textarea{
-    width:100%; background:var(--panel2); border:1px solid var(--border); border-radius:8px;
-    color:var(--txt); padding:9px 11px; font-size:14px; outline:none;
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    background:var(--bg); color:var(--ink); font-family:var(--disp);
+    background-image:radial-gradient(circle at 1px 1px, #161a11 1px, transparent 0);
+    background-size:26px 26px; min-height:100vh;
   }
-  input:focus, select:focus, textarea:focus{border-color:var(--accent);}
-  textarea{resize:vertical; min-height:60px; font-family:inherit;}
-  button{
-    background:var(--accent); color:#fff; border:none; border-radius:8px; padding:9px 14px;
-    font-size:14px; cursor:pointer; font-weight:600;
+  ::selection{background:var(--signal); color:var(--signal-ink);}
+  .topbar{
+    display:flex; align-items:center; gap:16px; padding:14px 22px;
+    border-bottom:1px solid var(--line); background:rgba(11,13,10,.92); backdrop-filter:blur(6px);
+    position:sticky; top:0; z-index:50; flex-wrap:wrap;
   }
-  button:hover{filter:brightness(1.15);}
-  button.ghost{background:transparent; border:1px solid var(--border); color:var(--muted); font-weight:400;}
-  button.ghost:hover{color:var(--txt); border-color:var(--accent);}
-  button.danger{background:transparent; border:1px solid var(--border); color:var(--err); padding:4px 9px; font-size:12px;}
-  button.small{padding:4px 9px; font-size:12px;}
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand .mark{width:34px; height:34px; display:grid; place-items:center; background:var(--signal); color:var(--signal-ink); border-radius:9px;}
+  .brand .mark svg{width:20px;height:20px;}
+  .brand h1{font-size:17px; font-weight:700; letter-spacing:.06em;}
+  .brand small{display:block; font-family:var(--mono); font-size:10px; color:var(--dim); letter-spacing:.14em; text-transform:uppercase;}
+  .chips{display:flex; gap:8px; flex-wrap:wrap; margin-left:auto;}
+  .chip{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase;
+    border:1px solid var(--line2); border-radius:99px; padding:5px 11px; color:var(--dim);
+    display:inline-flex; align-items:center; gap:6px;
+  }
+  .chip .led{width:6px;height:6px;border-radius:50%;background:var(--faint);}
+  .chip.on{color:var(--signal); border-color:rgba(198,245,66,.4);}
+  .chip.on .led{background:var(--signal); box-shadow:0 0 8px rgba(198,245,66,.7);}
+  .account-btn{
+    display:inline-flex; align-items:center; gap:8px; background:var(--raise); border:1px solid var(--line2);
+    color:var(--ink); font-family:var(--mono); font-size:12px; padding:8px 14px; border-radius:9px; cursor:pointer;
+  }
+  .account-btn:hover{border-color:var(--signal); color:var(--signal);}
+  .account-btn svg{width:15px;height:15px;}
+  main{display:grid; grid-template-columns:370px 1fr; gap:18px; padding:20px 22px; max-width:1440px; margin:0 auto;}
+  @media(max-width:960px){ main{grid-template-columns:1fr;} }
+  .rail{display:flex; flex-direction:column; gap:14px;}
+  .panel{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:18px;}
+  .panel-head{
+    display:flex; align-items:center; gap:9px; margin-bottom:14px;
+    font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
+  }
+  .panel-head svg{width:15px;height:15px;color:var(--signal);}
+  .panel-head .right{margin-left:auto; letter-spacing:0; text-transform:none; color:var(--faint);}
+  label{display:block; font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); margin:12px 0 5px;}
+  input[type=text],input[type=password],input[type=email],select,textarea{
+    width:100%; background:var(--bg); border:1px solid var(--line2); border-radius:9px;
+    color:var(--ink); padding:10px 12px; font-size:14px; font-family:var(--disp); outline:none; transition:border-color .15s;
+  }
+  input:focus,select:focus,textarea:focus{border-color:var(--signal);}
+  textarea{resize:vertical;min-height:64px;}
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    background:var(--signal); color:var(--signal-ink); border:none; border-radius:9px;
+    padding:10px 16px; font-size:14px; font-weight:700; font-family:var(--disp); cursor:pointer;
+    transition:transform .08s, filter .15s;
+  }
+  .btn:hover{filter:brightness(1.08);}
+  .btn:active{transform:scale(.98);}
+  .btn svg{width:15px;height:15px;}
+  .btn.line{background:transparent; border:1px solid var(--line2); color:var(--ink); font-weight:500;}
+  .btn.line:hover{border-color:var(--signal); color:var(--signal);}
+  .btn.wide{width:100%;}
   .row{display:flex; gap:8px;}
-  .row > *{flex:1;}
-  .switch{display:flex; align-items:center; gap:10px; margin:12px 0; cursor:pointer; user-select:none;}
-  .switch .track{width:42px; height:22px; background:var(--panel2); border:1px solid var(--border); border-radius:20px; position:relative; transition:.2s;}
-  .switch .track::after{content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; background:var(--muted); border-radius:50%; transition:.2s;}
-  .switch.on .track{background:rgba(62,207,142,.2); border-color:var(--ok);}
-  .switch.on .track::after{left:22px; background:var(--ok);}
-  .switch span.lbl{font-size:14px;}
-  .hint{font-size:11px; color:var(--muted); margin-top:4px;}
-  .log{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:12px;
-       max-height:180px; overflow-y:auto; font-family:Consolas,monospace; line-height:1.6;}
-  .log div{color:var(--muted); word-break:break-word;}
-  .log div b{color:var(--txt); font-weight:600;}
-  .log .t{color:#5b6580; }
-  .agents-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:14px;}
-  .agent{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px;}
-  .agent .head{display:flex; align-items:center; gap:8px;}
-  .dot{width:9px; height:9px; border-radius:50%; background:var(--muted); flex-shrink:0;}
-  .dot.idle{background:var(--ok);} .dot.busy{background:var(--busy); animation:pulse 1.2s infinite;} .dot.paused{background:var(--warn);}
-  @keyframes pulse{50%{opacity:.3;}}
-  .agent .name{font-weight:700; font-size:15px;}
-  .agent .role{font-size:12px; color:var(--muted); flex:1;}
-  .status{font-size:11px; padding:2px 8px; border-radius:12px; border:1px solid var(--border); color:var(--muted);}
-  .status.busy{color:var(--busy); border-color:var(--busy);}
-  .status.idle{color:var(--ok); border-color:var(--ok);}
-  .status.paused{color:var(--warn); border-color:var(--warn);}
-  .task{font-size:13px; color:var(--txt); background:var(--panel2); border-radius:8px; padding:8px 10px; min-height:34px;}
-  .task .none{color:var(--muted); font-style:italic;}
-  .bar{height:6px; background:var(--panel2); border-radius:4px; overflow:hidden;}
-  .bar .fill{height:100%; width:0%; background:linear-gradient(90deg,var(--accent),var(--busy)); transition:width .5s linear;}
-  .queue{font-size:11px; color:var(--muted);}
-  .empty{color:var(--muted); font-style:italic; text-align:center; padding:30px 10px; grid-column:1/-1;}
-  #activity{max-height:420px;}
-  .kpi{display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap;}
-  .kpi .box{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:8px 14px; font-size:12px; color:var(--muted);}
-  .kpi .box b{display:block; font-size:18px; color:var(--txt);}
-  details{margin-top:10px;}
-  summary{cursor:pointer; font-size:12px; color:var(--muted);}
-  .success{color:var(--ok);}
+  .row>*{flex:1; min-width:0;}
+  .hint{font-size:11.5px; color:var(--faint); margin-top:6px; line-height:1.5;}
+  .switch{display:flex; align-items:center; gap:12px; margin-top:14px; cursor:pointer; user-select:none;}
+  .switch .track{width:44px;height:24px;background:var(--bg);border:1px solid var(--line2);border-radius:99px;position:relative;transition:.2s;flex-shrink:0;}
+  .switch .track::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;background:var(--faint);border-radius:50%;transition:.2s;}
+  .switch.on .track{background:rgba(198,245,66,.15);border-color:var(--signal);}
+  .switch.on .track::after{left:23px;background:var(--signal);box-shadow:0 0 8px rgba(198,245,66,.6);}
+  .switch .lbl{font-size:13.5px;}
+  .log{
+    background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px 12px;
+    font-family:var(--mono); font-size:11.5px; line-height:1.7; max-height:200px; overflow-y:auto;
+  }
+  .log div{color:var(--dim); word-break:break-word;}
+  .log b{color:var(--ink);font-weight:500;}
+  .log .t{color:var(--faint);}
+  #activityLog{max-height:260px;}
+  .kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px;}
+  @media(max-width:640px){.kpis{grid-template-columns:repeat(2,1fr);}}
+  .kpi{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 16px;}
+  .kpi b{display:block; font-size:26px; font-weight:700; font-variant-numeric:tabular-nums;}
+  .kpi span{font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim);}
+  .agents-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px;}
+  .agent{
+    background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px;
+    display:flex; flex-direction:column; gap:11px; position:relative; overflow:hidden;
+  }
+  .agent.busy{border-color:rgba(198,245,66,.35);}
+  .led{width:8px;height:8px;border-radius:50%;background:var(--faint);flex-shrink:0;}
+  .led.idle{background:var(--signal);}
+  .led.busy{background:var(--signal); animation:pulse 1.1s infinite;}
+  .led.paused{background:var(--amber);}
+  @keyframes pulse{50%{opacity:.25;}}
+  .agent .head{display:flex; align-items:center; gap:9px;}
+  .agent .name{font-weight:700; font-size:15.5px;}
+  .agent .role{font-family:var(--mono); font-size:10.5px; color:var(--dim); letter-spacing:.05em; flex:1; text-transform:uppercase;}
+  .iconbtn{background:transparent;border:1px solid var(--line2);color:var(--dim);border-radius:7px;width:28px;height:28px;display:grid;place-items:center;cursor:pointer;flex-shrink:0;}
+  .iconbtn:hover{color:var(--ink);background:var(--raise);}
+  .iconbtn svg{width:13px;height:13px;}
+  .task{font-size:13.5px; background:var(--bg); border:1px solid var(--line); border-radius:9px; padding:9px 11px; min-height:38px;}
+  .task .none{color:var(--faint); font-style:italic;}
+  .bar{height:5px; background:var(--bg); border-radius:3px; overflow:hidden;}
+  .bar .fill{height:100%; width:0%; background:var(--signal); transition:width .5s linear;}
+  .queue{font-family:var(--mono); font-size:10.5px; color:var(--faint); line-height:1.6;}
+  .agent .log{max-height:110px; font-size:10.5px;}
+  .empty{
+    color:var(--faint); font-style:italic; text-align:center; padding:44px 12px;
+    border:1px dashed var(--line2); border-radius:14px; grid-column:1/-1;
+  }
+  .overlay{position:fixed; inset:0; background:rgba(5,6,4,.78); backdrop-filter:blur(4px); display:none; place-items:center; z-index:100; padding:18px;}
+  .overlay.show{display:grid;}
+  .modal{background:var(--surface); border:1px solid var(--line2); border-radius:16px; width:min(480px,100%); max-height:88vh; overflow-y:auto; padding:24px; position:relative;}
+  .modal h2{font-size:19px; margin-bottom:4px; display:flex; align-items:center; gap:10px;}
+  .modal h2 svg{width:19px;height:19px;color:var(--signal);}
+  .modal .sub{color:var(--dim); font-size:13px; margin-bottom:18px; line-height:1.5;}
+  .oauth{display:flex; flex-direction:column; gap:9px; margin-bottom:16px;}
+  .divider{display:flex; align-items:center; gap:12px; color:var(--faint); font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; margin:16px 0;}
+  .divider::before,.divider::after{content:''; flex:1; height:1px; background:var(--line2);}
+  .sql{background:var(--bg); border:1px solid var(--line); border-radius:9px; padding:12px; font-family:var(--mono); font-size:11px; line-height:1.6; color:var(--dim); white-space:pre-wrap; word-break:break-word; margin:8px 0;}
+  .step{display:flex; gap:12px; margin:14px 0;}
+  .step .n{width:24px;height:24px;border-radius:50%;background:var(--raise);border:1px solid var(--line2);font-family:var(--mono);font-size:11px;display:grid;place-items:center;color:var(--signal);flex-shrink:0;}
+  .step p{font-size:13px; color:var(--dim); line-height:1.55;}
+  .step a{color:var(--signal);}
+  .msg{font-size:13px; margin-top:10px; line-height:1.5;}
+  .msg.ok{color:var(--signal);} .msg.err{color:var(--red);}
+  .close-x{position:absolute; top:14px; right:14px;}
+  details.settings{border-top:1px solid var(--line); margin-top:14px; padding-top:12px;}
+  details.settings summary{cursor:pointer; font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--dim); list-style:none; display:flex; align-items:center; gap:8px;}
+  details.settings summary svg{width:13px;height:13px;}
+  details.settings[open] summary{color:var(--signal); margin-bottom:4px;}
+  .footer{font-family:var(--mono); font-size:10px; color:var(--faint); text-align:center; padding:18px; letter-spacing:.08em;}
+  .footer a{color:var(--dim);}
 </style>
 </head>
 <body>
 
-<header>
-  <h1>🤖 Centre de contrôle des agents IA</h1>
-  <span class="sub">Le Patron distribue, les agents exécutent — même quand vous n'êtes pas là.</span>
-  <span class="badge" id="modeBadge">MODE SIMULATION</span>
-  <span class="badge" id="autoBadge">AUTONOME : OFF</span>
+<header class="topbar">
+  <div class="brand">
+    <div class="mark" id="brandMark"></div>
+    <div>
+      <h1>AGENT_IA</h1>
+      <small>centre de contrôle</small>
+    </div>
+  </div>
+  <div class="chips">
+    <span class="chip" id="chipMode"><span class="led"></span>simulation</span>
+    <span class="chip" id="chipAuto"><span class="led"></span>autonome off</span>
+    <span class="chip" id="chipSync"><span class="led"></span>local</span>
+  </div>
+  <button class="account-btn" id="accountBtn"></button>
 </header>
 
 <main>
-  <div>
-    <!-- PATRON -->
+  <div class="rail">
     <div class="panel">
-      <h2>👔 Le Patron</h2>
-
-      <label>Mission principale (objectif global, utilisé en mode autonome)</label>
-      <textarea id="missionInput" placeholder="Ex : Développer la présence en ligne de mon magasin..."></textarea>
-
+      <div class="panel-head" id="patronHead">Le Patron</div>
+      <label>Mission principale <span style="text-transform:none;letter-spacing:0">(objectif global du mode autonome)</span></label>
+      <textarea id="missionInput" placeholder="Ex : développer la présence en ligne de mon magasin..."></textarea>
       <label>Nouvel objectif à traiter maintenant</label>
       <div class="row">
-        <input type="text" id="objectiveInput" placeholder="Ex : Rédiger 3 posts pour les réseaux sociaux">
-        <button id="launchBtn" style="flex:0 0 auto;">Lancer 🚀</button>
+        <input type="text" id="objectiveInput" placeholder="Ex : rédiger 3 posts pour les réseaux sociaux">
+        <button class="btn" id="launchBtn" style="flex:0 0 auto;">Lancer</button>
       </div>
-
       <div class="switch" id="autoSwitch">
         <div class="track"></div>
-        <span class="lbl">Mode autonome (le Patron travaille sans vous)</span>
+        <span class="lbl">Mode autonome — le Patron travaille sans vous</span>
       </div>
-      <div class="hint">En mode autonome, le Patron relance des tâches en continu à partir de la mission principale.</div>
+      <div class="hint">En mode autonome, le Patron relance des cycles de travail en continu à partir de la mission. Laissez simplement l'onglet ouvert.</div>
+    </div>
 
-      <details>
-        <summary>⚙️ Connexion IA réelle (optionnel)</summary>
-        <label>Clé API Mistral (restera dans votre navigateur)</label>
-        <input type="password" id="apiKeyInput" placeholder="Sk-...">
-        <div class="hint">Sans clé : mode simulation réaliste. Avec clé : les agents utilisent une vraie IA.</div>
+    <div class="panel">
+      <div class="panel-head" id="hireHead">Embaucher un agent <span class="right" id="agentCount"></span></div>
+      <div class="row">
+        <input type="text" id="agentNameInput" placeholder="Nom (ex : Nova)">
+        <input type="text" id="agentRoleInput" placeholder="Spécialité (ex : rédaction)">
+      </div>
+      <div class="hint" id="agentHint" style="margin:6px 0 10px;"></div>
+      <button class="btn wide" id="addAgentBtn"></button>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head" id="settingsHead">Réglages</div>
+      <details class="settings" id="cloudSettings">
+        <summary id="cloudSummary">Connexion &amp; synchronisation</summary>
+        <div id="cloudBody"></div>
+      </details>
+      <details class="settings">
+        <summary id="aiSummary">IA réelle (optionnel)</summary>
+        <label>Clé API Mistral — reste dans ce navigateur</label>
+        <input type="password" id="apiKeyInput" placeholder="sk-...">
+        <div class="hint">Sans clé : mode simulation réaliste. Avec clé : les agents utilisent une vraie IA. La clé n'est jamais synchronisée dans le nuage.</div>
         <label>Vitesse de simulation</label>
         <select id="speedSelect">
           <option value="2">Lente</option>
           <option value="1" selected>Normale</option>
           <option value="0.5">Rapide</option>
         </select>
-        <label>Objectifs récurrents en mode autonome (un par ligne, optionnel)</label>
+        <label>Objectifs récurrents du mode autonome <span style="text-transform:none;letter-spacing:0">(un par ligne)</span></label>
         <textarea id="backlogInput" placeholder="Surveiller les tendances du secteur&#10;Préparer le rapport hebdomadaire"></textarea>
       </details>
-
-      <h2 style="margin-top:16px;">➕ Ajouter un agent <span id="agentCount" style="color:var(--txt)"></span></h2>
-      <div class="row">
-        <input type="text" id="agentNameInput" placeholder="Nom (ex : Nova)">
-        <input type="text" id="agentRoleInput" placeholder="Spécialité (ex : rédaction)">
-      </div>
-      <div class="hint" id="agentHint" style="margin-bottom:8px;"></div>
-      <button id="addAgentBtn" style="width:100%;">+ Embaucher un agent</button>
     </div>
 
-    <!-- ACTIVITÉ -->
-    <div class="panel" style="margin-top:16px;">
-      <h2>📜 Journal d'activité global</h2>
-      <div class="log" id="activity"><div class="empty">En attente d'activité...</div></div>
+    <div class="panel">
+      <div class="panel-head" id="logHead">Journal global</div>
+      <div class="log" id="activityLog"></div>
     </div>
   </div>
 
   <div>
-    <div class="kpi">
-      <div class="box"><b id="kpiAgents">0</b>Agents</div>
-      <div class="box"><b id="kpiBusy">0</b>En cours</div>
-      <div class="box"><b id="kpiDone">0</b>Terminées</div>
-      <div class="box"><b id="kpiQueue">0</b>En attente</div>
+    <div class="kpis">
+      <div class="kpi"><b id="kpiAgents">0</b><span>Agents</span></div>
+      <div class="kpi"><b id="kpiBusy">0</b><span>En cours</span></div>
+      <div class="kpi"><b id="kpiDone">0</b><span>Terminées</span></div>
+      <div class="kpi"><b id="kpiQueue">0</b><span>En attente</span></div>
     </div>
-    <div class="agents-grid" id="agentsGrid">
-      <div class="empty">Aucun agent pour l'instant. Embauchez-en un (jusqu'à 10) avec le formulaire à gauche.</div>
-    </div>
+    <div class="agents-grid" id="agentsGrid"></div>
   </div>
 </main>
 
+<div class="footer">Agent_IA · <a href="https://github.com/PapillonApp/Papicons" target="_blank" rel="noopener">Papicons</a> · design <a href="https://github.com/pbakaus/impeccable" target="_blank" rel="noopener">Impeccable</a></div>
+
+<div class="overlay" id="authOverlay">
+  <div class="modal">
+    <button class="iconbtn close-x" id="authClose"></button>
+    <h2 id="authTitle"></h2>
+    <p class="sub" id="authSub"></p>
+    <div id="authBody"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 "use strict";
 
-const MAX_AGENTS = 10;
-const STORE_KEY = "agents-center-v1";
+/* icônes Papicons (MIT — PapillonApp/Papicons) */
+const P = (inner) => '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' + inner + '</svg>';
+const ICONS = {
 
-let state = {
-  agents: [],           // {id,name,role,status,currentTask:{text,startedAt,duration},queue:[],log:[]}
-  mission: "",
-  backlog: [],
-  autonomous: false,
-  apiKey: "",
-  speed: 1,
-  doneCount: 0,
-  activity: []
+add: P('<path d="M20.4142 10.5147C20.789 10.889 21.0003 11.4314 21.0004 12C21.0003 12.5687 20.7898 13.1117 20.4149 13.486C20.0399 13.8617 19.5303 14.0388 19 14.0005C18.8836 13.9922 18.7669 13.9839 18.6505 13.9756C16.9723 13.8557 15.2935 13.7351 13.6152 13.6152C13.7351 15.2935 13.8557 16.9723 13.9756 18.6505C13.9839 18.7669 13.9922 18.8836 14.0005 18.9999C14.0388 19.5302 13.8617 20.0398 13.486 20.4148C13.1117 20.7898 12.5687 21.0003 12 21.0004C11.4314 21.0003 10.889 20.789 10.5147 20.4141C10.1392 20.0392 9.96199 19.5308 10.0002 19.0006C10.0085 18.8841 10.0174 18.767 10.0258 18.6505C10.1457 16.972 10.2658 15.2931 10.3855 13.6145C8.70696 13.7342 7.02801 13.8543 5.34948 13.9742C5.23297 13.9826 5.11588 13.9915 4.99937 13.9998C4.46926 14.038 3.96076 13.8608 3.58585 13.4853C3.21105 13.111 2.99966 12.5686 2.99959 12C2.99967 11.4313 3.21024 10.8883 3.58516 10.514C3.96015 10.1383 4.46976 9.96121 5.00006 9.99952C5.11641 10.0078 5.23313 10.0161 5.34948 10.0244C7.02746 10.1442 8.70607 10.2642 10.3842 10.3841C10.2642 8.70605 10.1442 7.02744 10.0244 5.34946C10.0161 5.23311 10.0078 5.1164 9.99953 5.00005C9.96122 4.46974 10.1383 3.96014 10.514 3.58515C10.8883 3.21023 11.4313 2.99965 12 2.99957C12.5686 2.99965 13.111 3.21104 13.4853 3.58584C13.8608 3.96074 14.038 4.46924 13.9998 4.99936C13.9915 5.11586 13.9826 5.23295 13.9742 5.34946C13.8544 7.02775 13.7349 8.70649 13.6152 10.3848C15.2935 10.2651 16.9722 10.1456 18.6505 10.0258C18.767 10.0174 18.8841 10.0085 19.0006 10.0002C19.5308 9.96198 20.0393 10.1392 20.4142 10.5147Z" fill="currentColor"/>'),
+  check: P('<path d="M18.9531 3.99225C19.48 3.9335 20.0214 4.09638 20.4492 4.43854C20.8769 4.78081 21.1545 5.27298 21.2129 5.79987C21.2716 6.32695 21.1064 6.84596 20.7617 7.24908C20.5953 7.44382 20.4282 7.63931 20.2617 7.83405C17.2647 11.3402 14.2675 14.8465 11.2705 18.3526C11.1041 18.5473 10.937 18.7428 10.7705 18.9376C10.52 19.23 10.1569 19.4123 9.76758 19.4493C9.50945 19.4735 9.25416 19.4313 9.02344 19.3311C8.84537 19.272 8.67957 19.1816 8.53906 19.0606C8.45329 18.9866 8.36702 18.9129 8.28125 18.8389C6.73535 17.5051 5.18946 16.1708 3.64356 14.837C3.55775 14.7629 3.47155 14.6884 3.38574 14.6143C2.98278 14.2673 2.74666 13.7828 2.74707 13.252C2.7467 12.7223 2.98292 12.1892 3.38574 11.7862C3.78869 11.3833 4.32181 11.1482 4.85156 11.1485C5.38243 11.148 5.86681 11.3832 6.21387 11.7862C6.28792 11.872 6.36247 11.9582 6.43652 12.044C7.4622 13.2328 8.48806 14.4216 9.51367 15.6104C12.0681 12.1955 14.6234 8.78117 17.1777 5.36627C17.3311 5.16129 17.4844 4.95602 17.6377 4.75104C17.9553 4.32607 18.426 4.05079 18.9531 3.99225Z" fill="currentColor"/>'),
+  clock: P('<path fill-rule="evenodd" clip-rule="evenodd" d="M12 3.00046C16.9706 3.00046 21 7.02989 21 12.0005C20.9998 16.9708 16.9704 21.0005 12 21.0005C7.02959 21.0005 3.00024 16.9708 3 12.0005C3 7.02989 7.02944 3.00046 12 3.00046ZM12 6.00046C11.4477 6.00046 11 6.44817 11 7.00046V10.9301C10.9998 11.2643 10.8327 11.5768 10.5547 11.7622L8.44531 13.1684C7.98595 13.4748 7.86166 14.0957 8.16797 14.5551C8.47435 15.0143 9.09528 15.1386 9.55469 14.8325L11.6641 13.4262C12.4985 12.8699 12.9998 11.933 13 10.9301V7.00046C13 6.44817 12.5523 6.00046 12 6.00046Z" fill="currentColor"/>'),
+  cross: P('<path d="M17.958 3.95801C18.4881 3.95763 19.0166 4.18846 19.4141 4.58594C19.8115 4.98342 20.0424 5.51194 20.042 6.04199C20.0423 6.57267 19.8115 7.06147 19.4141 7.41406C19.3082 7.50811 19.2025 7.60225 19.0967 7.69629C17.4824 9.13092 15.8673 10.5653 14.2529 12C15.8673 13.4347 17.4824 14.8691 19.0967 16.3037C19.2025 16.3978 19.3082 16.4919 19.4141 16.5859C19.8115 16.9385 20.0423 17.4273 20.042 17.958C20.0424 18.4881 19.8115 19.0166 19.4141 19.4141C19.0166 19.8115 18.4881 20.0424 17.958 20.042C17.4273 20.0423 16.9385 19.8115 16.5859 19.4141C16.4919 19.3082 16.3978 19.2025 16.3037 19.0967C14.8691 17.4824 13.4347 15.8673 12 14.2529C10.5653 15.8673 9.13092 17.4824 7.69629 19.0967C7.60225 19.2025 7.50811 19.3082 7.41406 19.4141C7.06147 19.8115 6.57267 20.0423 6.04199 20.042C5.51194 20.0424 4.98342 19.8115 4.58594 19.4141C4.18846 19.0166 3.95763 18.4881 3.95801 17.958C3.95773 17.4273 4.18854 16.9385 4.58594 16.5859C4.69176 16.4919 4.7975 16.3978 4.90332 16.3037C6.51743 14.8692 8.13186 13.4345 9.74609 12C8.13186 10.5655 6.51743 9.13076 4.90332 7.69629C4.7975 7.60225 4.69176 7.50811 4.58594 7.41406C4.18854 7.06147 3.95773 6.57267 3.95801 6.04199C3.95763 5.51194 4.18846 4.98342 4.58594 4.58594C4.98342 4.18846 5.51194 3.95763 6.04199 3.95801C6.57267 3.95773 7.06147 4.18854 7.41406 4.58594C7.50811 4.69176 7.60225 4.7975 7.69629 4.90332C9.13076 6.51743 10.5655 8.13186 12 9.74609C13.4345 8.13186 14.8692 6.51743 16.3037 4.90332C16.3978 4.7975 16.4919 4.69176 16.5859 4.58594C16.9385 4.18854 17.4273 3.95773 17.958 3.95801Z" fill="currentColor"/>'),
+  crown: P('<path d="M17.635 18.143c.754 0 1.365.61 1.365 1.364 0 .658-.469 1.218-1.122 1.3-1.175.145-3.219.336-5.878.336-2.659 0-4.704-.19-5.879-.337-.652-.08-1.12-.64-1.12-1.299 0-.753.61-1.364 1.364-1.364h11.27zM11.126 3.717a1 1 0 011.748 0l3.335 6.002a1 1 0 001.702.075l1.551-2.295c.6-.888 1.987-.34 1.817.718l-1.008 6.245a2 2 0 01-1.974 1.681H5.703a2 2 0 01-1.974-1.681L2.722 8.217C2.552 7.16 3.938 6.611 4.537 7.5l1.551 2.295a1 1 0 001.703-.075l3.335-6.002z" fill="currentColor" />'),
+  gears: P('<path fill-rule="evenodd" clip-rule="evenodd" d="M11.9995 3C12.5927 3.00002 13.3086 3.20228 13.8921 3.41211C14.5527 3.64979 14.8812 4.36002 14.7143 5.04199L14.5307 5.78809C14.4327 6.18858 14.6447 6.59689 15.0014 6.80371C15.3585 7.01063 15.8146 6.98753 16.1128 6.70215L16.6684 6.1709C17.1756 5.68518 17.9554 5.61392 18.4917 6.06738C18.9651 6.46772 19.4979 6.98637 19.7944 7.5C20.091 8.01372 20.2733 8.7346 20.3833 9.34473C20.5078 10.0358 20.0565 10.6757 19.3823 10.8721L18.643 11.0869C18.2471 11.2022 18.0005 11.5876 18.0005 12C18.0005 12.4123 18.2463 12.7975 18.6421 12.9131L19.3833 13.1289C20.0571 13.3255 20.5077 13.9644 20.3833 14.6553C20.2733 15.2654 20.0909 15.9863 19.7944 16.5C19.4979 17.0136 18.965 17.5323 18.4917 17.9326C17.9555 18.386 17.1756 18.3156 16.6684 17.8301L16.1128 17.2979C15.8148 17.0124 15.3587 16.9888 15.0014 17.1953C14.6445 17.4017 14.4325 17.8105 14.5307 18.2109L14.7143 18.958C14.8813 19.6401 14.5528 20.3512 13.8921 20.5889C13.3087 20.7987 12.5926 21 11.9995 21C11.4065 20.9999 10.6911 20.7986 10.1079 20.5889C9.4471 20.3512 9.11864 19.6401 9.28562 18.958L9.46824 18.21C9.56604 17.8097 9.3543 17.4015 8.99754 17.1953C8.64021 16.989 8.18412 17.0124 7.88621 17.2979L7.33152 17.8301C6.82436 18.3157 6.04449 18.3859 5.50828 17.9326C5.03495 17.5323 4.50211 17.0136 4.20555 16.5C3.90903 15.9863 3.7257 15.2654 3.6157 14.6553C3.49135 13.9644 3.94281 13.3254 4.61668 13.1289L5.35594 12.9131C5.7518 12.7976 6.00041 12.4124 6.00047 12C6.00048 11.5876 5.75186 11.2022 5.35594 11.0869L4.61668 10.8721C3.94264 10.6756 3.49219 10.0357 3.61668 9.34473C3.72668 8.73456 3.90897 8.01373 4.20555 7.5C4.50212 6.98632 5.03487 6.46774 5.50828 6.06738C6.04452 5.61392 6.82432 5.68518 7.33152 6.1709L7.88621 6.70215C8.18437 6.98742 8.64039 7.01053 8.99754 6.80371C9.35438 6.59702 9.56625 6.18865 9.46824 5.78809L9.28562 5.04199C9.1187 4.35995 9.44713 3.64975 10.1079 3.41211C10.6912 3.20234 11.4064 3.00008 11.9995 3ZM12.0005 9C10.3436 9 9.00047 10.3431 9.00047 12C9.00047 13.6569 10.3436 15 12.0005 15C13.6571 14.9997 15.0005 13.6567 15.0005 12C15.0005 10.3433 13.6571 9.00026 12.0005 9Z" fill="currentColor"/>'),
+  ghost: P('<path fill-rule="evenodd" clip-rule="evenodd" d="M12 3.85718C16.0969 3.85718 19.7273 6.6028 20.4102 10.6423C20.7427 12.6102 21 14.6987 21 16.449C21 16.5912 20.9991 16.7322 20.9971 16.8718C20.9564 19.6723 20.9359 21.0727 19.667 21.5554C18.3977 22.038 17.3622 20.9073 15.292 18.6453L15.0312 18.3601C13.914 20.3864 13.3549 21.3994 12.5674 21.6326C12.1973 21.742 11.8027 21.742 11.4326 21.6326C10.6451 21.3994 10.086 20.3864 8.96875 18.3601L8.70801 18.6453C6.63777 20.9073 5.60232 22.038 4.33301 21.5554C3.0641 21.0727 3.04356 19.6723 3.00293 16.8718C3.0009 16.7322 3 16.5912 3 16.449C3 14.6987 3.25728 12.6102 3.58984 10.6423C4.27271 6.6028 7.90311 3.85718 12 3.85718ZM8.5 9.85718C7.11937 9.85718 6.00013 11.0499 6 12.5212C6 13.9927 7.11929 12.8533 8.5 12.8533C9.88071 12.8533 11 13.9927 11 12.5212C10.9999 11.0499 9.88063 9.85718 8.5 9.85718ZM15.5 9.85718C14.1194 9.85718 13.0001 11.0499 13 12.5212C13 13.9927 14.1193 12.8533 15.5 12.8533C16.8807 12.8533 18 13.9927 18 12.5212C17.9999 11.0499 16.8806 9.85718 15.5 9.85718Z" fill="currentColor"/>'),
+  globe: P('<path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2ZM4.73926 9C4.6407 9 4.55559 9.06709 4.52056 9.15921C4.18489 10.0421 4 10.9994 4 12C4 16.4183 7.58172 20 12 20C12.5088 20 13 19.6719 13 19.1631C12.9998 18.149 12.1772 17.3271 11.1631 17.3271H8.82617C8.24987 17.3271 7.78223 16.8595 7.78223 16.2832C7.78238 15.707 8.24997 15.2402 8.82617 15.2402H8.86914C9.46936 15.2402 9.9559 14.7535 9.95605 14.1533V13.6436C9.95605 12.7619 9.24192 12.0471 8.36035 12.0469H8.00195C7.16056 12.0469 6.47852 11.3648 6.47852 10.5234C6.47849 9.68216 5.79632 9.00016 4.95508 9H4.73926ZM12.5176 7.22559C12.1868 7.54639 12 7.98745 12 8.44824C12 9.38888 12.7625 10.1513 13.7031 10.1514H15.5762C16.9149 10.1516 18 11.2374 18 12.5762V13.5C18 13.7937 18.0844 14.0672 18.2303 14.2981C18.687 15.021 19.6577 14.4662 19.8323 13.629C19.942 13.1032 20 12.5584 20 12C20 9.1841 18.5448 6.7087 16.3457 5.28326C15.667 4.84332 14.7905 5.02052 14.2099 5.58373L12.5176 7.22559Z" fill="currentColor"/>'),
+  list: P('<path d="M12 3C13.483 3.00001 14.7481 3.07251 15.8047 3.17871C18.5276 3.45246 20.5473 5.47153 20.8213 8.19434C20.9275 9.25103 21 10.5167 21 12C21 13.483 20.9275 14.7481 20.8213 15.8047C20.5475 18.5277 18.5277 20.5475 15.8047 20.8213C14.7481 20.9275 13.483 21 12 21C10.5168 21 9.251 20.9275 8.19434 20.8213C5.47156 20.5473 3.45246 18.5276 3.17871 15.8047C3.0725 14.7481 3 13.483 3 12C3 10.5167 3.07248 9.25103 3.17871 8.19434C3.45264 5.4717 5.47172 3.45267 8.19434 3.17871C9.251 3.07248 10.5168 3.00001 12 3ZM11.5 15C10.1892 15 9.21877 15.0253 8.5625 15.0518C7.86067 15.0801 7 15.2977 7 16C7 16.7023 7.86067 16.9199 8.5625 16.9482C9.21877 16.9747 10.1892 17 11.5 17C12.8108 17 13.7812 16.9747 14.4375 16.9482C15.1393 16.9199 16 16.7023 16 16C16 15.2977 15.1393 15.0801 14.4375 15.0518C13.7812 15.0253 12.8108 15 11.5 15ZM10.5 11C9.59007 11 8.89128 11.0199 8.38867 11.043C7.73172 11.0732 7 11.3424 7 12C7 12.6576 7.73172 12.9268 8.38867 12.957C8.89128 12.9801 9.59007 13 10.5 13C11.4099 13 12.1087 12.9801 12.6113 12.957C13.2683 12.9268 14 12.6576 14 12C14 11.3424 13.2683 11.0732 12.6113 11.043C12.1087 11.0199 11.4099 11 10.5 11ZM12 7C10.4872 7 9.38276 7.02718 8.65332 7.05469C7.92733 7.08208 7 7.27351 7 8C7 8.72649 7.92733 8.91792 8.65332 8.94531C9.38276 8.97282 10.4872 9 12 9C13.5128 9 14.6172 8.97282 15.3467 8.94531C16.0727 8.91792 17 8.72649 17 8C17 7.27351 16.0727 7.08208 15.3467 7.05469C14.6172 7.02718 13.5128 7 12 7Z" fill="currentColor"/>'),
+  login: P('<path d="M15.8756 3C14.6036 3 13.5941 3.14324 12.8307 3.32129C11.8191 3.55721 11.1206 4.32479 10.8209 5.28711C10.7029 5.66615 10.922 6.04257 11.2028 6.32324L14.9752 10.0957C15.9515 11.072 15.9514 12.6555 14.9752 13.6318L11.2028 17.4043C11.0946 17.5124 10.9788 17.6079 10.8571 17.6914C10.7382 17.7729 10.6637 17.9096 10.6803 18.0527C10.8265 19.3117 11.5964 20.3908 12.8307 20.6787C13.5941 20.8568 14.6036 21 15.8756 21C17.1477 21 18.1571 20.8568 18.9205 20.6787C20.1548 20.3908 20.9247 19.3117 21.0709 18.0527C21.2233 16.7401 21.3756 14.7432 21.3756 12C21.3756 9.25683 21.2233 7.25991 21.0709 5.94727C20.9247 4.68832 20.1548 3.60916 18.9205 3.32129C18.1571 3.14324 17.1477 3 15.8756 3ZM9.64319 7.38281C9.25275 6.99259 8.61863 6.99267 8.22815 7.38281C7.83769 7.77327 7.83782 8.40731 8.22815 8.79785L10.3707 10.9385C8.15256 10.8418 5.93358 10.7462 3.71545 10.6494C3.58831 10.6439 3.46076 10.6384 3.33362 10.6328C2.98014 10.6172 2.64126 10.744 2.39124 10.9941C2.14123 11.2439 2.00066 11.5966 2.00061 11.9658C2.00067 12.3348 2.1405 12.6878 2.39026 12.9375C2.64028 13.1876 2.98012 13.3145 3.33362 13.2988C3.46076 13.2933 3.58831 13.2878 3.71545 13.2822C5.86231 13.1886 8.00992 13.0946 10.1569 13.001L8.22815 14.9297C7.83803 15.3202 7.83794 15.9533 8.22815 16.3438C8.61867 16.7343 9.25266 16.7343 9.64319 16.3438L13.4156 12.5703C13.8059 12.1798 13.8061 11.5467 13.4156 11.1562L9.64319 7.38281Z" fill="currentColor"/>'),
+  logout: P('<path d="M7.5 3C8.77204 3 9.7815 3.14324 10.5449 3.32129C11.7792 3.60916 12.5491 4.68832 12.6953 5.94727C12.7404 6.33543 12.7854 6.78351 12.8262 7.29297C12.891 8.10446 12.1921 8.76206 11.3828 8.67383C11.2557 8.65998 11.128 8.64666 11.001 8.63281C10.1171 8.53511 9.26865 8.80021 8.64355 9.42676C8.0185 10.0502 7.66803 10.9842 7.66797 11.9658C7.66803 12.9475 8.0185 13.8815 8.64355 14.5049C9.26864 15.1314 10.1171 15.3965 11.001 15.2988C11.128 15.285 11.2557 15.2717 11.3828 15.2578C12.1939 15.1694 12.8945 15.8263 12.8311 16.6396C12.789 17.177 12.7423 17.6476 12.6953 18.0527C12.5491 19.3117 11.7792 20.3908 10.5449 20.6787C9.7815 20.8568 8.77204 21 7.5 21C6.22796 21 5.2185 20.8568 4.45508 20.6787C3.22079 20.3908 2.45087 19.3117 2.30469 18.0527C2.15229 16.7401 2 14.7432 2 12C2 9.25683 2.15229 7.25991 2.30469 5.94727C2.45087 4.68832 3.22079 3.60916 4.45508 3.32129C5.2185 3.14324 6.22795 3 7.5 3ZM15.8955 7.38379C16.286 6.99352 16.9191 6.99349 17.3096 7.38379L21.083 11.1572C21.473 11.5477 21.4732 12.1809 21.083 12.5713L17.3096 16.3438C16.919 16.734 16.2859 16.7342 15.8955 16.3438C15.5052 15.9533 15.5053 15.3202 15.8955 14.9297L17.8242 13.001C15.677 13.0946 13.5289 13.1886 11.3818 13.2822C11.2547 13.2878 11.1272 13.2933 11 13.2988C10.6465 13.3144 10.3066 13.1877 10.0566 12.9375C9.80697 12.6878 9.66705 12.3347 9.66699 11.9658C9.66704 11.5968 9.80779 11.2439 10.0576 10.9941C10.3076 10.7441 10.6466 10.6173 11 10.6328C11.1272 10.6384 11.2547 10.6439 11.3818 10.6494C13.5999 10.7461 15.819 10.8418 18.0371 10.9385L15.8955 8.79785C15.5052 8.40741 15.5053 7.77428 15.8955 7.38379Z" fill="currentColor"/>'),
+  mail: P('<path d="M18.8209 9.96069C19.3285 9.56573 19.5824 9.36825 19.8275 9.32533C20.2399 9.25312 20.6872 9.47184 20.8834 9.84165C21 10.0615 21 10.3743 21 11V13C21 15.8284 20.9998 17.2424 20.1211 18.1211C19.2424 18.9998 17.8284 19 15 19H9C6.17157 19 4.75759 18.9998 3.87891 18.1211C3.00023 17.2424 3 15.8284 3 13V11C3 10.3746 3 10.0619 3.1167 9.84206C3.3129 9.47239 3.76001 9.25373 4.17226 9.32582C4.41747 9.3687 4.67108 9.56597 5.1783 9.96049L8.31641 12.4014C10.4831 14.0865 13.5169 14.0865 15.6836 12.4014L18.8209 9.96069Z" fill="currentColor"/><path d="M15 5C17.8284 5 19.2424 5.00023 20.1211 5.87891C20.2211 5.97894 20.3086 6.08663 20.3871 6.20186C20.3891 6.20476 20.3885 6.20878 20.3857 6.21094L14.4561 10.8232C13.0116 11.9467 10.9884 11.9467 9.54395 10.8232L3.61426 6.21094C3.61113 6.20851 3.61013 6.20447 3.61236 6.2012C3.69086 6.08606 3.77893 5.97888 3.87891 5.87891C4.75759 5.00023 6.17157 5 9 5H15Z" fill="currentColor"/>'),
+  pause: P('<path d="M13.6831 5.24183C13.593 4.03724 14.542 3 15.7499 3C16.9579 3 17.9069 4.03724 17.8168 5.24183C17.6741 7.14988 17.5 9.90623 17.5 12C17.5 14.0938 17.6741 16.8501 17.8168 18.7582C17.9069 19.9628 16.9579 21 15.7499 21C14.542 21 13.593 19.9628 13.6831 18.7582C13.8258 16.8501 13.9999 14.0938 13.9999 12C13.9999 9.90623 13.8258 7.14988 13.6831 5.24183Z" fill="currentColor"/><path d="M6.18317 5.24178C6.09307 4.03722 7.04205 3 8.24998 3C9.45791 3 10.4069 4.03722 10.3168 5.24178C10.1741 7.14983 9.99998 9.90621 9.99998 12C9.99998 14.0938 10.1741 16.8502 10.3168 18.7582C10.4069 19.9628 9.45791 21 8.24998 21C7.04205 21 6.09307 19.9628 6.18317 18.7582C6.3259 16.8502 6.49998 14.0938 6.49998 12C6.49998 9.90621 6.3259 7.14983 6.18317 5.24178Z" fill="currentColor"/>'),
+  play: P('<path d="M6 14.7702V9.22986C6 5.65215 6 3.86329 7.12572 3.31615C8.25145 2.769 9.65806 3.8742 12.4713 6.08459L14.9962 8.06842C17.3011 9.87942 18.4535 10.7849 18.4535 12C18.4535 13.2151 17.3011 14.1206 14.9962 15.9316L12.4713 17.9154C9.65806 20.1258 8.25145 21.231 7.12572 20.6839C6 20.1367 6 18.3479 6 14.7702Z" fill="currentColor"/>'),
+  sparkles: P('<path d="M12.6468 16.8589C11.56 19.0445 11.0166 20.1373 10.2354 20.4022C9.8188 20.5435 9.36724 20.5435 8.95064 20.4022C8.16948 20.1373 7.62607 19.0445 6.53925 16.8589C5.38268 16.6575 4.8044 16.5569 4.66322 16.5099C2.77517 15.8825 2.86171 13.1828 4.78608 12.6776C4.92997 12.6398 5.4664 12.5815 6.53925 12.4649C7.60286 10.2132 8.13467 9.08735 8.90409 8.80503C9.34888 8.64183 9.83716 8.64183 10.2819 8.80503C11.0514 9.08735 11.5832 10.2132 12.6468 12.4649C13.8235 12.5794 14.4118 12.6367 14.5561 12.6728C16.5154 13.1637 16.5948 15.9188 14.667 16.5217C14.5251 16.5661 13.899 16.6637 12.6468 16.8589Z" fill="currentColor"/><path d="M14.294 9.11395L14.0434 8.97309C13.0998 8.44293 12.628 8.17785 12.4953 7.86028C12.3686 7.55716 12.3988 7.21115 12.5763 6.93464C12.7621 6.64495 13.2728 6.46582 14.294 6.10755C15.0622 4.67727 15.4462 3.96213 15.9765 3.76466C16.3142 3.63891 16.6858 3.63891 17.0235 3.76466C17.5538 3.96213 17.9378 4.67727 18.7059 6.10755C19.7272 6.46582 20.2379 6.64495 20.4237 6.93464C20.6011 7.21115 20.6314 7.55716 20.5047 7.86028C20.372 8.17785 19.9002 8.44293 18.9566 8.97309L18.7059 9.11396C17.9167 10.5043 17.5221 11.1995 16.9801 11.3826C16.6687 11.4878 16.3313 11.4878 16.0199 11.3826C15.4779 11.1995 15.0833 10.5043 14.294 9.11395Z" fill="currentColor"/>'),
+  star: P('<path d="M7.82032 8.83999L6.25654 14.0434L12 17.68L17.7435 14.0434L16.1797 8.83999H7.82032Z" fill="currentColor"/><path d="M12 17.68C14.7225 20.2309 16.0837 21.5063 17.0809 21.3186C17.4986 21.2399 17.8805 21.0302 18.171 20.7198C18.8643 19.979 18.5182 18.146 17.8259 14.48L17.7435 14.0434L12 17.68Z" fill="currentColor"/><path d="M16.1797 8.83999L17.7435 14.0434C20.0495 12.9774 21.2026 12.4444 21.5049 12.0426C22.2419 11.0633 21.9327 9.65753 20.8528 9.07784C20.4098 8.83999 19.1395 8.83999 16.599 8.83999H16.1797Z" fill="currentColor"/><path d="M7.82032 8.83999H16.1797L15.6162 7.64815C14.0498 4.33535 13.2667 2.67896 12 2.67896C10.7333 2.67896 9.95018 4.33535 8.38384 7.64815L7.82032 8.83999Z" fill="currentColor"/><path d="M6.1741 14.48C5.48181 18.146 5.13567 19.979 5.829 20.7198C6.11951 21.0302 6.50136 21.2399 6.91915 21.3186C7.91626 21.5063 9.27751 20.2309 12 17.68L6.25654 14.0434L6.1741 14.48Z" fill="currentColor"/><path d="M6.25654 14.0434L7.82032 8.83999H7.40101C4.86049 8.83999 3.59024 8.83999 3.14716 9.07784C2.0673 9.65753 1.7581 11.0633 2.49508 12.0426C2.79746 12.4444 3.95049 12.9774 6.25654 14.0434Z" fill="currentColor"/>'),
+  tasks: P('<path fill-rule="evenodd" clip-rule="evenodd" d="M12.0002 3.00012C13.4833 3.00013 14.7483 3.07262 15.8049 3.17883C18.5278 3.45259 20.5476 5.47159 20.8215 8.19446C20.9277 9.25118 21.0002 10.5168 21.0002 12.0001C21.0002 13.4832 20.9277 14.7482 20.8215 15.8048C20.5477 18.5279 18.5279 20.5476 15.8049 20.8214C14.7483 20.9276 13.4833 21.0001 12.0002 21.0001C10.5169 21.0001 9.25124 20.9277 8.19452 20.8214C5.47162 20.5475 3.45265 18.5278 3.17889 15.8048C3.07268 14.7482 3.00019 13.4832 3.00018 12.0001C3.00018 10.5168 3.07266 9.25118 3.17889 8.19446C3.4528 5.47171 5.47175 3.4527 8.19452 3.17883C9.25124 3.07259 10.5169 3.00012 12.0002 3.00012ZM17.6291 7.22278C17.1997 6.87551 16.5702 6.94195 16.2228 7.37122L10.4504 14.507L8.23651 12.2931L8.16034 12.2247C7.76757 11.9044 7.18856 11.927 6.82245 12.2931C6.43195 12.6836 6.43193 13.3166 6.82245 13.7072L9.03632 15.921C9.87617 16.7608 11.2591 16.6882 12.006 15.7648L17.7775 8.62903C18.1248 8.19971 18.0583 7.57014 17.6291 7.22278Z" fill="currentColor"/>'),
+  trash: P('<path d="M14.876 10.2891C17.2815 10.2054 18.4841 10.1634 19.1094 10.876C19.7347 11.5886 19.5423 12.7465 19.1562 15.0625L18.835 16.9863C18.4359 19.3808 18.2367 20.5781 17.3975 21.2891C16.5582 22 15.3444 22 12.917 22H11.082C8.65486 22 7.44074 22 6.60156 21.2891C5.76256 20.5781 5.5631 19.3805 5.16406 16.9863L4.84375 15.0625C4.45778 12.7467 4.26459 11.5886 4.88965 10.876C5.51497 10.1633 6.71833 10.2054 9.12402 10.2891C10.0581 10.3216 11.0413 10.3428 12 10.3428C12.9587 10.3428 13.9418 10.3216 14.876 10.2891ZM8.5 12C7.94775 12 7.50001 12.4477 7.5 13V19C7.5 19.5523 7.94774 20 8.5 20C9.05215 19.9998 9.5 19.5522 9.5 19V13C9.49999 12.4478 9.05215 12.0002 8.5 12ZM12 12C11.4477 12 11 12.4477 11 13V19C11 19.5523 11.4477 20 12 20C12.5522 19.9998 13 19.5522 13 19V13C13 12.4478 12.5521 12.0002 12 12ZM15.5 12C14.9477 12 14.5 12.4477 14.5 13V19C14.5 19.5523 14.9477 20 15.5 20C16.0522 19.9998 16.5 19.5522 16.5 19V13C16.5 12.4478 16.0521 12.0002 15.5 12ZM12 2C13.2752 2 14.271 2.27648 14.9707 2.85449C15.6924 3.45088 15.9479 4.2418 15.9922 4.93652C16.0162 5.31286 15.9793 5.67654 15.9189 6H18.6494C19.3953 6.00014 19.9999 6.60474 20 7.35059C20 8.01305 19.5206 8.57368 18.8623 8.64746C17.5465 8.79493 15.1509 9 12 9C8.8491 9 6.4535 8.79493 5.1377 8.64746C4.47935 8.57368 4 8.01305 4 7.35059C4.00014 6.60474 4.60474 6.00014 5.35059 6H8.08105C8.02072 5.67654 7.98384 5.31286 8.00781 4.93652C8.05208 4.2418 8.30763 3.45088 9.0293 2.85449C9.729 2.27648 10.7248 2 12 2ZM12 4C10.9822 4 10.5121 4.22356 10.3037 4.39551C10.1178 4.54906 10.0234 4.75842 10.0039 5.06348C9.9847 5.36497 10.0475 5.70063 10.1367 6H13.8633C13.9525 5.70063 14.0153 5.36497 13.9961 5.06348C13.9766 4.75842 13.8822 4.54906 13.6963 4.39551C13.4879 4.22356 13.0178 4 12 4Z" fill="currentColor" />'),
+  user: P('<path d="M17 8C17 10.7614 14.7614 13 12 13C9.23858 13 7 10.7614 7 8C7 5.23858 9.23858 3 12 3C14.7614 3 17 5.23858 17 8Z" fill="currentColor"/><path d="M4.34542 18.5821C4.39658 18.224 4.42215 18.0449 4.43934 17.9545C4.8491 15.7994 6.4989 14.5405 8.68577 14.7142C8.77748 14.7215 9.03624 14.7541 9.55376 14.8193C10.4048 14.9265 11.2587 15 12 15C12.7413 15 13.5952 14.9265 14.4462 14.8193C14.9638 14.7541 15.2225 14.7215 15.3142 14.7142C17.5011 14.5405 19.1509 15.7994 19.5607 17.9545C19.5778 18.0449 19.6034 18.224 19.6546 18.5821C19.6722 18.7056 19.681 18.7673 19.6857 18.8178C19.7892 19.9495 18.9302 20.9399 17.7953 20.9974C17.7447 21 17.6823 21 17.5575 21H6.4425C6.31772 21 6.25533 21 6.2047 20.9974C5.06979 20.9399 4.21082 19.9495 4.31433 18.8178C4.31895 18.7673 4.32777 18.7056 4.34542 18.5821Z" fill="currentColor"/>'),
+
 };
+function icon(name){
+  return '<span style="display:inline-flex;width:1em;height:1em;vertical-align:-0.125em">' + (ICONS[name] || '') + '</span>';
+}
 
-let saveTimer = null;
+/* ================= état ================= */
+const MAX_AGENTS = 10;
+const CFG_KEY = "ac_supabase_cfg";
+const MISTRAL_KEY_STORE = "ac_mistral_key";
 
-/* ---------- persistance ---------- */
+let cfg = { url: "", key: "" };
+try{ cfg = Object.assign(cfg, JSON.parse(localStorage.getItem(CFG_KEY) || "{}")); }catch(e){}
+
+let session = null;
+let sb = null;
+let bossQueue = [];
+let saveTimer = null, pushTimer = null, pendingLocal = false, bossBusy = false;
+
+function scopeKey(){
+  return session ? "ac_state_" + session.user.id : "ac_state_guest";
+}
+function freshState(){
+  return { agents: [], mission: "", backlog: [], autonomous: false, speed: 1, doneCount: 0,
+           activity: [], meta: { syncedAt: null } };
+}
+let state = freshState();
+
+/* ================= persistance locale ================= */
 function save(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(()=>{
-    try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
-  }, 300);
+    try{ localStorage.setItem(scopeKey(), JSON.stringify(state)); }catch(e){}
+    pendingLocal = true;
+    schedulePush();
+  }, 250);
 }
-function load(){
+function loadLocal(){
   try{
-    const raw = localStorage.getItem(STORE_KEY);
-    if(raw){ const s = JSON.parse(raw); Object.assign(state, s); }
-  }catch(e){}
+    const raw = localStorage.getItem(scopeKey());
+    state = raw ? Object.assign(freshState(), JSON.parse(raw)) : freshState();
+  }catch(e){ state = freshState(); }
 }
 
-/* ---------- utilitaires ---------- */
+/* ================= utilitaires ================= */
 const uid = () => Math.random().toString(36).slice(2,9);
-const now = () => new Date().toLocaleTimeString("fr-FR");
-const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nowT = () => new Date().toLocaleTimeString("fr-FR");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const freeAgents = () => state.agents.filter(a => a.status === "idle");
 const pendingCount = () => state.agents.reduce((n,a)=> n + a.queue.length + (a.currentTask?1:0), 0);
 
 function logGlobal(msg, who){
-  state.activity.unshift({ t: now(), who: who || "Système", msg });
+  state.activity.unshift({ t: nowT(), who: who || "Système", msg });
   if(state.activity.length > 120) state.activity.length = 120;
   renderActivity(); save();
 }
 function logAgent(agent, msg){
-  agent.log.unshift({ t: now(), msg });
+  agent.log.unshift({ t: nowT(), msg });
   if(agent.log.length > 30) agent.log.length = 30;
 }
 
-/* ---------- moteur de ticks (Web Worker : continue même en arrière-plan) ---------- */
+/* ================= moteur (Web Worker : continue en arrière-plan) ================= */
 const workerSrc = "let id=null;onmessage=e=>{if(e.data==='start'&&!id){id=setInterval(()=>postMessage('tick'),1000)};if(e.data==='stop'){clearInterval(id);id=null}};";
 const worker = new Worker(URL.createObjectURL(new Blob([workerSrc], {type:"application/javascript"})));
 worker.onmessage = () => engineTick();
 worker.postMessage("start");
 
-let llmBusy = false;
-let bossBusy = false;
-
 function engineTick(){
   let changed = false;
-
   for(const a of state.agents){
     if(a.status !== "busy" || !a.currentTask) continue;
     const t = a.currentTask;
-    const elapsed = (Date.now() - t.startedAt) / 1000;
-    const p = Math.min(100, (elapsed / t.duration) * 100);
-    if(p >= 100){
-      finishTask(a);
-      changed = true;
-    }
+    if((Date.now() - t.startedAt) / 1000 >= t.duration){ finishTask(a); changed = true; }
   }
-
   dispatch();
-
-  if(state.autonomous){
-    if(!bossBusy && freeAgents().length > 0 && state.agents.every(a => !a.currentTask && a.queue.length === 0)){
-      bossBusy = true;
-      autonomousRound().finally(()=>{ bossBusy = false; });
-    }
+  if(state.autonomous && !bossBusy && state.agents.length > 0 &&
+     freeAgents().length > 0 && state.agents.every(a => !a.currentTask && a.queue.length === 0)){
+    bossBusy = true;
+    autonomousRound().finally(()=>{ bossBusy = false; });
   }
-
   if(changed || state.agents.some(a=>a.status==="busy")) updateDynamicUI();
   updateKPIs();
 }
 
 function dispatch(){
-  let guard = 0;
-  while(freeAgents().length > 0 && bossQueue.length > 0 && guard++ < 20){
-    const agent = freeAgents()[0];
-    const text = bossQueue.shift();
-    assignTask(agent, text, "Patron");
+  let g = 0;
+  while(freeAgents().length > 0 && bossQueue.length > 0 && g < 20){
+    g++;
+    assignTask(freeAgents()[0], bossQueue.shift(), "Patron");
   }
-  let g2 = 0;
-  while(freeAgents().length > 0 && bossQueue.length === 0 && g2++ < 20){
+  while(freeAgents().length > 0 && bossQueue.length === 0 && g < 40){
+    g++;
     const agent = freeAgents().find(a => a.queue.length > 0);
     if(!agent) break;
     assignTask(agent, agent.queue.shift(), "File locale");
@@ -253,10 +371,10 @@ function dispatch(){
 }
 
 function assignTask(agent, text, from){
-  const duration = (8 + Math.random() * 10) * state.speed;
+  const duration = (8 + Math.random() * 10) * (state.speed || 1);
   agent.status = "busy";
-  agent.currentTask = { text, startedAt: Date.now(), duration, progress: 0 };
-  logAgent(agent, "📋 Tâche reçue de " + from + " : " + text);
+  agent.currentTask = { text, startedAt: Date.now(), duration };
+  logAgent(agent, "Tâche reçue de " + from + " : " + text);
   logGlobal("tâche confiée à <b>" + esc(agent.name) + "</b> : " + esc(text), "Patron");
   updateDynamicUI(); save();
 }
@@ -266,24 +384,16 @@ function finishTask(agent){
   agent.currentTask = null;
   agent.status = "idle";
   state.doneCount++;
-  const result = "✅ Terminé : " + t.text;
-  logAgent(agent, result);
+  logAgent(agent, "Terminé : " + t.text);
   logGlobal("<b>" + esc(agent.name) + "</b> a terminé : " + esc(t.text), agent.name);
-  if(state.autonomous){
-    logAgent(agent, "💬 Rapport envoyé au Patron.");
-  }
 }
 
-/* ---------- décomposition des objectifs ---------- */
-let bossQueue = [];
-
+/* ================= objectifs & IA ================= */
 async function launchObjective(text){
-  text = text.trim();
+  text = (text || "").trim();
   if(!text) return;
-  if(state.agents.length === 0){
-    logGlobal("impossible : embauchez au moins un agent.", "Patron"); return;
-  }
-  logGlobal("🎯 nouvel objectif reçu : « " + esc(text) + " »", "Patron");
+  if(state.agents.length === 0){ logGlobal("impossible : embauchez au moins un agent.", "Patron"); return; }
+  logGlobal("nouvel objectif reçu : « " + esc(text) + " »", "Patron");
   const subtasks = await decompose(text);
   bossQueue.push(...subtasks);
   logGlobal("objectif découpé en <b>" + subtasks.length + "</b> tâche(s), distribution en cours...", "Patron");
@@ -291,19 +401,19 @@ async function launchObjective(text){
 }
 
 async function decompose(objective){
-  if(state.apiKey){
+  if(mistralKey()){
     try{
       const reply = await callLLM([
-        {role:"system", content:"Tu es un manager. Découpe l'objectif donné en sous-tâches courtes et actionnables (max 6). Réponds UNIQUEMENT avec un tableau JSON de chaînes de caractères en français, ex: [\"tache 1\",\"tache 2\"]"},
+        {role:"system", content:"Tu es un manager. Découpe l'objectif donné en sous-tâches courtes et actionnables (max 6). Réponds UNIQUEMENT avec un tableau JSON de chaînes en français, ex: [\"tache 1\",\"tache 2\"]"},
         {role:"user", content: objective}
       ]);
       const m = reply.match(/\[[\s\S]*\]/);
       if(m){
         const arr = JSON.parse(m[0]);
-        if(Array.isArray(arr) && arr.length) return arr.map(x => String(x)).slice(0,6);
+        if(Array.isArray(arr) && arr.length) return arr.map(String).slice(0,6);
       }
     }catch(e){
-      logGlobal("IA réelle indisponible (" + esc(e.message) + ") → mode simulation.", "Patron");
+      logGlobal("IA réelle indisponible (" + esc(e.message) + ") → simulation.", "Patron");
     }
   }
   const steps = ["Cadrer et analyser", "Préparer les ressources", "Exécuter", "Vérifier la qualité", "Rédiger le bilan"];
@@ -312,66 +422,147 @@ async function decompose(objective){
 
 async function autonomousRound(){
   if(state.agents.length === 0) return;
-  let objective = null;
-
-  if(state.backlog.length){
-    objective = state.backlog[state.doneCount % state.backlog.length];
-  } else if(state.mission){
-    objective = "Faire avancer la mission : " + state.mission;
-  } else {
-    objective = "Point d'étape : vérifier l'avancement général et proposer des améliorations";
-  }
-
-  logGlobal("🔄 cycle autonome : " + esc(objective), "Patron");
+  let objective;
+  if(state.backlog.length) objective = state.backlog[state.doneCount % state.backlog.length];
+  else if(state.mission) objective = "Faire avancer la mission : " + state.mission;
+  else objective = "Point d'étape : vérifier l'avancement général et proposer des améliorations";
+  logGlobal("cycle autonome : " + esc(objective), "Patron");
   const subtasks = await decompose(objective);
   bossQueue.push(...subtasks);
   dispatch(); updateDynamicUI(); save();
 }
 
-/* ---------- appel IA réel (optionnel) ---------- */
+function mistralKey(){
+  try{ return localStorage.getItem(MISTRAL_KEY_STORE) || ""; }catch(e){ return ""; }
+}
+
 async function callLLM(messages){
   const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.apiKey },
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + mistralKey() },
     body: JSON.stringify({ model: "mistral-small-latest", messages, temperature: 0.4, max_tokens: 500 })
   });
   if(!res.ok) throw new Error("HTTP " + res.status);
   const data = await res.json();
-  llmBusy = false;
   return data.choices[0].message.content;
 }
 
-/* ---------- rendu UI ---------- */
+/* ================= Supabase : authentification + synchro ================= */
+function supabaseReady(){ return !!(cfg.url && cfg.key && window.supabase); }
+
+function initSupabase(){
+  if(!supabaseReady()){ sb = null; return; }
+  sb = window.supabase.createClient(cfg.url, cfg.key);
+  sb.auth.getSession().then(({data})=>{ if(data.session) applySession(data.session); refreshAccountUI(); });
+  sb.auth.onAuthStateChange((event, s)=>{
+    if(event === "SIGNED_IN" && s) applySession(s);
+    if(event === "SIGNED_OUT"){ session = null; loadLocal(); renderAll(); }
+    refreshAccountUI();
+  });
+}
+
+function applySession(s){
+  const sameUser = session && session.user && s.user && session.user.id === s.user.id;
+  session = s;
+  loadLocal();
+  renderAll();
+  pullRemote(!sameUser);
+}
+
+function schedulePush(){
+  if(!session || !sb) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(pushRemote, 2000);
+}
+
+async function pushRemote(){
+  if(!session || !sb) return;
+  try{
+    const updated_at = new Date().toISOString();
+    state.meta.syncedAt = updated_at;
+    pendingLocal = false;
+    const { agents, mission, backlog, autonomous, speed, doneCount, activity } = state;
+    await sb.from("agent_workspaces").upsert({
+      id: session.user.id,
+      data: { agents, mission, backlog, autonomous, speed, doneCount, activity },
+      updated_at
+    });
+    try{ localStorage.setItem(scopeKey(), JSON.stringify(state)); }catch(e){}
+    renderSyncChip();
+  }catch(e){ console.warn("push échoué", e); }
+}
+
+async function pullRemote(force){
+  if(!session || !sb) return;
+  try{
+    const { data, error } = await sb.from("agent_workspaces").select("*").eq("id", session.user.id).maybeSingle();
+    if(error) throw error;
+    if(data && data.data){
+      const remoteNewer = !state.meta.syncedAt || (data.updated_at > state.meta.syncedAt);
+      if((remoteNewer && !pendingLocal) || force){
+        state = Object.assign(freshState(), data.data, { meta: { syncedAt: data.updated_at } });
+        renderAll(); save();
+      }
+    } else if(!data){
+      pushRemote();
+    }
+    renderSyncChip();
+  }catch(e){ console.warn("pull échoué", e); }
+}
+
+setInterval(()=>{ if(session && !pendingLocal) pullRemote(false); }, 20000);
+window.addEventListener("focus", ()=>{ if(session && !pendingLocal) pullRemote(false); });
+
+async function signInProvider(provider){
+  if(!sb) return;
+  try{
+    const { error } = await sb.auth.signInWithOAuth({ provider, options: { redirectTo: location.href } });
+    if(error) showAuthMsg(error.message, true);
+  }catch(e){ showAuthMsg(e.message, true); }
+}
+
+async function signInEmail(){
+  const email = document.getElementById("magicEmail").value.trim();
+  if(!email){ showAuthMsg("Entrez votre adresse e-mail.", true); return; }
+  try{
+    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href } });
+    if(error) showAuthMsg(error.message, true);
+    else showAuthMsg("Lien de connexion envoyé ! Vérifiez votre boîte " + email + " (et les spams).", false);
+  }catch(e){ showAuthMsg(e.message, true); }
+}
+
+async function signOut(){
+  if(sb) await sb.auth.signOut();
+  session = null;
+  loadLocal(); renderAll();
+}
+
+/* ================= rendu ================= */
 const grid = document.getElementById("agentsGrid");
 const cards = new Map();
-
-function statusLabel(a){
-  if(a.status === "busy") return "Occupé";
-  if(a.status === "paused") return "En pause";
-  return "Libre";
-}
+const statusLabel = a => a.status === "busy" ? "Occupé" : a.status === "paused" ? "En pause" : "Libre";
 
 function buildCard(a){
   const el = document.createElement("div");
   el.className = "agent";
   el.innerHTML = `
     <div class="head">
-      <span class="dot"></span>
-      <span class="name">${esc(a.name)}</span>
-      <span class="role">${esc(a.role || "polyvalent")}</span>
-      <span class="status"></span>
-      <button class="danger pauseBtn" title="Pause / reprise">⏸</button>
-      <button class="danger removeBtn" title="Retirer l'agent">✕</button>
+      <span class="led"></span>
+      <span class="name"></span>
+      <span class="role"></span>
+      <button class="iconbtn pauseBtn" title="Pause / reprise">${icon("pause")}</button>
+      <button class="iconbtn removeBtn" title="Retirer l'agent">${icon("cross")}</button>
     </div>
     <div class="task"><span class="none">Aucune tâche en cours.</span></div>
     <div class="bar"><div class="fill"></div></div>
     <div class="queue"></div>
     <form class="row directForm">
-      <input type="text" placeholder="Donner une tâche directement à ${esc(a.name)}...">
-      <button style="flex:0 0 auto;" class="small">OK</button>
+      <input type="text" placeholder="Tâche directe pour cet agent...">
+      <button class="btn" style="flex:0 0 auto;padding:9px 13px;">OK</button>
     </form>
-    <div class="log agentLog"></div>
-  `;
+    <div class="log agentLog"></div>`;
+  el.querySelector(".name").textContent = a.name;
+  el.querySelector(".role").textContent = a.role || "polyvalent";
   el.querySelector(".removeBtn").addEventListener("click", ()=>{
     state.agents = state.agents.filter(x => x.id !== a.id);
     cards.delete(a.id);
@@ -379,9 +570,8 @@ function buildCard(a){
     renderAgents(); save();
   });
   el.querySelector(".pauseBtn").addEventListener("click", ()=>{
-    if(a.status === "paused"){ a.status = a.currentTask ? "busy" : "idle"; }
-    else if(a.status === "busy"){ a.status = "paused"; }
-    else { a.status = "paused"; }
+    if(a.status === "paused") a.status = a.currentTask ? "busy" : "idle";
+    else a.status = "paused";
     updateDynamicUI(); save();
   });
   el.querySelector(".directForm").addEventListener("submit", e=>{
@@ -390,12 +580,8 @@ function buildCard(a){
     const text = inp.value.trim();
     if(!text) return;
     inp.value = "";
-    if(a.currentTask || a.queue.length >= 5){
-      if(a.queue.length < 5) a.queue.push(text);
-      logGlobal("file pleine, tâche mise en attente pour <b>" + esc(a.name) + "</b>.", "Système");
-    } else {
-      assignTask(a, text, "Vous");
-    }
+    if(a.currentTask){ if(a.queue.length < 5) a.queue.push(text); }
+    else assignTask(a, text, "Vous");
     save();
   });
   cards.set(a.id, el);
@@ -403,24 +589,22 @@ function buildCard(a){
 }
 
 function renderAgents(){
-  document.getElementById("agentCount").textContent = "(" + state.agents.length + "/" + MAX_AGENTS + ")";
+  document.getElementById("agentCount").textContent = state.agents.length + "/" + MAX_AGENTS;
   const btn = document.getElementById("addAgentBtn");
   const hint = document.getElementById("agentHint");
   if(state.agents.length >= MAX_AGENTS){
-    btn.disabled = true; btn.textContent = "Limite de 10 agents atteinte";
-    hint.textContent = "Vous avez atteint le maximum de 10 agents.";
+    btn.disabled = true; btn.innerHTML = icon("check") + " Équipe complète (10 agents)";
+    hint.textContent = "Maximum de 10 agents atteint.";
   } else {
-    btn.disabled = false; btn.textContent = "+ Embaucher un agent";
+    btn.disabled = false; btn.innerHTML = icon("add") + " Embaucher";
     hint.textContent = "";
   }
   grid.innerHTML = "";
   if(state.agents.length === 0){
-    grid.innerHTML = '<div class="empty">Aucun agent pour l\'instant. Embauchez-en un (jusqu\'à 10) avec le formulaire à gauche.</div>';
+    grid.innerHTML = '<div class="empty">' + icon("ghost") + ' Aucun agent. Embauchez-en un (jusqu\'à 10) — le Patron leur distribuera les tâches.</div>';
     return;
   }
-  for(const a of state.agents){
-    grid.appendChild(cards.get(a.id) || buildCard(a));
-  }
+  for(const a of state.agents) grid.appendChild(cards.get(a.id) || buildCard(a));
   updateDynamicUI();
 }
 
@@ -428,31 +612,26 @@ function updateDynamicUI(){
   for(const a of state.agents){
     const el = cards.get(a.id);
     if(!el) continue;
-    el.querySelector(".dot").className = "dot " + a.status;
-    const st = el.querySelector(".status");
-    st.className = "status " + a.status;
-    st.textContent = statusLabel(a);
+    el.classList.toggle("busy", a.status === "busy");
+    el.querySelector(".led").className = "led " + a.status;
     const taskEl = el.querySelector(".task");
     if(a.currentTask){
-      taskEl.innerHTML = "▸ " + esc(a.currentTask.text);
+      taskEl.textContent = "▸ " + a.currentTask.text;
       let p = 0;
-      if(a.status === "busy"){
-        p = Math.min(100, ((Date.now() - a.currentTask.startedAt) / 1000 / a.currentTask.duration) * 100);
-      }
+      if(a.status === "busy") p = Math.min(100, ((Date.now() - a.currentTask.startedAt) / 1000 / a.currentTask.duration) * 100);
       el.querySelector(".fill").style.width = p.toFixed(1) + "%";
     } else {
       taskEl.innerHTML = '<span class="none">Aucune tâche en cours.</span>';
       el.querySelector(".fill").style.width = "0%";
     }
-    el.querySelector(".queue").textContent = a.queue.length ? "⏳ " + a.queue.length + " tâche(s) en attente : " + a.queue.join(" • ") : "";
-    const logEl = el.querySelector(".agentLog");
-    logEl.innerHTML = a.log.map(l => "<div><span class='t'>[" + l.t + "]</span> " + esc(l.msg) + "</div>").join("");
+    el.querySelector(".queue").textContent = a.queue.length ? "⏳ " + a.queue.length + " en attente : " + a.queue.join(" • ") : "";
+    el.querySelector(".agentLog").innerHTML = a.log.map(l => "<div><span class='t'>[" + l.t + "]</span> " + esc(l.msg) + "</div>").join("");
   }
 }
 
 function renderActivity(){
-  const el = document.getElementById("activity");
-  if(!state.activity.length){ el.innerHTML = '<div class="empty">En attente d\'activité...</div>'; return; }
+  const el = document.getElementById("activityLog");
+  if(!state.activity.length){ el.innerHTML = '<div style="color:var(--faint);font-style:italic;">En attente d\'activité...</div>'; return; }
   el.innerHTML = state.activity.map(l => "<div><span class='t'>[" + l.t + "]</span> <b>" + esc(l.who) + "</b> — " + l.msg + "</div>").join("");
 }
 
@@ -463,67 +642,207 @@ function updateKPIs(){
   document.getElementById("kpiQueue").textContent = pendingCount() + bossQueue.length;
 }
 
-function updateBadges(){
-  const mb = document.getElementById("modeBadge");
-  if(state.apiKey){ mb.textContent = "IA RÉELLE CONNECTÉE"; mb.className = "badge on"; }
-  else { mb.textContent = "MODE SIMULATION"; mb.className = "badge"; }
-  const ab = document.getElementById("autoBadge");
-  if(state.autonomous){ ab.textContent = "AUTONOME : ON"; ab.className = "badge on"; }
-  else { ab.textContent = "AUTONOME : OFF"; ab.className = "badge"; }
+function renderChips(){
+  const m = document.getElementById("chipMode");
+  if(mistralKey()){ m.className = "chip on"; m.innerHTML = "<span class='led'></span>ia réelle"; }
+  else { m.className = "chip"; m.innerHTML = "<span class='led'></span>simulation"; }
+  const a = document.getElementById("chipAuto");
+  if(state.autonomous){ a.className = "chip on"; a.innerHTML = "<span class='led'></span>autonome on"; }
+  else { a.className = "chip"; a.innerHTML = "<span class='led'></span>autonome off"; }
   document.getElementById("autoSwitch").classList.toggle("on", state.autonomous);
+  renderSyncChip();
 }
 
-/* ---------- événements ---------- */
+function renderSyncChip(){
+  const c = document.getElementById("chipSync");
+  if(session){
+    c.className = "chip on";
+    const email = session.user.email || "compte lié";
+    c.innerHTML = "<span class='led'></span>nuage · " + esc(email.length > 26 ? email.slice(0,24) + "…" : email);
+  } else {
+    c.className = "chip";
+    c.innerHTML = "<span class='led'></span>local";
+  }
+}
+
+function refreshAccountUI(){
+  const btn = document.getElementById("accountBtn");
+  if(session){
+    const email = session.user.email || "compte lié";
+    btn.innerHTML = icon("user") + " " + esc(email.length > 24 ? email.slice(0,22) + "…" : email) + " " + icon("logout");
+    btn.onclick = signOut;
+    btn.title = "Se déconnecter";
+  } else {
+    btn.innerHTML = icon("login") + " Se connecter";
+    btn.onclick = openAuthModal;
+    btn.title = "Se connecter pour synchroniser";
+  }
+  renderSyncChip();
+  renderCloudSettings();
+}
+
+function loadLocalInputs(){
+  document.getElementById("missionInput").value = state.mission || "";
+  document.getElementById("backlogInput").value = (state.backlog || []).join("\n");
+  document.getElementById("apiKeyInput").value = mistralKey();
+  document.getElementById("speedSelect").value = String(state.speed || 1);
+}
+
+function renderAll(){
+  cards.clear();
+  loadLocalInputs();
+  renderChips();
+  renderAgents();
+  renderActivity();
+  updateKPIs();
+  refreshAccountUI();
+}
+
+/* ================= modale connexion ================= */
+const authOverlay = document.getElementById("authOverlay");
+const SETUP_SQL = `create table if not exists agent_workspaces (
+  id uuid primary key references auth.users(id) on delete cascade,
+  data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table agent_workspaces enable row level security;
+create policy "proprietaire"
+  on agent_workspaces for all
+  using (auth.uid() = id)
+  with check (auth.uid() = id);`;
+
+function openAuthModal(){
+  document.getElementById("authTitle").innerHTML = icon("login") + " Connexion";
+  const body = document.getElementById("authBody");
+  if(supabaseReady()){
+    document.getElementById("authSub").textContent = "Connectez-vous pour retrouver vos agents et vos tâches sur tous vos appareils, avec le même compte.";
+    body.innerHTML = `
+      <div class="oauth">
+        <button class="btn line wide" data-p="github">${icon("github")} Continuer avec GitHub</button>
+        <button class="btn line wide" data-p="google">${icon("google")} Continuer avec Google (Gmail)</button>
+        <button class="btn line wide" data-p="azure">${icon("microsoft")} Continuer avec Microsoft (Outlook)</button>
+      </div>
+      <div class="divider">ou par e-mail</div>
+      <input type="email" id="magicEmail" placeholder="votre@email.com" style="margin-bottom:10px;">
+      <button class="btn wide" id="magicBtn">${icon("mail")} Recevoir un lien de connexion</button>
+      <div class="msg" id="authMsg"></div>`;
+    body.querySelectorAll("[data-p]").forEach(b => b.addEventListener("click", ()=> signInProvider(b.dataset.p)));
+    body.querySelector("#magicBtn").addEventListener("click", signInEmail);
+    body.querySelector("#magicEmail").addEventListener("keydown", e=>{ if(e.key === "Enter") signInEmail(); });
+  } else {
+    document.getElementById("authSub").textContent = "Pour vous connecter avec GitHub, Gmail ou Outlook et retrouver vos agents sur tous vos appareils, reliez d'abord un espace de synchronisation Supabase (gratuit, 2 minutes) :";
+    body.innerHTML = `
+      <div class="step"><div class="n">1</div><p>Créez un compte gratuit sur <a href="https://supabase.com" target="_blank" rel="noopener">supabase.com</a>, puis créez un projet (n'importe quel nom).</p></div>
+      <div class="step"><div class="n">2</div><p>Ouvrez <b>SQL Editor</b> dans Supabase, collez et exécutez :<div class="sql" id="sqlBlock"></div><button class="btn line" id="copySql" style="padding:7px 12px;font-size:12px;">Copier le SQL</button></p></div>
+      <div class="step"><div class="n">3</div><p>Dans <b>Project Settings → API</b>, copiez « Project URL » et « anon public key » ci-dessous :</p></div>
+      <input type="text" id="cfgUrl" placeholder="https://xxxx.supabase.co">
+      <input type="password" id="cfgKey" placeholder="anon key (eyJhbGci...)" style="margin-top:8px;">
+      <button class="btn wide" id="cfgSave" style="margin-top:12px;">Enregistrer et activer la connexion</button>
+      <div class="msg" id="authMsg"></div>`;
+    document.getElementById("sqlBlock").textContent = SETUP_SQL;
+    document.getElementById("copySql").addEventListener("click", ()=>{
+      navigator.clipboard.writeText(SETUP_SQL).then(()=>{ document.getElementById("copySql").textContent = "Copié ✓"; });
+    });
+    document.getElementById("cfgSave").addEventListener("click", ()=>{
+      const url = document.getElementById("cfgUrl").value.trim().replace(/\/+$/, "");
+      const key = document.getElementById("cfgKey").value.trim();
+      if(!url.startsWith("https://") || key.length < 20){
+        showAuthMsg("URL ou clé invalide.", true); return;
+      }
+      cfg = { url, key };
+      localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+      initSupabase();
+      openAuthModal();
+    });
+  }
+  authOverlay.classList.add("show");
+}
+
+function showAuthMsg(msg, isErr){
+  const el = document.getElementById("authMsg");
+  if(!el) return;
+  el.className = "msg " + (isErr ? "err" : "ok");
+  el.textContent = msg;
+}
+
+document.getElementById("authClose").innerHTML = icon("cross");
+document.getElementById("authClose").addEventListener("click", ()=> authOverlay.classList.remove("show"));
+authOverlay.addEventListener("click", e=>{ if(e.target === authOverlay) authOverlay.classList.remove("show"); });
+
+function renderCloudSettings(){
+  const body = document.getElementById("cloudBody");
+  if(supabaseReady()){
+    body.innerHTML = `
+      <div class="hint" style="margin:8px 0 10px;">Espace connecté. La connexion par GitHub, Google, Outlook ou e-mail est active, et vos données sont synchronisées sur tous vos appareils.</div>
+      <button class="btn line" id="cfgReset" style="padding:7px 12px;font-size:12px;">Déconnecter l'espace de synchronisation</button>`;
+    document.getElementById("cfgReset").addEventListener("click", ()=>{
+      cfg = { url: "", key: "" };
+      localStorage.removeItem(CFG_KEY);
+      sb = null; session = null;
+      loadLocal(); renderAll();
+    });
+  } else {
+    body.innerHTML = `
+      <div class="hint" style="margin:8px 0 10px;">Actuellement : mode local (données de ce navigateur uniquement). Connectez un espace Supabase gratuit pour la connexion GitHub / Gmail / Outlook et la synchro multi-appareils.</div>
+      <button class="btn line" id="cfgSetup" style="padding:7px 12px;font-size:12px;">Configurer la synchronisation</button>`;
+    document.getElementById("cfgSetup").addEventListener("click", openAuthModal);
+  }
+}
+
+/* ================= événements ================= */
+document.getElementById("brandMark").innerHTML = icon("crown");
+document.getElementById("patronHead").insertAdjacentHTML("afterbegin", icon("crown"));
+document.getElementById("hireHead").insertAdjacentHTML("afterbegin", icon("user"));
+document.getElementById("settingsHead").insertAdjacentHTML("afterbegin", icon("gears"));
+document.getElementById("logHead").insertAdjacentHTML("afterbegin", icon("list"));
+document.getElementById("launchBtn").insertAdjacentHTML("afterbegin", icon("play"));
+document.getElementById("cloudSummary").insertAdjacentHTML("afterbegin", icon("globe"));
+document.getElementById("aiSummary").insertAdjacentHTML("afterbegin", icon("sparkles"));
+
 document.getElementById("addAgentBtn").addEventListener("click", ()=>{
   if(state.agents.length >= MAX_AGENTS) return;
   const names = ["Nova","Atlas","Zéphyr","Orion","Luna","Vega","Comet","Echo","Iris","Juno"];
-  const name = document.getElementById("agentNameInput").value.trim() || names[state.agents.length % names.length] + "-" + (state.agents.length+1);
+  const name = document.getElementById("agentNameInput").value.trim() || names[state.agents.length % names.length] + "-" + (state.agents.length + 1);
   const role = document.getElementById("agentRoleInput").value.trim();
-  const a = { id: uid(), name, role, status: "idle", currentTask: null, queue: [], log: [] };
-  state.agents.push(a);
+  state.agents.push({ id: uid(), name, role, status: "idle", currentTask: null, queue: [], log: [] });
   document.getElementById("agentNameInput").value = "";
   document.getElementById("agentRoleInput").value = "";
   logGlobal("<b>" + esc(name) + "</b> a rejoint l'équipe" + (role ? " (spécialité : " + esc(role) + ")" : "") + ".", "Système");
-  renderAgents(); updateKPIs(); save();
+  renderAgents(); save();
 });
 
 document.getElementById("launchBtn").addEventListener("click", ()=>{
   const inp = document.getElementById("objectiveInput");
-  launchObjective(inp.value);
-  inp.value = "";
+  launchObjective(inp.value); inp.value = "";
 });
 document.getElementById("objectiveInput").addEventListener("keydown", e=>{
   if(e.key === "Enter"){ launchObjective(e.target.value); e.target.value = ""; }
 });
-
 document.getElementById("autoSwitch").addEventListener("click", ()=>{
   state.autonomous = !state.autonomous;
-  updateBadges(); save();
+  renderChips(); save();
   logGlobal("mode autonome " + (state.autonomous ? "ACTIVÉ — le Patron travaille sans vous." : "désactivé."), "Patron");
 });
-
 document.getElementById("missionInput").addEventListener("input", e=>{ state.mission = e.target.value; save(); });
 document.getElementById("backlogInput").addEventListener("input", e=>{
   state.backlog = e.target.value.split("\n").map(s=>s.trim()).filter(Boolean); save();
 });
 document.getElementById("apiKeyInput").addEventListener("input", e=>{
-  state.apiKey = e.target.value.trim(); updateBadges(); save();
+  try{
+    if(e.target.value.trim()) localStorage.setItem(MISTRAL_KEY_STORE, e.target.value.trim());
+    else localStorage.removeItem(MISTRAL_KEY_STORE);
+  }catch(err){}
+  renderChips();
 });
 document.getElementById("speedSelect").addEventListener("change", e=>{
   state.speed = parseFloat(e.target.value); save();
 });
 
-/* ---------- démarrage ---------- */
-load();
-document.getElementById("missionInput").value = state.mission || "";
-document.getElementById("backlogInput").value = (state.backlog || []).join("\n");
-document.getElementById("apiKeyInput").value = state.apiKey || "";
-document.getElementById("speedSelect").value = String(state.speed || 1);
-updateBadges();
-renderAgents();
-renderActivity();
-updateKPIs();
-logGlobal("centre de contrôle démarré.", "Système");
+/* ================= démarrage ================= */
+initSupabase();
+if(!session) loadLocal();
+renderAll();
+logGlobal("centre de contrôle démarré" + (supabaseReady() ? " (synchro prête)." : " en mode local."), "Système");
 </script>
 </body>
 </html>
