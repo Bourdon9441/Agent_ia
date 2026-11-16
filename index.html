@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Centre de contrôle — Agents IA</title>
+<style>
+  :root{
+    --bg:#0b0f17; --panel:#131a26; --panel2:#1a2333; --border:#26314a;
+    --txt:#e8edf7; --muted:#8b97ad; --accent:#5b8cff; --ok:#3ecf8e; --warn:#ffb454; --busy:#c792ea; --err:#ff6b6b;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--txt); font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh;}
+  header{padding:18px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+  header h1{font-size:20px; letter-spacing:.5px;}
+  header .sub{color:var(--muted); font-size:13px;}
+  .badge{font-size:11px; padding:3px 10px; border-radius:20px; border:1px solid var(--border); color:var(--muted);}
+  .badge.on{color:var(--ok); border-color:var(--ok);}
+  main{display:grid; grid-template-columns:340px 1fr; gap:16px; padding:16px 24px; max-width:1400px; margin:0 auto;}
+  @media(max-width:900px){ main{grid-template-columns:1fr;} }
+  .panel{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px;}
+  .panel h2{font-size:14px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;}
+  label{display:block; font-size:12px; color:var(--muted); margin:10px 0 4px;}
+  input[type=text], input[type=password], select, textarea{
+    width:100%; background:var(--panel2); border:1px solid var(--border); border-radius:8px;
+    color:var(--txt); padding:9px 11px; font-size:14px; outline:none;
+  }
+  input:focus, select:focus, textarea:focus{border-color:var(--accent);}
+  textarea{resize:vertical; min-height:60px; font-family:inherit;}
+  button{
+    background:var(--accent); color:#fff; border:none; border-radius:8px; padding:9px 14px;
+    font-size:14px; cursor:pointer; font-weight:600;
+  }
+  button:hover{filter:brightness(1.15);}
+  button.ghost{background:transparent; border:1px solid var(--border); color:var(--muted); font-weight:400;}
+  button.ghost:hover{color:var(--txt); border-color:var(--accent);}
+  button.danger{background:transparent; border:1px solid var(--border); color:var(--err); padding:4px 9px; font-size:12px;}
+  button.small{padding:4px 9px; font-size:12px;}
+  .row{display:flex; gap:8px;}
+  .row > *{flex:1;}
+  .switch{display:flex; align-items:center; gap:10px; margin:12px 0; cursor:pointer; user-select:none;}
+  .switch .track{width:42px; height:22px; background:var(--panel2); border:1px solid var(--border); border-radius:20px; position:relative; transition:.2s;}
+  .switch .track::after{content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; background:var(--muted); border-radius:50%; transition:.2s;}
+  .switch.on .track{background:rgba(62,207,142,.2); border-color:var(--ok);}
+  .switch.on .track::after{left:22px; background:var(--ok);}
+  .switch span.lbl{font-size:14px;}
+  .hint{font-size:11px; color:var(--muted); margin-top:4px;}
+  .log{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:12px;
+       max-height:180px; overflow-y:auto; font-family:Consolas,monospace; line-height:1.6;}
+  .log div{color:var(--muted); word-break:break-word;}
+  .log div b{color:var(--txt); font-weight:600;}
+  .log .t{color:#5b6580; }
+  .agents-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:14px;}
+  .agent{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px;}
+  .agent .head{display:flex; align-items:center; gap:8px;}
+  .dot{width:9px; height:9px; border-radius:50%; background:var(--muted); flex-shrink:0;}
+  .dot.idle{background:var(--ok);} .dot.busy{background:var(--busy); animation:pulse 1.2s infinite;} .dot.paused{background:var(--warn);}
+  @keyframes pulse{50%{opacity:.3;}}
+  .agent .name{font-weight:700; font-size:15px;}
+  .agent .role{font-size:12px; color:var(--muted); flex:1;}
+  .status{font-size:11px; padding:2px 8px; border-radius:12px; border:1px solid var(--border); color:var(--muted);}
+  .status.busy{color:var(--busy); border-color:var(--busy);}
+  .status.idle{color:var(--ok); border-color:var(--ok);}
+  .status.paused{color:var(--warn); border-color:var(--warn);}
+  .task{font-size:13px; color:var(--txt); background:var(--panel2); border-radius:8px; padding:8px 10px; min-height:34px;}
+  .task .none{color:var(--muted); font-style:italic;}
+  .bar{height:6px; background:var(--panel2); border-radius:4px; overflow:hidden;}
+  .bar .fill{height:100%; width:0%; background:linear-gradient(90deg,var(--accent),var(--busy)); transition:width .5s linear;}
+  .queue{font-size:11px; color:var(--muted);}
+  .empty{color:var(--muted); font-style:italic; text-align:center; padding:30px 10px; grid-column:1/-1;}
+  #activity{max-height:420px;}
+  .kpi{display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap;}
+  .kpi .box{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:8px 14px; font-size:12px; color:var(--muted);}
+  .kpi .box b{display:block; font-size:18px; color:var(--txt);}
+  details{margin-top:10px;}
+  summary{cursor:pointer; font-size:12px; color:var(--muted);}
+  .success{color:var(--ok);}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🤖 Centre de contrôle des agents IA</h1>
+  <span class="sub">Le Patron distribue, les agents exécutent — même quand vous n'êtes pas là.</span>
+  <span class="badge" id="modeBadge">MODE SIMULATION</span>
+  <span class="badge" id="autoBadge">AUTONOME : OFF</span>
+</header>
+
+<main>
+  <div>
+    <!-- PATRON -->
+    <div class="panel">
+      <h2>👔 Le Patron</h2>
+
+      <label>Mission principale (objectif global, utilisé en mode autonome)</label>
+      <textarea id="missionInput" placeholder="Ex : Développer la présence en ligne de mon magasin..."></textarea>
+
+      <label>Nouvel objectif à traiter maintenant</label>
+      <div class="row">
+        <input type="text" id="objectiveInput" placeholder="Ex : Rédiger 3 posts pour les réseaux sociaux">
+        <button id="launchBtn" style="flex:0 0 auto;">Lancer 🚀</button>
+      </div>
+
+      <div class="switch" id="autoSwitch">
+        <div class="track"></div>
+        <span class="lbl">Mode autonome (le Patron travaille sans vous)</span>
+      </div>
+      <div class="hint">En mode autonome, le Patron relance des tâches en continu à partir de la mission principale.</div>
+
+      <details>
+        <summary>⚙️ Connexion IA réelle (optionnel)</summary>
+        <label>Clé API Mistral (restera dans votre navigateur)</label>
+        <input type="password" id="apiKeyInput" placeholder="Sk-...">
+        <div class="hint">Sans clé : mode simulation réaliste. Avec clé : les agents utilisent une vraie IA.</div>
+        <label>Vitesse de simulation</label>
+        <select id="speedSelect">
+          <option value="2">Lente</option>
+          <option value="1" selected>Normale</option>
+          <option value="0.5">Rapide</option>
+        </select>
+        <label>Objectifs récurrents en mode autonome (un par ligne, optionnel)</label>
+        <textarea id="backlogInput" placeholder="Surveiller les tendances du secteur&#10;Préparer le rapport hebdomadaire"></textarea>
+      </details>
+
+      <h2 style="margin-top:16px;">➕ Ajouter un agent <span id="agentCount" style="color:var(--txt)"></span></h2>
+      <div class="row">
+        <input type="text" id="agentNameInput" placeholder="Nom (ex : Nova)">
+        <input type="text" id="agentRoleInput" placeholder="Spécialité (ex : rédaction)">
+      </div>
+      <div class="hint" id="agentHint" style="margin-bottom:8px;"></div>
+      <button id="addAgentBtn" style="width:100%;">+ Embaucher un agent</button>
+    </div>
+
+    <!-- ACTIVITÉ -->
+    <div class="panel" style="margin-top:16px;">
+      <h2>📜 Journal d'activité global</h2>
+      <div class="log" id="activity"><div class="empty">En attente d'activité...</div></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="kpi">
+      <div class="box"><b id="kpiAgents">0</b>Agents</div>
+      <div class="box"><b id="kpiBusy">0</b>En cours</div>
+      <div class="box"><b id="kpiDone">0</b>Terminées</div>
+      <div class="box"><b id="kpiQueue">0</b>En attente</div>
+    </div>
+    <div class="agents-grid" id="agentsGrid">
+      <div class="empty">Aucun agent pour l'instant. Embauchez-en un (jusqu'à 10) avec le formulaire à gauche.</div>
+    </div>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+const MAX_AGENTS = 10;
+const STORE_KEY = "agents-center-v1";
+
+let state = {
+  agents: [],           // {id,name,role,status,currentTask:{text,startedAt,duration},queue:[],log:[]}
+  mission: "",
+  backlog: [],
+  autonomous: false,
+  apiKey: "",
+  speed: 1,
+  doneCount: 0,
+  activity: []
+};
+
+let saveTimer = null;
+
+/* ---------- persistance ---------- */
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
+  }, 300);
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){ const s = JSON.parse(raw); Object.assign(state, s); }
+  }catch(e){}
+}
+
+/* ---------- utilitaires ---------- */
+const uid = () => Math.random().toString(36).slice(2,9);
+const now = () => new Date().toLocaleTimeString("fr-FR");
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const freeAgents = () => state.agents.filter(a => a.status === "idle");
+const pendingCount = () => state.agents.reduce((n,a)=> n + a.queue.length + (a.currentTask?1:0), 0);
+
+function logGlobal(msg, who){
+  state.activity.unshift({ t: now(), who: who || "Système", msg });
+  if(state.activity.length > 120) state.activity.length = 120;
+  renderActivity(); save();
+}
+function logAgent(agent, msg){
+  agent.log.unshift({ t: now(), msg });
+  if(agent.log.length > 30) agent.log.length = 30;
+}
+
+/* ---------- moteur de ticks (Web Worker : continue même en arrière-plan) ---------- */
+const workerSrc = "let id=null;onmessage=e=>{if(e.data==='start'&&!id){id=setInterval(()=>postMessage('tick'),1000)};if(e.data==='stop'){clearInterval(id);id=null}};";
+const worker = new Worker(URL.createObjectURL(new Blob([workerSrc], {type:"application/javascript"})));
+worker.onmessage = () => engineTick();
+worker.postMessage("start");
+
+let llmBusy = false;
+let bossBusy = false;
+
+function engineTick(){
+  let changed = false;
+
+  for(const a of state.agents){
+    if(a.status !== "busy" || !a.currentTask) continue;
+    const t = a.currentTask;
+    const elapsed = (Date.now() - t.startedAt) / 1000;
+    const p = Math.min(100, (elapsed / t.duration) * 100);
+    if(p >= 100){
+      finishTask(a);
+      changed = true;
+    }
+  }
+
+  dispatch();
+
+  if(state.autonomous){
+    if(!bossBusy && freeAgents().length > 0 && state.agents.every(a => !a.currentTask && a.queue.length === 0)){
+      bossBusy = true;
+      autonomousRound().finally(()=>{ bossBusy = false; });
+    }
+  }
+
+  if(changed || state.agents.some(a=>a.status==="busy")) updateDynamicUI();
+  updateKPIs();
+}
+
+function dispatch(){
+  let guard = 0;
+  while(freeAgents().length > 0 && bossQueue.length > 0 && guard++ < 20){
+    const agent = freeAgents()[0];
+    const text = bossQueue.shift();
+    assignTask(agent, text, "Patron");
+  }
+  let g2 = 0;
+  while(freeAgents().length > 0 && bossQueue.length === 0 && g2++ < 20){
+    const agent = freeAgents().find(a => a.queue.length > 0);
+    if(!agent) break;
+    assignTask(agent, agent.queue.shift(), "File locale");
+  }
+}
+
+function assignTask(agent, text, from){
+  const duration = (8 + Math.random() * 10) * state.speed;
+  agent.status = "busy";
+  agent.currentTask = { text, startedAt: Date.now(), duration, progress: 0 };
+  logAgent(agent, "📋 Tâche reçue de " + from + " : " + text);
+  logGlobal("tâche confiée à <b>" + esc(agent.name) + "</b> : " + esc(text), "Patron");
+  updateDynamicUI(); save();
+}
+
+function finishTask(agent){
+  const t = agent.currentTask;
+  agent.currentTask = null;
+  agent.status = "idle";
+  state.doneCount++;
+  const result = "✅ Terminé : " + t.text;
+  logAgent(agent, result);
+  logGlobal("<b>" + esc(agent.name) + "</b> a terminé : " + esc(t.text), agent.name);
+  if(state.autonomous){
+    logAgent(agent, "💬 Rapport envoyé au Patron.");
+  }
+}
+
+/* ---------- décomposition des objectifs ---------- */
+let bossQueue = [];
+
+async function launchObjective(text){
+  text = text.trim();
+  if(!text) return;
+  if(state.agents.length === 0){
+    logGlobal("impossible : embauchez au moins un agent.", "Patron"); return;
+  }
+  logGlobal("🎯 nouvel objectif reçu : « " + esc(text) + " »", "Patron");
+  const subtasks = await decompose(text);
+  bossQueue.push(...subtasks);
+  logGlobal("objectif découpé en <b>" + subtasks.length + "</b> tâche(s), distribution en cours...", "Patron");
+  dispatch(); updateDynamicUI(); save();
+}
+
+async function decompose(objective){
+  if(state.apiKey){
+    try{
+      const reply = await callLLM([
+        {role:"system", content:"Tu es un manager. Découpe l'objectif donné en sous-tâches courtes et actionnables (max 6). Réponds UNIQUEMENT avec un tableau JSON de chaînes de caractères en français, ex: [\"tache 1\",\"tache 2\"]"},
+        {role:"user", content: objective}
+      ]);
+      const m = reply.match(/\[[\s\S]*\]/);
+      if(m){
+        const arr = JSON.parse(m[0]);
+        if(Array.isArray(arr) && arr.length) return arr.map(x => String(x)).slice(0,6);
+      }
+    }catch(e){
+      logGlobal("IA réelle indisponible (" + esc(e.message) + ") → mode simulation.", "Patron");
+    }
+  }
+  const steps = ["Cadrer et analyser", "Préparer les ressources", "Exécuter", "Vérifier la qualité", "Rédiger le bilan"];
+  return steps.map(s => s + " : " + objective);
+}
+
+async function autonomousRound(){
+  if(state.agents.length === 0) return;
+  let objective = null;
+
+  if(state.backlog.length){
+    objective = state.backlog[state.doneCount % state.backlog.length];
+  } else if(state.mission){
+    objective = "Faire avancer la mission : " + state.mission;
+  } else {
+    objective = "Point d'étape : vérifier l'avancement général et proposer des améliorations";
+  }
+
+  logGlobal("🔄 cycle autonome : " + esc(objective), "Patron");
+  const subtasks = await decompose(objective);
+  bossQueue.push(...subtasks);
+  dispatch(); updateDynamicUI(); save();
+}
+
+/* ---------- appel IA réel (optionnel) ---------- */
+async function callLLM(messages){
+  const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.apiKey },
+    body: JSON.stringify({ model: "mistral-small-latest", messages, temperature: 0.4, max_tokens: 500 })
+  });
+  if(!res.ok) throw new Error("HTTP " + res.status);
+  const data = await res.json();
+  llmBusy = false;
+  return data.choices[0].message.content;
+}
+
+/* ---------- rendu UI ---------- */
+const grid = document.getElementById("agentsGrid");
+const cards = new Map();
+
+function statusLabel(a){
+  if(a.status === "busy") return "Occupé";
+  if(a.status === "paused") return "En pause";
+  return "Libre";
+}
+
+function buildCard(a){
+  const el = document.createElement("div");
+  el.className = "agent";
+  el.innerHTML = `
+    <div class="head">
+      <span class="dot"></span>
+      <span class="name">${esc(a.name)}</span>
+      <span class="role">${esc(a.role || "polyvalent")}</span>
+      <span class="status"></span>
+      <button class="danger pauseBtn" title="Pause / reprise">⏸</button>
+      <button class="danger removeBtn" title="Retirer l'agent">✕</button>
+    </div>
+    <div class="task"><span class="none">Aucune tâche en cours.</span></div>
+    <div class="bar"><div class="fill"></div></div>
+    <div class="queue"></div>
+    <form class="row directForm">
+      <input type="text" placeholder="Donner une tâche directement à ${esc(a.name)}...">
+      <button style="flex:0 0 auto;" class="small">OK</button>
+    </form>
+    <div class="log agentLog"></div>
+  `;
+  el.querySelector(".removeBtn").addEventListener("click", ()=>{
+    state.agents = state.agents.filter(x => x.id !== a.id);
+    cards.delete(a.id);
+    logGlobal("<b>" + esc(a.name) + "</b> a quitté l'équipe.", "Système");
+    renderAgents(); save();
+  });
+  el.querySelector(".pauseBtn").addEventListener("click", ()=>{
+    if(a.status === "paused"){ a.status = a.currentTask ? "busy" : "idle"; }
+    else if(a.status === "busy"){ a.status = "paused"; }
+    else { a.status = "paused"; }
+    updateDynamicUI(); save();
+  });
+  el.querySelector(".directForm").addEventListener("submit", e=>{
+    e.preventDefault();
+    const inp = e.target.querySelector("input");
+    const text = inp.value.trim();
+    if(!text) return;
+    inp.value = "";
+    if(a.currentTask || a.queue.length >= 5){
+      if(a.queue.length < 5) a.queue.push(text);
+      logGlobal("file pleine, tâche mise en attente pour <b>" + esc(a.name) + "</b>.", "Système");
+    } else {
+      assignTask(a, text, "Vous");
+    }
+    save();
+  });
+  cards.set(a.id, el);
+  return el;
+}
+
+function renderAgents(){
+  document.getElementById("agentCount").textContent = "(" + state.agents.length + "/" + MAX_AGENTS + ")";
+  const btn = document.getElementById("addAgentBtn");
+  const hint = document.getElementById("agentHint");
+  if(state.agents.length >= MAX_AGENTS){
+    btn.disabled = true; btn.textContent = "Limite de 10 agents atteinte";
+    hint.textContent = "Vous avez atteint le maximum de 10 agents.";
+  } else {
+    btn.disabled = false; btn.textContent = "+ Embaucher un agent";
+    hint.textContent = "";
+  }
+  grid.innerHTML = "";
+  if(state.agents.length === 0){
+    grid.innerHTML = '<div class="empty">Aucun agent pour l\'instant. Embauchez-en un (jusqu\'à 10) avec le formulaire à gauche.</div>';
+    return;
+  }
+  for(const a of state.agents){
+    grid.appendChild(cards.get(a.id) || buildCard(a));
+  }
+  updateDynamicUI();
+}
+
+function updateDynamicUI(){
+  for(const a of state.agents){
+    const el = cards.get(a.id);
+    if(!el) continue;
+    el.querySelector(".dot").className = "dot " + a.status;
+    const st = el.querySelector(".status");
+    st.className = "status " + a.status;
+    st.textContent = statusLabel(a);
+    const taskEl = el.querySelector(".task");
+    if(a.currentTask){
+      taskEl.innerHTML = "▸ " + esc(a.currentTask.text);
+      let p = 0;
+      if(a.status === "busy"){
+        p = Math.min(100, ((Date.now() - a.currentTask.startedAt) / 1000 / a.currentTask.duration) * 100);
+      }
+      el.querySelector(".fill").style.width = p.toFixed(1) + "%";
+    } else {
+      taskEl.innerHTML = '<span class="none">Aucune tâche en cours.</span>';
+      el.querySelector(".fill").style.width = "0%";
+    }
+    el.querySelector(".queue").textContent = a.queue.length ? "⏳ " + a.queue.length + " tâche(s) en attente : " + a.queue.join(" • ") : "";
+    const logEl = el.querySelector(".agentLog");
+    logEl.innerHTML = a.log.map(l => "<div><span class='t'>[" + l.t + "]</span> " + esc(l.msg) + "</div>").join("");
+  }
+}
+
+function renderActivity(){
+  const el = document.getElementById("activity");
+  if(!state.activity.length){ el.innerHTML = '<div class="empty">En attente d\'activité...</div>'; return; }
+  el.innerHTML = state.activity.map(l => "<div><span class='t'>[" + l.t + "]</span> <b>" + esc(l.who) + "</b> — " + l.msg + "</div>").join("");
+}
+
+function updateKPIs(){
+  document.getElementById("kpiAgents").textContent = state.agents.length;
+  document.getElementById("kpiBusy").textContent = state.agents.filter(a=>a.status==="busy").length;
+  document.getElementById("kpiDone").textContent = state.doneCount;
+  document.getElementById("kpiQueue").textContent = pendingCount() + bossQueue.length;
+}
+
+function updateBadges(){
+  const mb = document.getElementById("modeBadge");
+  if(state.apiKey){ mb.textContent = "IA RÉELLE CONNECTÉE"; mb.className = "badge on"; }
+  else { mb.textContent = "MODE SIMULATION"; mb.className = "badge"; }
+  const ab = document.getElementById("autoBadge");
+  if(state.autonomous){ ab.textContent = "AUTONOME : ON"; ab.className = "badge on"; }
+  else { ab.textContent = "AUTONOME : OFF"; ab.className = "badge"; }
+  document.getElementById("autoSwitch").classList.toggle("on", state.autonomous);
+}
+
+/* ---------- événements ---------- */
+document.getElementById("addAgentBtn").addEventListener("click", ()=>{
+  if(state.agents.length >= MAX_AGENTS) return;
+  const names = ["Nova","Atlas","Zéphyr","Orion","Luna","Vega","Comet","Echo","Iris","Juno"];
+  const name = document.getElementById("agentNameInput").value.trim() || names[state.agents.length % names.length] + "-" + (state.agents.length+1);
+  const role = document.getElementById("agentRoleInput").value.trim();
+  const a = { id: uid(), name, role, status: "idle", currentTask: null, queue: [], log: [] };
+  state.agents.push(a);
+  document.getElementById("agentNameInput").value = "";
+  document.getElementById("agentRoleInput").value = "";
+  logGlobal("<b>" + esc(name) + "</b> a rejoint l'équipe" + (role ? " (spécialité : " + esc(role) + ")" : "") + ".", "Système");
+  renderAgents(); updateKPIs(); save();
+});
+
+document.getElementById("launchBtn").addEventListener("click", ()=>{
+  const inp = document.getElementById("objectiveInput");
+  launchObjective(inp.value);
+  inp.value = "";
+});
+document.getElementById("objectiveInput").addEventListener("keydown", e=>{
+  if(e.key === "Enter"){ launchObjective(e.target.value); e.target.value = ""; }
+});
+
+document.getElementById("autoSwitch").addEventListener("click", ()=>{
+  state.autonomous = !state.autonomous;
+  updateBadges(); save();
+  logGlobal("mode autonome " + (state.autonomous ? "ACTIVÉ — le Patron travaille sans vous." : "désactivé."), "Patron");
+});
+
+document.getElementById("missionInput").addEventListener("input", e=>{ state.mission = e.target.value; save(); });
+document.getElementById("backlogInput").addEventListener("input", e=>{
+  state.backlog = e.target.value.split("\n").map(s=>s.trim()).filter(Boolean); save();
+});
+document.getElementById("apiKeyInput").addEventListener("input", e=>{
+  state.apiKey = e.target.value.trim(); updateBadges(); save();
+});
+document.getElementById("speedSelect").addEventListener("change", e=>{
+  state.speed = parseFloat(e.target.value); save();
+});
+
+/* ---------- démarrage ---------- */
+load();
+document.getElementById("missionInput").value = state.mission || "";
+document.getElementById("backlogInput").value = (state.backlog || []).join("\n");
+document.getElementById("apiKeyInput").value = state.apiKey || "";
+document.getElementById("speedSelect").value = String(state.speed || 1);
+updateBadges();
+renderAgents();
+renderActivity();
+updateKPIs();
+logGlobal("centre de contrôle démarré.", "Système");
+</script>
+</body>
+</html>
