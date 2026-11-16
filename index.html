@@ -3009,6 +3009,7 @@ function openPlanMenu(x, y, items){
   const mw = m.offsetWidth || 150, mh = m.offsetHeight || 90;
   m.style.left = Math.max(6, Math.min(x, window.innerWidth - mw - 10)) + "px";
   m.style.top = Math.max(6, Math.min(y + 8, window.innerHeight - mh - 10)) + "px";
+  m.addEventListener("mouseleave", hidePlanMenu);
 }
 document.addEventListener("pointerdown", e => {
   const m = document.getElementById("planMenu");
@@ -3059,12 +3060,11 @@ function planChooserItems(kind){
   pal.innerHTML = '<div class="pp-head">Blocs à ajouter</div>' + PLAN_TEMPLATES.map(tp =>
     '<button class="pp-item" data-t="' + tp.t + '">' + icon(tp.icon) + " " + tp.label + '</button>').join("") +
     '<div class="pp-hint">Cliquez un bloc pour l\'ouvrir. Glissez le point d\'un bloc vers un autre pour relier. Cliquez un fil pour le supprimer.</div>';
-  pal.addEventListener("mouseleave", hidePlanMenu);
   pal.querySelectorAll(".pp-item").forEach(b => b.addEventListener("click", e => {
     const tp = PLAN_TEMPLATES.find(x => x.t === b.dataset.t);
     if(!tp) return;
     if(tp.t === "agent" || tp.t === "group" || tp.t === "patron" || tp.t === "drh" || tp.t === "service"){
-      openPlanMenu(e.clientX, e.clientY, planChooserItems(tp.t));
+      openPlanMenu(Math.max(6, e.clientX - 200), e.clientY - 6, planChooserItems(tp.t));
       return;
     }
     const world = document.getElementById("planWorld");
