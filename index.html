@@ -1779,6 +1779,12 @@ window.addEventListener("keydown", e=>{
   if(document.pointerLockElement) document.exitPointerLock();
   if(isGameFullscreen()) exitGameFullscreen();
 });
+window.addEventListener("keydown", e=>{
+  if(e.code !== "KeyP") return;
+  if(!three || pcOverlay.classList.contains("show")) return;
+  if(document.querySelector(".overlay.show")) return;
+  openPc("notes");
+});
 
 /* ================= terminal PC (mon PC) ================= */
 const pcOverlay = document.getElementById("pcOverlay");
@@ -2942,10 +2948,10 @@ function checkNear(){
   };
   consider(0, -6.5, 3.6, { type: "boss", label: "Parler au Patron" });
   consider(10, -7.3, 2.6, { type: "drh", label: "Administration — parler à la DRH" });
-  consider(12.4, 8.9, 2.6, { type: "pc", label: "Ouvrir votre PC (fichiers, tâches, réunion)" });
-  consider(13.3, 4.6, 2.6, { type: "servers", label: "Salle serveurs — héberger un site à coder" });
+  consider(-12.4, 8.9, 2.6, { type: "pc", label: "Ouvrir votre PC (fichiers, tâches, réunion)" });
+  consider(-13.3, 1.6, 2.6, { type: "servers", label: "Salle serveurs — héberger un site à coder" });
   consider(-10, -7, 3.2, { type: "reunion", label: "Salle de réunion — convoquer une réunion" });
-  consider(0, 9.1, 2.2, { type: "laptop", label: "Votre PC portable — notes & assistant personnel" });
+  consider(0, 9.1, 2.2, { type: "laptop", label: "Votre PC portable — touche P (notes & assistant)" });
   for(const a of state.agents){
     const rec = agent3d.get(a.id);
     if(rec) consider(rec.group.position.x, rec.group.position.z, 2.3,
@@ -3216,18 +3222,17 @@ function init3D(){
   scene.add(bossGroup, bossLabel, bossChar);
 
   const pcGroup = makeDeskGroup({ w: 1.9, d: 1.05, sw: 1.15, sh: .68, screen: 0xc6f542, glow: .85 });
-  pcGroup.position.set(12.4, 0, 8.9);
-  pcGroup.rotation.y = Math.PI;
+  pcGroup.position.set(-12.4, 0, 8.9);
   pcGroup.traverse(o => o.userData.pc = true);
   const pcLabel = makeLabel("VOTRE PC", "récupérer les fichiers");
-  pcLabel.position.set(12.4, 2.5, 8.9);
+  pcLabel.position.set(-12.4, 2.5, 8.9);
   scene.add(pcGroup, pcLabel);
 
   /* salle serveurs : héberger un site internet à coder */
   const rackMat = new THREE.MeshStandardMaterial({ color: 0x23262b, roughness: .45, metalness: .35 });
   const srvGroup = new THREE.Group();
   const srvLeds = [];
-  for(const [rx, rz] of [[13.3, 3.4], [13.3, 4.6], [13.3, 5.8]]){
+  for(const [rx, rz] of [[-13.3, 0.4], [-13.3, 1.6], [-13.3, 2.8]]){
     const rack = new THREE.Mesh(new THREE.BoxGeometry(.9, 2.2, .8), rackMat);
     rack.position.set(rx, 1.1, rz);
     rack.userData.servers = true;
@@ -3235,38 +3240,46 @@ function init3D(){
     for(let r = 0; r < 6; r++){
       for(let c = 0; c < 3; c++){
         const led = new THREE.Mesh(new THREE.BoxGeometry(.07, .07, .03), screenMat(0xc6f542, .9));
-        led.position.set(rx - .25 + c * .25, .35 + r * .3, rz + .41);
+        led.position.set(rx + .46, .35 + r * .3, rz - .25 + c * .25);
         srvGroup.add(led);
         srvLeds.push(led);
       }
     }
   }
   const srvLabel = makeLabel("SALLE SERVEURS", "héberger un site à coder");
-  srvLabel.position.set(13.3, 3, 4.6);
+  srvLabel.position.set(-13.3, 3, 1.6);
   scene.add(srvGroup, srvLabel);
 
-  const coffeeTable = new THREE.Mesh(new THREE.CylinderGeometry(.85, .85, .1, 20), new THREE.MeshStandardMaterial({ color: 0x9c7a52, roughness: .8 }));
-  coffeeTable.position.set(-11.4, .85, 7.6); scene.add(coffeeTable);
-  const coffeeLeg = new THREE.Mesh(new THREE.CylinderGeometry(.12, .2, .85, 10), new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: .8 }));
-  coffeeLeg.position.set(-11.4, .42, 7.6); scene.add(coffeeLeg);
-  const selfCounter = new THREE.Mesh(new THREE.BoxGeometry(.7, .92, 3.4), new THREE.MeshStandardMaterial({ color: 0xb8ad9c, roughness: .6 }));
-  selfCounter.position.set(-13.25, .46, 7.6); scene.add(selfCounter);
-  const selfTop = new THREE.Mesh(new THREE.BoxGeometry(.8, .06, 3.5), new THREE.MeshStandardMaterial({ color: 0x6e4f33, roughness: .5 }));
-  selfTop.position.set(-13.25, .95, 7.6); scene.add(selfTop);
-  for(const [trX, trZ] of [[-13.25, 6.5], [-13.25, 7.6], [-13.25, 8.7]]){
-    const tray = new THREE.Mesh(new THREE.BoxGeometry(.5, .07, .68), new THREE.MeshStandardMaterial({ color: 0x8a2f2b, roughness: .6 }));
+  /* salle self fermee (cote droit) */
+  roomWall(.18, 2.3, 7.4, 4.5);
+  roomWall(.18, 3.2, 7.4, 8.4);
+  roomWall(6.6, .18, 10.7, 3.4);
+  const selfCounter = new THREE.Mesh(new THREE.BoxGeometry(1, .92, 5.2), new THREE.MeshStandardMaterial({ color: 0xb8ad9c, roughness: .6 }));
+  selfCounter.position.set(12.9, .46, 6.6); scene.add(selfCounter);
+  const selfTop = new THREE.Mesh(new THREE.BoxGeometry(1.1, .06, 5.3), new THREE.MeshStandardMaterial({ color: 0x6e4f33, roughness: .5 }));
+  selfTop.position.set(12.9, .95, 6.6); scene.add(selfTop);
+  for(const [trX, trZ] of [[12.9, 4.6], [12.9, 5.7], [12.9, 6.8], [12.9, 7.9], [12.9, 9]]){
+    const tray = new THREE.Mesh(new THREE.BoxGeometry(.55, .07, .7), new THREE.MeshStandardMaterial({ color: 0x8a2f2b, roughness: .6 }));
     tray.position.set(trX, 1.01, trZ); scene.add(tray);
-    const cloche = new THREE.Mesh(new THREE.SphereGeometry(.2, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xcfc6b8, roughness: .35, metalness: .4 }));
-    cloche.position.set(trX, 1.04, trZ); scene.add(cloche);
+    const cloche = new THREE.Mesh(new THREE.SphereGeometry(.22, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xcfc6b8, roughness: .35, metalness: .4 }));
+    cloche.position.set(trX, 1.05, trZ); scene.add(cloche);
   }
   const machineLed = new THREE.Mesh(new THREE.BoxGeometry(.12, .12, .03), screenMat(0xffb454, 1));
-  machineLed.position.set(-13.25, 1.2, 9.15); scene.add(machineLed);
-  const machineLabel = makeLabel("LE SELF", "pause déjeuner des agents");
-  machineLabel.position.set(-11.4, 2.5, 7.6);
+  machineLed.position.set(12.9, 1.25, 4.2); scene.add(machineLed);
+  const coffeeTable = new THREE.Mesh(new THREE.CylinderGeometry(.85, .85, .1, 20), new THREE.MeshStandardMaterial({ color: 0x9c7a52, roughness: .8 }));
+  coffeeTable.position.set(9.2, .85, 6); scene.add(coffeeTable);
+  const coffeeLeg = new THREE.Mesh(new THREE.CylinderGeometry(.12, .2, .85, 10), new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: .8 }));
+  coffeeLeg.position.set(9.2, .42, 6); scene.add(coffeeLeg);
+  const coffeeTable2 = new THREE.Mesh(new THREE.CylinderGeometry(.85, .85, .1, 20), new THREE.MeshStandardMaterial({ color: 0x9c7a52, roughness: .8 }));
+  coffeeTable2.position.set(9.2, .85, 8.2); scene.add(coffeeTable2);
+  const coffeeLeg2 = new THREE.Mesh(new THREE.CylinderGeometry(.12, .2, .85, 10), new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: .8 }));
+  coffeeLeg2.position.set(9.2, .42, 8.2); scene.add(coffeeLeg2);
+  const machineLabel = makeLabel("LE SELF", "salle de pause — grand self");
+  machineLabel.position.set(10.5, 2.7, 6.6);
   scene.add(machineLabel);
   const stoolGeo = new THREE.CylinderGeometry(.24, .24, .5, 12);
   const stoolMat = new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .8 });
-  const coffeeSlots = [new THREE.Vector3(-10.4, 0, 6.9), new THREE.Vector3(-10.6, 0, 8.6), new THREE.Vector3(-12.5, 0, 9), new THREE.Vector3(-9.7, 0, 8.1)];
+  const coffeeSlots = [new THREE.Vector3(9.2, 0, 4.9), new THREE.Vector3(10.3, 0, 6), new THREE.Vector3(8.1, 0, 6), new THREE.Vector3(9.2, 0, 7.1), new THREE.Vector3(10.3, 0, 8.2), new THREE.Vector3(8.1, 0, 8.2)];
   coffeeSlots.forEach(p => {
     const s = new THREE.Mesh(stoolGeo, stoolMat);
     s.position.copy(p); s.position.y = .25;
@@ -3284,8 +3297,10 @@ function init3D(){
   laptopScr.position.set(0, .93, 9.23); laptopScr.rotation.x = -.3;
   laptopScr.userData.laptop = true;
   scene.add(laptopScr);
-  const laptopLabel = makeLabel("VOTRE PC PORTABLE", "notes & assistant personnel");
+  const laptopLabel = makeLabel("VOTRE PC PORTABLE", "touche P — notes & assistant");
   laptopLabel.position.set(0, 2.2, 9.1); scene.add(laptopLabel);
+  const corridorStrip = new THREE.Mesh(new THREE.BoxGeometry(2.2, .015, 13.3), new THREE.MeshStandardMaterial({ color: 0x8a7a62, roughness: .9 }));
+  corridorStrip.position.set(3.7, .018, 2.85); scene.add(corridorStrip);
 
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
@@ -3387,7 +3402,7 @@ function init3D(){
     camera.updateProjectionMatrix();
   });
 
-  three = { scene, camera, renderer, bossChar, coffeeSlots, limeLight, redrawSign: drawSign, coffeeLabel: machineLabel };
+  three = { scene, camera, renderer, bossChar, coffeeSlots, limeLight, redrawSign: drawSign, coffeeLabel: machineLabel, corridorStrip };
   syncCoffeeUI();
   const clock = new THREE.Clock();
   let lastT = performance.now();
@@ -3415,7 +3430,7 @@ function init3D(){
           const rec = agent3d.get(a.id);
           if(rec) circles.push([rec.group.position.x, rec.group.position.z, 1.05]);
         }
-        circles.push([0, -6.5, 2.1], [12.4, 8.9, 1.2], [-11.4, 7.6, 1], [-13.25, 7.6, .85], [13.3, 4.6, 1.5], [-10, -7, 2.6], [10, -8, 1.7], [10, -7.3, .55], [0, 9.1, .95]);
+        circles.push([0, -6.5, 2.1], [-12.4, 8.9, 1.2], [12.9, 5.3, 1.1], [12.9, 7.9, 1.1], [9.2, 6, .95], [9.2, 8.2, .95], [-13.3, 1.6, 1.5], [-10, -7, 2.6], [10, -8, 1.7], [10, -7.3, .55], [0, 9.1, .95]);
         for(const [cx, cz, cr] of circles){
           const dx = fpsState.x - cx, dz = fpsState.z - cz;
           const d = Math.hypot(dx, dz);
@@ -3427,7 +3442,8 @@ function init3D(){
       }
       const walls3d = [
         [-14, -7.4, -4.1, -3.9], [-6.6, -6, -4.1, -3.9], [-6.1, -5.9, -10, -4],
-        [5.9, 6.1, -10, -4], [6, 6.6, -4.1, -3.9], [7.4, 14, -4.1, -3.9]
+        [5.9, 6.1, -10, -4], [6, 6.6, -4.1, -3.9], [7.4, 14, -4.1, -3.9],
+        [7.3, 7.5, 3.3, 5.7], [7.3, 7.5, 6.7, 10.1], [7.4, 14.1, 3.3, 3.5]
       ];
       for(const [x1, x2, z1, z2] of walls3d){
         if(fpsState.x > x1 - .35 && fpsState.x < x2 + .35 && fpsState.z > z1 - .35 && fpsState.z < z2 + .35){
@@ -3496,20 +3512,26 @@ function sync3D(){
     }
   }
   const SLOTS = [];
-  const LX = [-12.4, -10.4, -8.4, -6.4, -4.4, -2.4];
-  const RX = [2.4, 4.4, 6.4, 8.4, 10.4];
-  const RZ = [-1.4, 1.2, 3.8, 6.4, 8.8];
-  RZ.forEach(z => {
-    LX.forEach(x => { if(!(z >= 6.4 && (x === -12.4 || x === -10.4))) SLOTS.push([x, z]); });
-    RX.forEach(x => SLOTS.push([x, z]));
-  });
+  const CX = [5.6, 7.8, 10, 12.2];
+  const CZ = [-3.2, -0.8, 1.6];
+  CZ.forEach(z => CX.forEach(x => SLOTS.push([x, z])));
+  [4.8, 6.6, 8.4].forEach(z => SLOTS.push([6.2, z]));
   const clusters = [];
-  state.agents.forEach(a => {
-    const r = a.role || "polyvalent";
-    let c = clusters.find(x => x.role === r);
-    if(!c){ c = { role: r, members: [] }; clusters.push(c); }
-    c.members.push(a);
-  });
+  if((state.groups || []).length){
+    state.groups.forEach(g => {
+      const members = state.agents.filter(a => a.group === g.id);
+      if(members.length) clusters.push({ role: g.name, sub: "groupe", members });
+    });
+    const rest = state.agents.filter(a => !clusters.some(c => c.members.includes(a)));
+    if(rest.length) clusters.push({ role: "polyvalent", sub: "espace général", members: rest });
+  } else {
+    state.agents.forEach(a => {
+      const r = a.role || "polyvalent";
+      let c = clusters.find(x => x.role === r);
+      if(!c){ c = { role: r, sub: "pôle", members: [] }; clusters.push(c); }
+      c.members.push(a);
+    });
+  }
   const posOf = new Map();
   let si = 0;
   clusters.forEach(c => c.members.forEach(a => {
@@ -3551,12 +3573,19 @@ function sync3D(){
     const cz = pts.reduce((s, p) => s + p[1], 0) / pts.length;
     let lbl = zoneLabels.get(c.role);
     if(!lbl){
-      lbl = makeLabel(c.role.toUpperCase(), "pôle " + c.role);
+      lbl = makeLabel(c.role.toUpperCase(), (c.sub || "pôle") + " — " + c.role);
       three.scene.add(lbl);
       zoneLabels.set(c.role, lbl);
     }
     lbl.position.set(cx, 3.05, cz);
   });
+  if(three.corridorStrip){
+    let maxZ = -3.8;
+    posOf.forEach(p => { if(p[1] > maxZ) maxZ = p[1]; });
+    const len = Math.max(4, maxZ + 2.4 + 3.8);
+    three.corridorStrip.scale.z = len / 13.3;
+    three.corridorStrip.position.z = -3.8 + len / 2;
+  }
   updateHud();
 }
 function update3D(){ if(!three) return; updateHud(); }
@@ -3572,7 +3601,7 @@ function updateHud(){
   const done = (state.results || []).filter(r => r.status === "done").length;
   const paused = state.agents.filter(a => a.status === "paused").length;
   const modeTxt = camMode === "fps"
-    ? "marche : ZQSD/WASD/flèches · souris : regarder · bouton : vue libre"
+    ? "marche : ZQSD/WASD/flèches · souris : regarder · P : PC portable"
     : "glisser : tourner · molette : zoom · cliquer un bureau";
   document.getElementById("hud3d").innerHTML =
     modeTxt +
