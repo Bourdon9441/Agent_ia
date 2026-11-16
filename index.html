@@ -203,7 +203,7 @@
   .pp-item:hover{border-color:var(--signal); color:var(--signal);}
   .pp-item svg{width:12px; height:12px;}
   .pp-hint{font-family:var(--mono); font-size:8.5px; color:var(--faint); line-height:1.6; margin-top:2px;}
-  #planMenu{position:fixed; z-index:600; display:none; background:var(--raise); border:1px solid var(--line2); border-radius:10px; padding:5px; box-shadow:0 8px 30px rgba(0,0,0,.5); min-width:140px;}
+  #planMenu{position:fixed; z-index:600; display:none; background:var(--raise); border:1px solid var(--line2); border-radius:10px; padding:5px; box-shadow:0 8px 30px rgba(0,0,0,.5); min-width:140px; max-height:60vh; overflow:auto;}
   #planMenu.show{display:block;}
   #planMenu button{display:flex; width:100%; align-items:center; gap:7px; background:transparent; border:none; color:var(--ink); font-family:var(--disp); font-size:12.5px; padding:7px 10px; border-radius:7px; cursor:pointer; text-align:left;}
   #planMenu button:hover{background:var(--line);}
@@ -2874,7 +2874,32 @@ function buildPlanData(){
   nodes.push({ id: "conn", title: "CONNECTEURS MCP", sub: (state.connectors || []).length + " connecté(s)", icon: "globe", x: col3, y: midY + 100 });
   nodes.push({ id: "self", title: "LE SELF", sub: state.coffeeClosed ? "fermé — pauses coupées" : "ouvert", icon: "cutlery", dot: state.coffeeClosed ? "warn" : "on", x: col3, y: midY + 200 });
   for(const sid of ["taches", "serveurs", "reunions", "conn", "self"]) edges.push({ a: "patron", b: sid });
-  for(const b of (state.planBlocks || [])) nodes.push({ id: b.id, title: b.title, sub: b.sub || "bloc", icon: b.icon || "gears", dot: b.on ? "on" : "", custom: b, x: b.x, y: b.y });
+  for(const b of (state.planBlocks || [])){
+    const bn = { id: b.id, title: b.title, sub: b.sub || "bloc", icon: b.icon || "gears", dot: b.on ? "on" : "", custom: b, x: b.x, y: b.y };
+    if(b.ref && b.on !== false){
+      const r = b.ref;
+      if(r.kind === "agent"){
+        const a = state.agents.find(x => x.id === r.id);
+        if(a){ bn.title = a.name; bn.icon = "user"; bn.sub = (a.role || "polyvalent") + " · " + (a.status === "busy" ? "au travail" : (a.status === "paused" ? "au self" : "libre")); bn.dot = a.status === "busy" ? "busy" : (a.status === "paused" ? "warn" : "on"); }
+        else { bn.title = b.title; bn.sub = "agent absent"; bn.dot = ""; }
+      } else if(r.kind === "group"){
+        const g = (state.groups || []).find(x => x.id === r.id);
+        if(g){ const members = state.agents.filter(x => x.group === g.id); bn.title = g.name; bn.icon = "user"; bn.sub = members.length + " agent(s)"; bn.dot = members.some(m => m.status === "busy") ? "busy" : "on"; bn.chips = members; }
+        else { bn.sub = "groupe dissous"; bn.dot = ""; }
+      } else if(r.kind === "patron"){
+        bn.title = "LE PATRON"; bn.icon = "crown"; bn.sub = bossBusy ? "organise le travail..." : (bossQueue.length + " tâche(s) en distribution"); bn.dot = bossBusy ? "busy" : "on";
+      } else if(r.kind === "drh"){
+        bn.title = "DRH SYLVIE"; bn.icon = "shield"; bn.sub = state.drhAuto ? "recrutement automatique activé" : "recrutement manuel"; bn.dot = state.drhAuto ? "on" : "";
+      } else if(r.kind === "service"){
+        if(r.id === "taches"){ bn.title = "TÂCHES & AUTONOMIE"; bn.icon = "tasks"; bn.sub = state.autonomous ? "mode autonome actif — " + state.backlog.length + " en liste" : (state.backlog.length + " tâche(s) en attente"); bn.dot = state.autonomous ? "on" : ""; }
+        else if(r.id === "serveurs"){ bn.title = "SALLE SERVEURS"; bn.icon = "gears"; bn.sub = (state.sites || []).length + " site(s) · " + done + " livrable(s)"; bn.dot = "on"; }
+        else if(r.id === "reunions"){ bn.title = "RÉUNIONS"; bn.icon = "clock"; bn.sub = (state.meetings || []).filter(m => m.status === "pending").length + " planifiée(s)"; bn.dot = "on"; }
+        else if(r.id === "conn"){ bn.title = "CONNECTEURS MCP"; bn.icon = "globe"; bn.sub = (state.connectors || []).length + " connecté(s)"; bn.dot = "on"; }
+        else if(r.id === "self"){ bn.title = "LE SELF"; bn.icon = "cutlery"; bn.sub = state.coffeeClosed ? "fermé — pauses coupées" : "ouvert"; bn.dot = state.coffeeClosed ? "warn" : "on"; }
+      }
+    }
+    nodes.push(bn);
+  }
   for(const l of (state.planLinks || [])) edges.push({ a: l.from, b: l.to, link: l });
   for(const n of nodes){ if(planPos[n.id]){ n.x = planPos[n.id].x; n.y = planPos[n.id].y; } }
   return { nodes, edges };
@@ -2986,31 +3011,96 @@ function linkMenuItems(l){
   ];
 }
 function blockMenuItems(b){
-  return [
+  const base = [
     { label: b.on ? "Désactiver" : "Activer", icon: b.on ? "pause" : "play", fn: ()=>{ b.on = !b.on; save(); renderPlan(); } },
     { label: "Renommer", icon: "pen", fn: ()=>{ const t = prompt("Nom du bloc :", b.title); if(t && t.trim()){ b.title = t.trim().slice(0, 40); save(); renderPlan(); } } },
-    { label: "Supprimer", icon: "trash", fn: ()=>{ state.planBlocks = (state.planBlocks || []).filter(x => x.id !== b.id); state.planLinks = (state.planLinks || []).filter(l => l.from !== b.id && l.to !== b.id); save(); renderPlan(); } }
+    { label: "Supprimer le bloc", icon: "trash", fn: ()=>{ state.planBlocks = (state.planBlocks || []).filter(x => x.id !== b.id); state.planLinks = (state.planLinks || []).filter(l => l.from !== b.id && l.to !== b.id); save(); renderPlan(); } }
   ];
+  if(!b.ref || b.on === false) return base;
+  const r = b.ref;
+  let extra = [];
+  if(r.kind === "agent"){
+    const a = state.agents.find(x => x.id === r.id);
+    if(a) extra = [
+      { label: a.status === "paused" ? "Activer (reprendre)" : "Désactiver (pause self)", icon: a.status === "paused" ? "play" : "pause", fn: ()=>{ togglePause(a); renderPlan(); } },
+      { label: "Ouvrir la fiche", icon: "user", fn: ()=> openPc("hr") }
+    ];
+  } else if(r.kind === "group"){
+    extra = [{ label: "Ouvrir Équipes", icon: "user", fn: ()=> openPc("teams") }];
+  } else if(r.kind === "patron"){
+    extra = [
+      { label: "Parler au Patron", icon: "crown", fn: ()=> openBossDlg() },
+      { label: "Voir les tâches", icon: "tasks", fn: ()=> openPc("tasks") }
+    ];
+  } else if(r.kind === "drh"){
+    extra = [
+      { label: "Parler à la DRH", icon: "shield", fn: ()=> openDrhDlg() },
+      { label: state.drhAuto ? "DRH auto : désactiver" : "DRH auto : activer", icon: "gears", fn: ()=>{ state.drhAuto = !state.drhAuto; logGlobal("DRH automatique " + (state.drhAuto ? "activée." : "désactivée."), "DRH"); renderDrhAuto(); save(); renderPlan(); setTimeout(drhAutoTick, 800); } },
+      { label: "Gérer l'équipe", icon: "user", fn: ()=> openPc("hr") }
+    ];
+  } else if(r.kind === "service"){
+    if(r.id === "self") extra = [{ label: state.coffeeClosed ? "Ouvrir le self" : "Fermer le self", icon: "cutlery", fn: ()=> setCoffeeClosed(!state.coffeeClosed) }];
+    else extra = [{ label: "Ouvrir", icon: "gears", fn: ()=> planOpenNode(r.id) }];
+  }
+  return extra.concat(base);
 }
 document.addEventListener("pointerdown", e => {
   const m = document.getElementById("planMenu");
   if(m && !m.contains(e.target)) hidePlanMenu();
 });
 const PLAN_TEMPLATES = [
-  { t: "bloc", label: "Bloc", icon: "gears", title: "Nouveau bloc", sub: "bloc libre" },
+  { t: "agent", label: "Assistant", icon: "user" },
+  { t: "group", label: "Groupe", icon: "user" },
+  { t: "patron", label: "Patron", icon: "crown" },
+  { t: "drh", label: "Admin (DRH)", icon: "shield" },
+  { t: "service", label: "Service", icon: "gears" },
+  { t: "bloc", label: "Bloc libre", icon: "gears", title: "Nouveau bloc", sub: "bloc libre" },
   { t: "note", label: "Note", icon: "pen", title: "Note", sub: "bloc note" },
   { t: "goal", label: "Objectif", icon: "star", title: "Objectif", sub: "à atteindre" }
 ];
+function addRefBlock(kind, id, title){
+  state.planBlocks = state.planBlocks || [];
+  const world = document.getElementById("planWorld");
+  const r = world.getBoundingClientRect();
+  const cx = (r.width / 2 - planView.x) / planView.z, cy = (r.height / 2 - planView.y) / planView.z;
+  const n = state.planBlocks.length;
+  state.planBlocks.push({ id: "b_" + uid(), title: title, sub: "bloc", icon: "gears", on: true, ref: { kind: kind, id: id }, x: Math.round(cx - 115 + (n % 4) * 26), y: Math.round(cy - 40 + (n % 4) * 26) });
+  logGlobal("bloc « " + esc(title) + " » ajouté au plan.", "Système");
+  save(); renderPlan();
+}
+function planChooserItems(kind){
+  if(kind === "agent"){
+    if(!state.agents.length) return [{ label: "Aucun assistant — embauchez d'abord", icon: "ghost", fn: ()=> openPc("hr") }];
+    return state.agents.map(a => ({ label: a.name + " (" + (a.role || "polyvalent") + ")", icon: "user", fn: ()=> addRefBlock("agent", a.id, a.name) }));
+  }
+  if(kind === "group"){
+    if(!(state.groups || []).length) return [{ label: "Aucun groupe — créez-en un (PC → Équipes)", icon: "ghost", fn: ()=> openPc("teams") }];
+    return state.groups.map(g => ({ label: g.name, icon: "user", fn: ()=> addRefBlock("group", g.id, g.name) }));
+  }
+  if(kind === "patron") return [{ label: "LE PATRON", icon: "crown", fn: ()=> addRefBlock("patron", "", "LE PATRON") }];
+  if(kind === "drh") return [{ label: "DRH SYLVIE", icon: "shield", fn: ()=> addRefBlock("drh", "", "DRH SYLVIE") }];
+  return [
+    { label: "Tâches & autonomie", icon: "tasks", fn: ()=> addRefBlock("service", "taches", "TÂCHES & AUTONOMIE") },
+    { label: "Salle serveurs (sites)", icon: "gears", fn: ()=> addRefBlock("service", "serveurs", "SALLE SERVEURS") },
+    { label: "Réunions", icon: "clock", fn: ()=> addRefBlock("service", "reunions", "RÉUNIONS") },
+    { label: "Connecteurs MCP", icon: "globe", fn: ()=> addRefBlock("service", "conn", "CONNECTEURS MCP") },
+    { label: "Le self", icon: "cutlery", fn: ()=> addRefBlock("service", "self", "LE SELF") }
+  ];
+}
 (function(){
   const pal = document.getElementById("planPalette");
   if(!pal) return;
   pal.innerHTML = '<div class="pp-head">Blocs à ajouter</div>' + PLAN_TEMPLATES.map(tp =>
     '<button class="pp-item" data-t="' + tp.t + '">' + icon(tp.icon) + " " + tp.label + '</button>').join("") +
-    '<div class="pp-hint">Glissez le point d\'un bloc (à droite) vers un autre pour créer une liaison. Cliquez un fil ou un bloc pour un menu : activer, désactiver…</div>';
+    '<div class="pp-hint">Cliquez un bloc pour le menu (activer, désactiver…). Glissez le point d\'un bloc vers un autre pour relier.</div>';
   pal.addEventListener("mouseleave", hidePlanMenu);
-  pal.querySelectorAll(".pp-item").forEach(b => b.addEventListener("click", ()=>{
+  pal.querySelectorAll(".pp-item").forEach(b => b.addEventListener("click", e => {
     const tp = PLAN_TEMPLATES.find(x => x.t === b.dataset.t);
     if(!tp) return;
+    if(tp.t === "agent" || tp.t === "group" || tp.t === "patron" || tp.t === "drh" || tp.t === "service"){
+      openPlanMenu(e.clientX, e.clientY, planChooserItems(tp.t));
+      return;
+    }
     const world = document.getElementById("planWorld");
     const r = world.getBoundingClientRect();
     const cx = (r.width / 2 - planView.x) / planView.z, cy = (r.height / 2 - planView.y) / planView.z;
