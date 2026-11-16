@@ -292,9 +292,9 @@
         <div id="cloudBody"></div>
       </details>
       <details class="settings">
-        <summary id="themeSummary">Couleur du bureau</summary>
+        <summary id="themeSummary">Couleur des écrans &amp; accents</summary>
         <div class="dots" id="themeDots"></div>
-        <div class="hint" style="margin-top:8px;">La couleur est appliquée à toute la page et au bureau 3D (murs, enseigne, écrans, éclairage).</div>
+        <div class="hint" style="margin-top:8px;">Le décor est réaliste (parquet, murs blanc cassé, plantes). Cette couleur s'applique aux écrans, à l'enseigne et aux accents de la page.</div>
       </details>
       <details class="settings">
         <summary id="aiSummary">IA réelle (optionnel)</summary>
@@ -1490,16 +1490,17 @@ function makeCharacter(bodyHex){
 }
 function makeDeskGroup(opts){
   const g = new THREE.Group();
-  const wood = new THREE.MeshStandardMaterial({ color: 0x191d15, roughness: .85 });
+  const wood = new THREE.MeshStandardMaterial({ color: opts.wood || 0x9c7a52, roughness: .8 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: .85 });
   const top = new THREE.Mesh(new THREE.BoxGeometry(opts.w, .1, opts.d), wood);
   top.position.y = .92; g.add(top);
   const legGeo = new THREE.BoxGeometry(.07, .9, .07);
   for(const [lx, lz] of [[-1,1],[1,1],[-1,-1],[1,-1]]){
-    const leg = new THREE.Mesh(legGeo, wood);
+    const leg = new THREE.Mesh(legGeo, dark);
     leg.position.set(lx * (opts.w/2 - .1), .45, lz * (opts.d/2 - .1));
     g.add(leg);
   }
-  const stand = new THREE.Mesh(new THREE.BoxGeometry(.09, .22, .09), wood);
+  const stand = new THREE.Mesh(new THREE.BoxGeometry(.09, .22, .09), dark);
   stand.position.set(0, 1.08, -opts.d/2 + .22); g.add(stand);
   const sm = screenMat(opts.screen, opts.glow);
   const scr = new THREE.Mesh(new THREE.BoxGeometry(opts.sw, opts.sh, .05), sm);
@@ -1521,7 +1522,6 @@ function init3D(){
   wrap.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0b0d0a);
-  scene.fog = new THREE.Fog(0x0b0d0a, 20, 46);
   const camera = new THREE.PerspectiveCamera(50, W()/H(), .1, 100);
   let az = -.55, pol = 1.08, dist = 15.5;
   const target = new THREE.Vector3(0, .6, 0);
@@ -1534,27 +1534,49 @@ function init3D(){
     camera.lookAt(target);
   }
   updateCam();
-  scene.add(new THREE.AmbientLight(0xffffff, .6));
-  const dir = new THREE.DirectionalLight(0xffffff, .85);
+  scene.add(new THREE.AmbientLight(0xffffff, .75));
+  scene.add(new THREE.HemisphereLight(0xfff6e6, 0x3a2e20, .5));
+  const dir = new THREE.DirectionalLight(0xffffff, .7);
   dir.position.set(6, 12, 5);
   scene.add(dir);
   const limeLight = new THREE.PointLight(0xc6f542, .5, 24);
   limeLight.position.set(0, 5, 0);
   scene.add(limeLight);
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(17, .2, 13), new THREE.MeshStandardMaterial({ color: 0x12150f, roughness: .95 }));
+  function makePlanks(){
+    const c = document.createElement("canvas");
+    c.width = 512; c.height = 512;
+    const x = c.getContext("2d");
+    const shades = ["#7a5a3a", "#8a6844", "#75563a", "#8f6c48", "#7e5e3e"];
+    const pw = 512 / 8;
+    for(let i = 0; i < 8; i++){
+      x.fillStyle = shades[i % shades.length];
+      x.fillRect(i * pw, 0, pw, 512);
+      x.fillStyle = "rgba(0,0,0,.28)";
+      x.fillRect(i * pw, 0, 2, 512);
+      for(let j = 0; j < 3; j++) x.fillRect(i * pw, (i * 137 + j * 171) % 512, pw, 2);
+    }
+    x.globalAlpha = .07;
+    for(let i = 0; i < 500; i++){
+      x.fillStyle = Math.random() > .5 ? "#000" : "#fff";
+      x.fillRect(Math.random() * 512, Math.random() * 512, 26, 1);
+    }
+    x.globalAlpha = 1;
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(3, 2.4);
+    return tex;
+  }
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(17, .2, 13), new THREE.MeshStandardMaterial({ map: makePlanks(), roughness: .8 }));
   floor.position.y = -.1;
   scene.add(floor);
-  const grid = new THREE.GridHelper(34, 34, 0x333a2a, 0x262b1f);
-  grid.position.y = .02;
-  scene.add(grid);
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x151810, roughness: 1 });
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0xe6e1d3, roughness: 1 });
   const wallB = new THREE.Mesh(new THREE.BoxGeometry(17, 4.4, .2), wallMat);
   wallB.position.set(0, 2.2, -6.6); scene.add(wallB);
   const wallL = new THREE.Mesh(new THREE.BoxGeometry(.2, 4.4, 13), wallMat);
   wallL.position.set(-8.6, 2.2, 0); scene.add(wallL);
   const wallR = new THREE.Mesh(new THREE.BoxGeometry(.2, 4.4, 13), wallMat);
   wallR.position.set(8.6, 2.2, 0); scene.add(wallR);
-  const ceil = new THREE.Mesh(new THREE.BoxGeometry(17, .2, 13), new THREE.MeshStandardMaterial({ color: 0x0e110c, roughness: 1 }));
+  const ceil = new THREE.Mesh(new THREE.BoxGeometry(17, .2, 13), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 1 }));
   ceil.position.set(0, 4.5, 0); scene.add(ceil);
   const panelGroup = new THREE.Group();
   const panelMat = new THREE.MeshStandardMaterial({ color: 0x0b0d0a, emissive: 0xfff6dd, emissiveIntensity: .95 });
@@ -1566,14 +1588,13 @@ function init3D(){
   }
   scene.add(panelGroup);
   ceil.visible = panelGroup.visible = false;
-  const stripeMat = new THREE.MeshStandardMaterial({ color: 0x0b0d0a, emissive: 0xc6f542, emissiveIntensity: .75 });
-  matRegistry.push({ mat: stripeMat, kind: "signal" });
-  const stripeB = new THREE.Mesh(new THREE.BoxGeometry(16.6, .09, .06), stripeMat);
-  stripeB.position.set(0, 2.9, -6.47); scene.add(stripeB);
-  const stripeL = new THREE.Mesh(new THREE.BoxGeometry(.06, .09, 12.6), stripeMat);
-  stripeL.position.set(-8.47, 2.9, 0); scene.add(stripeL);
-  const stripeR = new THREE.Mesh(new THREE.BoxGeometry(.06, .09, 12.6), stripeMat);
-  stripeR.position.set(8.47, 2.9, 0); scene.add(stripeR);
+  const skirtMat = new THREE.MeshStandardMaterial({ color: 0x5c4630, roughness: .85 });
+  const skirtB = new THREE.Mesh(new THREE.BoxGeometry(16.6, .14, .07), skirtMat);
+  skirtB.position.set(0, .07, -6.46); scene.add(skirtB);
+  const skirtL = new THREE.Mesh(new THREE.BoxGeometry(.07, .14, 12.6), skirtMat);
+  skirtL.position.set(-8.46, .07, 0); scene.add(skirtL);
+  const skirtR = new THREE.Mesh(new THREE.BoxGeometry(.07, .14, 12.6), skirtMat);
+  skirtR.position.set(8.46, .07, 0); scene.add(skirtR);
   const sc = document.createElement("canvas");
   sc.width = 1024; sc.height = 256;
   const sctx = sc.getContext("2d");
@@ -1589,18 +1610,22 @@ function init3D(){
   drawSign();
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshBasicMaterial({ map: signTex }));
   sign.position.set(0, 3.55, -6.48); scene.add(sign);
-  const potMat = new THREE.MeshStandardMaterial({ color: 0x262b1f, roughness: .9 });
-  const leafMat = new THREE.MeshStandardMaterial({ color: 0x2c3a22, roughness: .9 });
+  const potMat = new THREE.MeshStandardMaterial({ color: 0x8b5e3c, roughness: .9 });
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x3e7a34, roughness: .9 });
   for(const [px, pz] of [[-7.7, -5.7], [7.7, -5.7], [7.7, 5.7]]){
     const pot = new THREE.Mesh(new THREE.CylinderGeometry(.3, .22, .5, 10), potMat);
     pot.position.set(px, .25, pz); scene.add(pot);
-    const foliage = new THREE.Mesh(new THREE.ConeGeometry(.45, 1.3, 8), leafMat);
-    foliage.position.set(px, 1.15, pz); scene.add(foliage);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.06, .08, .6, 8), new THREE.MeshStandardMaterial({ color: 0x5c4630, roughness: .9 }));
+    trunk.position.set(px, .75, pz); scene.add(trunk);
+    const foliage = new THREE.Mesh(new THREE.ConeGeometry(.5, 1.1, 9), leafMat);
+    foliage.position.set(px, 1.55, pz); scene.add(foliage);
+    const foliage2 = new THREE.Mesh(new THREE.ConeGeometry(.36, .8, 9), leafMat);
+    foliage2.position.set(px, 2.05, pz); scene.add(foliage2);
   }
-  const rug = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 2.7, .03, 26), new THREE.MeshStandardMaterial({ color: 0x1a2013, roughness: 1 }));
+  const rug = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 2.7, .03, 26), new THREE.MeshStandardMaterial({ color: 0x6e3b3b, roughness: 1 }));
   rug.position.set(0, .03, -4.3); scene.add(rug);
 
-  const bossGroup = makeDeskGroup({ w: 3.4, d: 1.6, sw: 2.3, sh: .85, screen: 0xc6f542, glow: .5 });
+  const bossGroup = makeDeskGroup({ w: 3.4, d: 1.6, sw: 2.3, sh: .85, screen: 0xc6f542, glow: .5, wood: 0x6e4f33 });
   bossGroup.position.set(0, 0, -4.3);
   bossGroup.traverse(o => o.userData.boss = true);
   const bossLabel = makeLabel("LE PATRON", "direction");
@@ -1619,11 +1644,11 @@ function init3D(){
   pcLabel.position.set(6.7, 2.5, 4.4);
   scene.add(pcGroup, pcLabel);
 
-  const coffeeTable = new THREE.Mesh(new THREE.CylinderGeometry(.85, .85, .1, 20), new THREE.MeshStandardMaterial({ color: 0x191d15, roughness: .8 }));
+  const coffeeTable = new THREE.Mesh(new THREE.CylinderGeometry(.85, .85, .1, 20), new THREE.MeshStandardMaterial({ color: 0x9c7a52, roughness: .8 }));
   coffeeTable.position.set(-6.7, .85, 4.4); scene.add(coffeeTable);
-  const coffeeLeg = new THREE.Mesh(new THREE.CylinderGeometry(.12, .2, .85, 10), new THREE.MeshStandardMaterial({ color: 0x191d15, roughness: .8 }));
+  const coffeeLeg = new THREE.Mesh(new THREE.CylinderGeometry(.12, .2, .85, 10), new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: .8 }));
   coffeeLeg.position.set(-6.7, .42, 4.4); scene.add(coffeeLeg);
-  const machine = new THREE.Mesh(new THREE.BoxGeometry(.55, .75, .45), new THREE.MeshStandardMaterial({ color: 0x262b1f, roughness: .6 }));
+  const machine = new THREE.Mesh(new THREE.BoxGeometry(.55, .75, .45), new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: .5 }));
   machine.position.set(-7.6, .4, 4.4); scene.add(machine);
   const machineLed = new THREE.Mesh(new THREE.BoxGeometry(.1, .1, .03), screenMat(0xffb454, 1));
   machineLed.position.set(-7.6, .62, 4.64); scene.add(machineLed);
@@ -1631,7 +1656,7 @@ function init3D(){
   machineLabel.position.set(-6.7, 2.5, 4.4);
   scene.add(machineLabel);
   const stoolGeo = new THREE.CylinderGeometry(.24, .24, .5, 12);
-  const stoolMat = new THREE.MeshStandardMaterial({ color: 0x262b1f, roughness: .8 });
+  const stoolMat = new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .8 });
   const coffeeSlots = [new THREE.Vector3(-5.6, 0, 3.6), new THREE.Vector3(-5.6, 0, 5.2), new THREE.Vector3(-7.4, 0, 5.6)];
   coffeeSlots.forEach(p => {
     const s = new THREE.Mesh(stoolGeo, stoolMat);
