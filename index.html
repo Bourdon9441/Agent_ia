@@ -163,6 +163,10 @@
   #officeView:fullscreen .floor3d{ height:100vh; border-radius:0; border:none; }
   #officeView:fullscreen .hud3d{font-size:11px;}
   #officeView:fullscreen .cambtn{font-size:12px; padding:10px 16px;}
+  body.gamefs #officeView{ position:fixed; inset:0; z-index:5000; width:100vw; height:100vh; margin:0; background:var(--bg); }
+  body.gamefs .floor3d{ height:100%; border-radius:0; border:none; }
+  body.gamefs .hud3d{font-size:11px;}
+  body.gamefs .cambtn{font-size:12px; padding:10px 16px;}
   .floor3d canvas{display:block; cursor:grab;}
   .floor3d canvas:active{cursor:grabbing;}
   .office.threed .floor{display:none;}
@@ -362,27 +366,6 @@
         </div>
       </div>
     </div>
-    <div class="kpis">
-      <div class="kpi"><b id="kpiAgents">0</b><span>Agents</span></div>
-      <div class="kpi"><b id="kpiBusy">0</b><span>En cours</span></div>
-      <div class="kpi"><b id="kpiDone">0</b><span>Terminées</span></div>
-      <div class="kpi"><b id="kpiQueue">0</b><span>En attente</span></div>
-    </div>
-    <div class="agents-grid" id="agentsGrid"></div>
-  </div>
-</main>
-
-<div class="footer">Agent_IA · <a href="https://github.com/PapillonApp/Papicons" target="_blank" rel="noopener">Papicons</a> · design <a href="https://github.com/pbakaus/impeccable" target="_blank" rel="noopener">Impeccable</a></div>
-
-<div class="overlay" id="authOverlay">
-  <div class="modal">
-    <button class="iconbtn close-x" id="authClose"></button>
-    <h2 id="authTitle"></h2>
-    <p class="sub" id="authSub"></p>
-    <div id="authBody"></div>
-  </div>
-</div>
-
 <div class="deskpopup" id="deskPopup"></div>
 
 <div class="overlay" id="resultsOverlay">
@@ -471,6 +454,27 @@
       <div class="dots" id="pcThemeDots"></div>
       <div class="hint" id="pcSyncInfo" style="margin-top:14px;"></div>
     </div>
+  </div>
+</div>
+
+    <div class="kpis">
+      <div class="kpi"><b id="kpiAgents">0</b><span>Agents</span></div>
+      <div class="kpi"><b id="kpiBusy">0</b><span>En cours</span></div>
+      <div class="kpi"><b id="kpiDone">0</b><span>Terminées</span></div>
+      <div class="kpi"><b id="kpiQueue">0</b><span>En attente</span></div>
+    </div>
+    <div class="agents-grid" id="agentsGrid"></div>
+  </div>
+</main>
+
+<div class="footer">Agent_IA · <a href="https://github.com/PapillonApp/Papicons" target="_blank" rel="noopener">Papicons</a> · design <a href="https://github.com/pbakaus/impeccable" target="_blank" rel="noopener">Impeccable</a></div>
+
+<div class="overlay" id="authOverlay">
+  <div class="modal">
+    <button class="iconbtn close-x" id="authClose"></button>
+    <h2 id="authTitle"></h2>
+    <p class="sub" id="authSub"></p>
+    <div id="authBody"></div>
   </div>
 </div>
 
@@ -1445,22 +1449,46 @@ function openBossDlg(){
 document.getElementById("bossChatSend").addEventListener("click", ()=> sendChatFrom("bossChatInput"));
 document.getElementById("bossChatInput").addEventListener("keydown", e=>{ if(e.key === "Enter") sendChatFrom("bossChatInput"); });
 
+function isGameFullscreen(){ return !!(document.fullscreenElement || document.body.classList.contains("gamefs")); }
+function syncFsBtn(){
+  const b = document.getElementById("fsBtn");
+  if(b) b.textContent = isGameFullscreen() ? "Quitter plein écran" : "Plein écran";
+}
+const GAME_OVERLAYS = ["deskPopup", "resultsOverlay", "bossDlg", "pcOverlay", "authOverlay"].map(id => document.getElementById(id)).filter(Boolean);
+function parkOverlays(host){ for(const el of GAME_OVERLAYS) host.appendChild(el); }
+parkOverlays(document.body);
+function enterGameFullscreen(){
+  parkOverlays(document.getElementById("officeView"));
+  document.body.classList.add("gamefs");
+  syncFsBtn();
+  setTimeout(()=> window.dispatchEvent(new Event("resize")), 80);
+}
+function exitGameFullscreen(){
+  if(document.fullscreenElement) document.exitFullscreen();
+  document.body.classList.remove("gamefs");
+  parkOverlays(document.body);
+  syncFsBtn();
+  setTimeout(()=> window.dispatchEvent(new Event("resize")), 80);
+}
 document.getElementById("fsBtn").addEventListener("click", e=>{
   e.stopPropagation();
+  if(isGameFullscreen()) return exitGameFullscreen();
   const el = document.getElementById("officeView");
-  if(document.fullscreenElement) document.exitFullscreen();
-  else if(el.requestFullscreen) el.requestFullscreen().catch(()=> logGlobal("plein écran refusé par le navigateur.", "Système"));
+  if(el.requestFullscreen){
+    parkOverlays(el);
+    el.requestFullscreen().then(syncFsBtn).catch(()=> enterGameFullscreen());
+  } else enterGameFullscreen();
 });
 document.addEventListener("fullscreenchange", ()=>{
+  parkOverlays(document.fullscreenElement ? document.getElementById("officeView") : document.body);
   setTimeout(()=> window.dispatchEvent(new Event("resize")), 80);
   setTimeout(()=> window.dispatchEvent(new Event("resize")), 350);
-  const b = document.getElementById("fsBtn");
-  b.textContent = document.fullscreenElement ? "Quitter plein écran" : "Plein écran";
+  syncFsBtn();
 });
 window.addEventListener("keydown", e=>{
   if(e.code !== "Escape") return;
   if(document.pointerLockElement) document.exitPointerLock();
-  if(document.fullscreenElement) document.exitFullscreen();
+  if(isGameFullscreen()) exitGameFullscreen();
 });
 
 /* ================= terminal PC (mon PC) ================= */
