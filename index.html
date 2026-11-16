@@ -1053,11 +1053,13 @@ function oauthErrHelp(provider, msg){
   if(m.includes("redirect")) return "URL de redirection refusée : utilisez exactement https://" + proj + ".supabase.co/auth/v1/callback chez le fournisseur, et Site URL = " + location.origin + location.pathname + " dans Supabase.";
   return msg;
 }
+const cleanUrl = () => location.origin + location.pathname;
 async function signInProvider(provider){
   if(!sb) return;
   showAuthMsg("Redirection vers " + provider + "...", false);
   try{
-    const { error } = await sb.auth.signInWithOAuth({ provider, options: { redirectTo: location.href } });
+    if(location.hash || location.search) history.replaceState(null, "", cleanUrl());
+    const { error } = await sb.auth.signInWithOAuth({ provider, options: { redirectTo: cleanUrl() } });
     if(error) showAuthMsg(oauthErrHelp(provider, error.message), true);
   }catch(e){ showAuthMsg(oauthErrHelp(provider, e.message), true); }
 }
@@ -1066,7 +1068,7 @@ async function signInEmail(){
   const email = document.getElementById("magicEmail").value.trim();
   if(!email){ showAuthMsg("Entrez votre adresse e-mail.", true); return; }
   try{
-    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href } });
+    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: cleanUrl() } });
     if(error) showAuthMsg(error.message, true);
     else showAuthMsg("Lien de connexion envoyé ! Vérifiez votre boîte " + email + " (et les spams).", false);
   }catch(e){ showAuthMsg(e.message, true); }
@@ -2768,6 +2770,7 @@ renderPcSettings();
     openAuthModal();
     showAuthMsg("Échec de connexion : " + err, true);
   }
+  setTimeout(()=>{ try{ if(location.hash || location.search) history.replaceState(null, "", location.pathname); }catch(e){} }, 3000);
 })();
 </script>
 </body>
