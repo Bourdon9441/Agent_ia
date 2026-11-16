@@ -160,6 +160,8 @@
   .floor3d canvas:active{cursor:grabbing;}
   .office.threed .floor{display:none;}
   .hud3d{position:absolute; top:10px; left:10px; z-index:5; font-family:var(--mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); background:rgba(11,13,10,.72); border:1px solid var(--line); border-radius:8px; padding:6px 10px; line-height:1.8; pointer-events:none;}
+  .cambtn{position:absolute; top:10px; right:10px; z-index:6; background:var(--raise); border:1px solid var(--line2); color:var(--signal); font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; padding:8px 12px; border-radius:8px; cursor:pointer;}
+  .cambtn:hover{background:var(--line);}
   .deskpopup{position:fixed; display:none; z-index:220; background:var(--raise); border:1px solid var(--line2); border-radius:10px; padding:10px 12px; min-width:180px; box-shadow:0 8px 30px rgba(0,0,0,.5);}
   .deskpopup.show{display:block;}
   .deskpopup b{font-family:var(--disp); font-size:13px; color:var(--ink);}
@@ -296,7 +298,7 @@
 
   <div>
     <div class="office" id="officeView">
-      <div class="floor3d" id="floor3d"><div class="hud3d" id="hud3d"></div></div>
+      <div class="floor3d" id="floor3d"><div class="hud3d" id="hud3d"></div><button class="cambtn" id="camBtn">1ère personne</button></div>
       <div class="floor">
         <div class="bosszone">
           <div class="desk boss">
@@ -469,6 +471,7 @@ function engineTick(){
     if(t.real) continue;
     if((Date.now() - t.startedAt) / 1000 >= t.duration){ finishTask(a); changed = true; }
   }
+  if(autoBreaks()) changed = true;
   dispatch();
   if(state.autonomous && !bossBusy && state.agents.length > 0 &&
      freeAgents().length > 0 && state.agents.every(a => !a.currentTask && a.queue.length === 0)){
@@ -477,6 +480,34 @@ function engineTick(){
   }
   if(changed || state.agents.some(a=>a.status==="busy")) updateDynamicUI();
   updateKPIs();
+}
+
+/* pauses café autonomes : les agents y vont seuls, mais il reste toujours quelqu'un au bureau */
+function autoBreaks(){
+  let changed = false;
+  for(const a of state.agents){
+    if(a.status === "paused" && a.autoBreak && Date.now() > a.autoBreak){
+      a.status = "idle";
+      delete a.autoBreak;
+      logAgent(a, "Pause terminée, retour au bureau.");
+      logGlobal("<b>" + esc(a.name) + "</b> revient du café.", "Système");
+      changed = true;
+    }
+  }
+  if(state.agents.length >= 2 && Math.random() < 0.01){
+    const candidates = state.agents.filter(a => a.status === "idle" && !a.autoBreak);
+    const disponibles = state.agents.filter(a => a.status !== "paused");
+    if(candidates.length && disponibles.length > 1){
+      const a = candidates[Math.floor(Math.random() * candidates.length)];
+      a.status = "paused";
+      a.autoBreak = Date.now() + 20000 + Math.random() * 40000;
+      logAgent(a, "Petite pause café.");
+      logGlobal("<b>" + esc(a.name) + "</b> va prendre un café (retour dans " + Math.round((a.autoBreak - Date.now()) / 1000) + " s).", "Système");
+      changed = true;
+    }
+  }
+  if(changed) updateDynamicUI();
+  return changed;
 }
 
 function dispatch(){
@@ -850,8 +881,10 @@ function renderAgents(){
 }
 
 function togglePause(a){
-  if(a.status === "paused") a.status = a.currentTask ? "busy" : "idle";
-  else a.status = "paused";
+  if(a.status === "paused"){
+    a.status = a.currentTask ? "busy" : "idle";
+    delete a.autoBreak;
+  } else a.status = "paused";
   logGlobal("<b>" + esc(a.name) + "</b> " + (a.status === "paused" ? "part se reposer au coin café." : "reprend le travail."), "Système");
   updateDynamicUI(); save();
 }
@@ -1302,6 +1335,7 @@ document.getElementById("vtList").addEventListener("click", ()=>{ viewMode = "li
 
 /* ================= bureau 3D ================= */
 let three = null;
+let camMode = "orbit";
 const agent3d = new Map();
 const deskPopup = document.getElementById("deskPopup");
 function showAgentPopup(a, x, y){
@@ -1458,9 +1492,43 @@ function init3D(){
   const mouse = new THREE.Vector2();
   let downX = 0, downY = 0, dragged = false;
   const dom = renderer.domElement;
+  const fpsState = { x: 0, z: 5.6, yaw: 0, pitch: 0 };
+  const fpsKeys = { forward: false, back: false, left: false, right: false, sprint: false };
+  function setCamMode(m){
+    camMode = m;
+    document.getElementById("camBtn").textContent = m === "fps" ? "Vue libre" : "1ère personne";
+    if(m === "fps"){ fpsState.x = 0; fpsState.z = 5.6; fpsState.yaw = 0; fpsState.pitch = 0; }
+    else updateCam();
+    updateHud();
+  }
+  document.getElementById("camBtn").addEventListener("click", e=>{
+    e.stopPropagation();
+    setCamMode(camMode === "fps" ? "orbit" : "fps");
+  });
+  window.addEventListener("keydown", e => {
+    if(camMode !== "fps" || document.pointerLockElement !== dom) return;
+    if(["KeyW","KeyZ","ArrowUp"].includes(e.code)) fpsKeys.forward = true;
+    if(["KeyS","ArrowDown"].includes(e.code)) fpsKeys.back = true;
+    if(["KeyA","KeyQ","ArrowLeft"].includes(e.code)) fpsKeys.left = true;
+    if(["KeyD","ArrowRight"].includes(e.code)) fpsKeys.right = true;
+    if(e.code === "ShiftLeft" || e.code === "ShiftRight") fpsKeys.sprint = true;
+    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code)) e.preventDefault();
+  });
+  window.addEventListener("keyup", e => {
+    if(["KeyW","KeyZ","ArrowUp"].includes(e.code)) fpsKeys.forward = false;
+    if(["KeyS","ArrowDown"].includes(e.code)) fpsKeys.back = false;
+    if(["KeyA","KeyQ","ArrowLeft"].includes(e.code)) fpsKeys.left = false;
+    if(["KeyD","ArrowRight"].includes(e.code)) fpsKeys.right = false;
+    if(e.code === "ShiftLeft" || e.code === "ShiftRight") fpsKeys.sprint = false;
+  });
+  document.addEventListener("mousemove", e => {
+    if(camMode !== "fps" || document.pointerLockElement !== dom) return;
+    fpsState.yaw -= (e.movementX || 0) * .0022;
+    fpsState.pitch = Math.min(1.2, Math.max(-1.2, fpsState.pitch - (e.movementY || 0) * .0022));
+  });
   dom.addEventListener("pointerdown", e => { downX = e.clientX; downY = e.clientY; dragged = false; dom.setPointerCapture(e.pointerId); });
   dom.addEventListener("pointermove", e => {
-    if(e.buttons !== 1) return;
+    if(camMode === "fps" || e.buttons !== 1) return;
     const dx = e.movementX || 0, dy = e.movementY || 0;
     if(Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 6) dragged = true;
     az -= dx * .005;
@@ -1468,12 +1536,17 @@ function init3D(){
     updateCam();
   });
   dom.addEventListener("wheel", e => {
+    if(camMode === "fps") return;
     e.preventDefault();
     dist = Math.min(28, Math.max(7, dist + e.deltaY * .012));
     updateCam();
   }, { passive: false });
   dom.addEventListener("click", e => {
     e.stopPropagation();
+    if(camMode === "fps"){
+      if(document.pointerLockElement !== dom && dom.requestPointerLock) dom.requestPointerLock();
+      return;
+    }
     if(dragged) return;
     const r = dom.getBoundingClientRect();
     mouse.x = ((e.clientX - r.left) / r.width) * 2 - 1;
@@ -1503,10 +1576,44 @@ function init3D(){
 
   three = { scene, camera, renderer, bossChar, coffeeSlots };
   const clock = new THREE.Clock();
+  let lastT = performance.now();
   (function animate(){
     requestAnimationFrame(animate);
     if(viewMode !== "office") return;
     const t = clock.getElapsedTime();
+    if(camMode === "fps"){
+      const now2 = performance.now();
+      const dt = Math.min(.05, (now2 - lastT) / 1000);
+      lastT = now2;
+      const f = (fpsKeys.forward ? 1 : 0) - (fpsKeys.back ? 1 : 0);
+      const r = (fpsKeys.right ? 1 : 0) - (fpsKeys.left ? 1 : 0);
+      if(f || r){
+        const sp = (fpsKeys.sprint ? 5 : 2.8) * dt;
+        const fx = -Math.sin(fpsState.yaw), fz = -Math.cos(fpsState.yaw);
+        const rx = Math.cos(fpsState.yaw), rz = -Math.sin(fpsState.yaw);
+        fpsState.x += (fx * f + rx * r) * sp;
+        fpsState.z += (fz * f + rz * r) * sp;
+        fpsState.x = Math.min(8, Math.max(-8, fpsState.x));
+        fpsState.z = Math.min(5.8, Math.max(-5.8, fpsState.z));
+        const circles = [];
+        for(const a of state.agents){
+          const rec = agent3d.get(a.id);
+          if(rec) circles.push([rec.group.position.x, rec.group.position.z, 1.05]);
+        }
+        circles.push([0, -4.3, 1.7], [6.7, 4.4, 1.1], [-6.7, 4.4, 1], [-7.6, 4.4, .55]);
+        for(const [cx, cz, cr] of circles){
+          const dx = fpsState.x - cx, dz = fpsState.z - cz;
+          const d = Math.hypot(dx, dz);
+          if(d < cr && d > .001){
+            fpsState.x = cx + dx / d * cr;
+            fpsState.z = cz + dz / d * cr;
+          }
+        }
+      }
+      camera.position.set(fpsState.x, 1.62, fpsState.z);
+      camera.rotation.order = "YXZ";
+      camera.rotation.set(fpsState.pitch, fpsState.yaw, 0);
+    } else lastT = performance.now();
     for(const a of state.agents){
       const rec = agent3d.get(a.id);
       if(!rec) continue;
@@ -1563,8 +1670,11 @@ function updateHud(){
   if(!three) return;
   const done = (state.results || []).filter(r => r.status === "done").length;
   const paused = state.agents.filter(a => a.status === "paused").length;
+  const modeTxt = camMode === "fps"
+    ? "marche : ZQSD/WASD/flèches · souris : regarder · bouton : vue libre"
+    : "glisser : tourner · molette : zoom · cliquer un bureau";
   document.getElementById("hud3d").innerHTML =
-    "glisser : tourner · molette : zoom · cliquer un bureau" +
+    modeTxt +
     "<br>" + state.agents.length + " agent(s) · " + done + " livrable(s) sur votre PC · " + paused + " au café";
 }
 
