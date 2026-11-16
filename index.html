@@ -364,7 +364,7 @@
             <div class="dtask">Cliquez pour récupérer les fichiers produits par vos agents.</div>
           </div>
           <div class="desk amenity" id="coffeeDesk" title="Les agents en pause viennent ici">
-            <div class="dtop"><span class="dicon" id="coffeeIcon"></span><span class="dname">COIN CAFÉ</span><span class="dhead" id="coffeeCount"></span></div>
+            <div class="dtop"><span class="dicon" id="coffeeIcon"></span><span class="dname">COIN CAFÉ</span><span class="dhead" id="coffeeCount"></span><button class="iconbtn" id="coffeeToggle" title="Fermer / ouvrir la cafet"></button></div>
             <div class="coffeeList" id="coffeeList"></div>
             <div class="dtask" id="coffeeHint">Mettez un agent en pause : il vient se reposer ici.</div>
           </div>
@@ -465,6 +465,9 @@
       <div class="hint" id="pcKeyHint">Sans clé : rien ne fonctionne. Avec clé : chaque tâche est réellement exécutée par votre IA.</div>
       <div class="hint" style="margin-top:14px;">Couleur des écrans &amp; accents</div>
       <div class="dots" id="pcThemeDots"></div>
+      <div class="hint" style="margin-top:14px;">Coin café</div>
+      <div class="row"><button class="btn line" id="pcCoffeeToggle" style="flex:0 0 auto;">Fermer la cafet</button></div>
+      <div class="hint" id="pcCoffeeHint">Ouverte : les agents sans travail peuvent prendre une pause café.</div>
       <div class="hint" id="pcSyncInfo" style="margin-top:14px;"></div>
     </div>
   </div>
@@ -554,7 +557,7 @@ function scopeKey(){
 }
 function freshState(){
   return { agents: [], mission: "", backlog: [], autonomous: false, speed: 1, doneCount: 0,
-           activity: [], results: [], chat: [], siteProject: null, meta: { syncedAt: null } };
+           activity: [], results: [], chat: [], siteProject: null, coffeeClosed: false, meta: { syncedAt: null } };
 }
 let state = freshState();
 const PERSONAS = ["efficace et direct","créatif et imaginatif","rigoureux et méthodique","enthousiaste et positif","pédagogue et clair","analytique et critique","chaleureux et diplomate","pragmatique, orienté résultats"];
@@ -620,6 +623,7 @@ function engineTick(){
 /* pauses café autonomes : uniquement quand il n'y a AUCUNE tâche en attente ; rappel immédiat sinon */
 function autoBreaks(){
   if(!hasKey()) return false;
+  if(state.coffeeClosed) return false;
   let changed = false;
   const workPending = bossQueue.length > 0 || state.agents.some(a => a.currentTask || a.queue.length > 0);
   if(workPending){
@@ -1122,7 +1126,10 @@ function togglePause(a){
   if(a.status === "paused"){
     a.status = a.currentTask ? "busy" : "idle";
     delete a.autoBreak;
-  } else a.status = "paused";
+  } else {
+    if(state.coffeeClosed){ logGlobal("La cafet est fermée : <b>" + esc(a.name) + "</b> reste à son poste.", "Patron"); return; }
+    a.status = "paused";
+  }
   logGlobal("<b>" + esc(a.name) + "</b> " + (a.status === "paused" ? "part se reposer au coin café." : "reprend le travail."), "Système");
   updateDynamicUI(); renderHR(); save();
 }
@@ -1821,6 +1828,7 @@ function renderPcSettings(){
   const keyEl = document.getElementById("pcKeyInput");
   if(keyEl && document.activeElement !== keyEl) keyEl.value = mistralKey();
   renderThemeDots();
+  syncCoffeeUI();
   const info = document.getElementById("pcSyncInfo");
   if(info){
     if(session && session.user) info.textContent = "Connecté : " + (session.user.email || session.user.id) + " — vos données suivent votre compte sur tous vos appareils.";
@@ -1891,13 +1899,51 @@ function updateOffice(){
   const done = (state.results || []).filter(r => r.status === "done").length;
   document.getElementById("pcCount").innerHTML = icon("folder") + " " + done + " livrable" + (done > 1 ? "s" : "");
   const paused = state.agents.filter(a => a.status === "paused");
-  document.getElementById("coffeeCount").innerHTML = icon("cutlery") + " " + (paused.length ? paused.length + " en pause" : "vide");
+  const ctog = document.getElementById("coffeeToggle");
+  if(ctog) ctog.innerHTML = icon(state.coffeeClosed ? "check" : "cross");
+  document.getElementById("coffeeCount").innerHTML = icon("cutlery") + " " + (state.coffeeClosed ? "fermée" : paused.length ? paused.length + " en pause" : "vide");
   document.getElementById("coffeeList").innerHTML = paused.map(a => '<span class="cup">' + icon("pause") + " " + esc(a.name) + '</span>').join("");
-  document.getElementById("coffeeHint").style.display = paused.length ? "none" : "";
+  const chint = document.getElementById("coffeeHint");
+  if(state.coffeeClosed){ chint.style.display = ""; chint.textContent = "Cafet fermée : les agents restent à leur poste."; }
+  else { chint.textContent = "Mettez un agent en pause : il vient se reposer ici."; chint.style.display = paused.length ? "none" : ""; }
 }
 document.getElementById("pcIcon").innerHTML = icon("folder");
 document.getElementById("pcScreen").innerHTML = icon("folder");
 document.getElementById("coffeeIcon").innerHTML = icon("cutlery");
+
+function setCoffeeClosed(closed){
+  state.coffeeClosed = !!closed;
+  if(state.coffeeClosed){
+    for(const a of state.agents){
+      if(a.status === "paused"){
+        a.status = a.currentTask ? "busy" : "idle";
+        delete a.autoBreak;
+        logAgent(a, "Cafet fermée : retour au poste.");
+      }
+    }
+    logGlobal("Le Patron <b>ferme la cafet</b> : tout le monde reste à son poste.", "Patron");
+  } else {
+    logGlobal("La cafet <b>rouvre</b> : les agents sans travail peuvent reprendre des pauses.", "Patron");
+  }
+  updateDynamicUI(); renderHR(); syncCoffeeUI(); save();
+}
+function syncCoffeeUI(){
+  const closed = !!state.coffeeClosed;
+  const b1 = document.getElementById("coffeeToggle");
+  if(b1){ b1.innerHTML = icon(closed ? "check" : "cross"); b1.title = closed ? "Rouvrir la cafet" : "Fermer la cafet"; }
+  const b2 = document.getElementById("pcCoffeeToggle");
+  if(b2) b2.textContent = closed ? "Rouvrir la cafet" : "Fermer la cafet";
+  const h = document.getElementById("pcCoffeeHint");
+  if(h) h.textContent = closed ? "La cafet est fermée : aucune pause, tous les agents restent à leur poste." : "Ouverte : les agents sans travail peuvent prendre une pause café.";
+  if(three && three.coffeeLabel){
+    const nl = makeLabel("COIN CAFÉ", closed ? "fermée" : "les agents en pause");
+    if(three.coffeeLabel.material.map) three.coffeeLabel.material.map.dispose();
+    three.coffeeLabel.material.map = nl.material.map;
+    three.coffeeLabel.material.needsUpdate = true;
+  }
+}
+document.getElementById("coffeeToggle").addEventListener("click", ()=> setCoffeeClosed(!state.coffeeClosed));
+document.getElementById("pcCoffeeToggle").addEventListener("click", ()=> setCoffeeClosed(!state.coffeeClosed));
 document.getElementById("bossRole").innerHTML = icon("crown") + " direction";
 document.getElementById("pcDesk").addEventListener("click", ()=> openPc("files"));
 
@@ -2333,7 +2379,8 @@ function init3D(){
     camera.updateProjectionMatrix();
   });
 
-  three = { scene, camera, renderer, bossChar, coffeeSlots, limeLight, redrawSign: drawSign };
+  three = { scene, camera, renderer, bossChar, coffeeSlots, limeLight, redrawSign: drawSign, coffeeLabel: machineLabel };
+  syncCoffeeUI();
   const clock = new THREE.Clock();
   let lastT = performance.now();
   (function animate(){
