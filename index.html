@@ -244,6 +244,11 @@
   .hrrow{display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:11px; padding:10px 12px; margin-bottom:8px; background:var(--bg);}
   .hrrow .hrname{font-weight:600; font-size:13px;}
   .hrrow .hrole{font-family:var(--mono); font-size:9.5px; color:var(--faint); text-transform:uppercase; letter-spacing:.1em; display:flex; align-items:center; gap:5px;}
+  .hrrow .hrpersona{color:var(--dim); text-transform:none; letter-spacing:0; font-family:var(--disp); font-size:10.5px;}
+  .hredit{display:flex; flex-wrap:wrap; gap:6px; align-items:center; width:100%;}
+  .hredit input, .hredit select{background:var(--raise); border:1px solid var(--line); border-radius:8px; color:var(--ink); font-family:var(--disp); font-size:12px; padding:6px 8px; outline:none; min-width:0;}
+  .hredit input:focus, .hredit select:focus{border-color:var(--signal);}
+  .hredit input.hePersona{flex:1; min-width:150px;}
   .hrrow .hrole svg{width:11px; height:11px;}
   .hrrow .hstat{font-family:var(--mono); font-size:9.5px; text-transform:uppercase; letter-spacing:.1em; margin-left:auto;}
   .hrrow .hstat.busy{color:var(--amber);} .hrrow .hstat.idle{color:var(--signal);} .hrrow .hstat.paused{color:var(--faint);}
@@ -552,6 +557,10 @@ function freshState(){
            activity: [], results: [], chat: [], siteProject: null, meta: { syncedAt: null } };
 }
 let state = freshState();
+const PERSONAS = ["efficace et direct","créatif et imaginatif","rigoureux et méthodique","enthousiaste et positif","pédagogue et clair","analytique et critique","chaleureux et diplomate","pragmatique, orienté résultats"];
+function ensurePersonas(){
+  state.agents.forEach((a, i) => { if(!a.persona) a.persona = PERSONAS[i % PERSONAS.length]; });
+}
 
 /* ================= persistance locale ================= */
 function save(){
@@ -566,6 +575,7 @@ function loadLocal(){
   try{
     const raw = localStorage.getItem(scopeKey());
     state = raw ? Object.assign(freshState(), JSON.parse(raw)) : freshState();
+    ensurePersonas();
   }catch(e){ state = freshState(); }
 }
 
@@ -783,7 +793,7 @@ async function executeTask(agent){
       }
     }
     const out = await enqueueLLM(()=> callLLM([
-      {role:"system", content:"Tu es l'agent " + agent.name + " (sp\u00e9cialit\u00e9 : " + (agent.role || "polyvalent") + ") d'une \u00e9quipe de travail. Ex\u00e9cute la t\u00e2che suivante et produis directement le livrable concret, en fran\u00e7ais, pr\u00eat \u00e0 l'emploi (texte structur\u00e9, complet, actionnable). Pas d'introduction, pas de commentaire : uniquement le livrable." + context},
+      {role:"system", content:"Tu es l'agent " + agent.name + " (sp\u00e9cialit\u00e9 : " + (agent.role || "polyvalent") + (agent.persona ? ", personnalit\u00e9 : " + agent.persona : "") + ") d'une \u00e9quipe de travail. Ex\u00e9cute la t\u00e2che suivante et produis directement le livrable concret, en fran\u00e7ais, pr\u00eat \u00e0 l'emploi (texte structur\u00e9, complet, actionnable). Ta personnalit\u00e9 doit se ressentir dans ton rendu (ton, choix, pr\u00e9sentation) sans nuire \u00e0 la qualit\u00e9 professionnelle. Pas d'introduction, pas de commentaire : uniquement le livrable." + context},
       {role:"user", content: t.text}
     ], 3000));
     if(agent.currentTask !== t) return;
@@ -869,7 +879,7 @@ async function decompose(objective){
   if(!hasKey()) return [];
   try{
     const agentsDesc = state.agents.length
-      ? state.agents.map(a => a.name + " (spécialité : " + (a.role || "polyvalent") + (a.status === "paused" ? ", en pause" : "") + ")").join("; ")
+      ? state.agents.map(a => a.name + " (spécialité : " + (a.role || "polyvalent") + (a.persona ? ", style : " + a.persona : "") + (a.status === "paused" ? ", en pause" : "") + ")").join("; ")
       : "aucun";
     const reply = await callLLM([
       {role:"system", content:"Tu es le Patron, un vrai manager d'équipe. Ton équipe d'agents : " + agentsDesc + ". Découpe l'objectif donné en sous-tâches courtes et actionnables (max 6) et répartis-les comme un vrai chef d'équipe : la recherche d'informations à l'agent spécialisé en recherche web, les textes à la rédaction, le développement au code, le visuel au design, la communication au marketing, etc. Chaque tâche doit aller à l'agent dont la spécialité correspond vraiment. Réponds UNIQUEMENT avec un tableau JSON de chaînes en français au format exact \"Nom de l'agent : la tâche\", ex: [\"Nova : analyser le marché des cafés\",\"Atlas : rédiger le plan marketing\"]. Si aucun agent ne convient, utilise quand même le plus proche."},
@@ -985,6 +995,7 @@ async function pullRemote(force){
       if((remoteNewer && !pendingLocal) || force){
         const keep = { results: state.results, chat: state.chat, siteProject: state.siteProject };
         state = Object.assign(freshState(), data.data, keep, { meta: { syncedAt: data.updated_at } });
+        ensurePersonas();
         renderAll(); save();
       }
     } else if(!data){
@@ -1243,7 +1254,7 @@ async function sendChatFrom(inputId){
   const btns = ["chatSend", "pcChatSend", "bossChatSend"].map(id => document.getElementById(id)).filter(Boolean);
   btns.forEach(b => b.disabled = true);
   try{
-    const agentsDesc = state.agents.length ? state.agents.map(a=>a.name + " (" + (a.role || "polyvalent") + ")").join(", ") : "aucun agent pour l'instant";
+    const agentsDesc = state.agents.length ? state.agents.map(a=>a.name + " (" + (a.role || "polyvalent") + (a.persona ? ", style : " + a.persona : "") + ")").join(", ") : "aucun agent pour l'instant";
     const history = state.chat.slice(0, -1).slice(-10).map(m => ({role: m.role === "user" ? "user" : "assistant", content: m.text}));
     const reply = await enqueueLLM(()=> callLLM([
       {role:"system", content:"Tu es le Patron, le manager de l'équipe d'agents IA de l'entreprise de l'utilisateur. Tes agents : " + agentsDesc + ". Réponds en français, de façon directe, concrète et utile (max 120 mots). Si l'utilisateur te confie un travail à exécuter, délègue comme un vrai manager : termine ta réponse par une ligne contenant exactement TACHES: puis une ligne par tâche au format \"Nom de l'agent : la tâche\" (max 6), en choisissant l'agent dont la spécialité correspond le mieux au travail. Si c'est une question ou une discussion, ne mets pas de section TACHES."},
@@ -1426,8 +1437,9 @@ const AGENT_NAMES = ["Nova","Atlas","Zéphyr","Orion","Luna","Vega","Comet","Ech
 function hireAgent(name, role){
   name = (name || "").trim() || AGENT_NAMES[state.agents.length % AGENT_NAMES.length] + "-" + (state.agents.length + 1);
   role = role || "polyvalent";
-  state.agents.push({ id: uid(), name, role, status: "idle", currentTask: null, queue: [], log: [] });
-  logGlobal("<b>" + esc(name) + "</b> a rejoint l'équipe (spécialité : " + esc(role) + ").", "DRH");
+  const persona = PERSONAS[state.agents.length % PERSONAS.length];
+  state.agents.push({ id: uid(), name, role, persona, status: "idle", currentTask: null, queue: [], log: [] });
+  logGlobal("<b>" + esc(name) + "</b> a rejoint l'équipe (spécialité : " + esc(role) + ", style : " + esc(persona) + ").", "DRH");
   renderAgents(); renderHR(); save();
   return name;
 }
@@ -1631,7 +1643,10 @@ async function buildSiteStep(key, prompt, maxTokens){
   entry.status = "building";
   renderPcServers(); save();
   try{
-    const out = await enqueueLLM(()=> callLLM(prompt, maxTokens));
+    const worker = state.agents.find(a => a.name === entry.agent);
+    const prompts = prompt.map(m => ({ role: m.role, content: m.content }));
+    if(worker) prompts[0].content += " Style personnel de " + worker.name + " à respecter dans le rendu : " + (worker.persona || "professionnel") + ".";
+    const out = await enqueueLLM(()=> callLLM(prompts, maxTokens));
     entry.output = out;
     entry.status = "done";
     logGlobal("<b>" + esc(entry.agent) + "</b> rend compte au Patron : \u00ab " + esc(entry.label) + " \u00bb termin\u00e9.", entry.agent);
@@ -1682,7 +1697,7 @@ async function launchSiteProject(desc){
       {role:"user", content: "Site \u00e0 cr\u00e9er : " + sp.desc + "\nPlan : " + ((sp.steps[0].output || "").slice(0, 2000))}
     ], 2000);
     await buildSiteStep("code", [
-      {role:"system", content:"Tu es un d\u00e9veloppeur web senior. G\u00e9n\u00e8re un site web complet en UN SEUL fichier HTML (HTML + CSS + JS inline), moderne, responsive, professionnel, textes en fran\u00e7ais, sans d\u00e9pendance externe. Respecte ce plan : " + ((sp.steps.find(s => s.key === "plan").output || "").slice(0, 3000)) + " ET cette charte graphique : " + ((sp.steps.find(s => s.key === "design").output || "").slice(0, 2000)) + ". R\u00e9ponds UNIQUEMENT avec le code HTML complet, sans explication."},
+      {role:"system", content:"Tu es un d\u00e9veloppeur web senior. G\u00e9n\u00e8re un site web complet en UN SEUL fichier HTML (HTML + CSS + JS inline), moderne, responsive, professionnel, textes en fran\u00e7ais, sans d\u00e9pendance externe. EXIGENCES DE DESIGN OBLIGATOIRES (rendu propre et \u00e9l\u00e9gant, digne d'un studio web professionnel, jamais moche) : palette limit\u00e9e (2-3 couleurs + neutres) strictement coh\u00e9rente avec la charte graphique fournie ; beaucoup d'espace blanc, sections a\u00e9r\u00e9es ; typographie hi\u00e9rarchis\u00e9e (grands titres marqu\u00e9s, textes lisibles, interligne confortable) ; cartes avec coins arrondis et ombres douces ; boutons soign\u00e9s avec effet hover ; bandeau h\u00e9ros avec titre fort et bouton d'action ; navigation sobre et lisible ; ic\u00f4nes et illustrations r\u00e9alis\u00e9es en CSS/SVG inline (jamais d'URL d'image externe) ; pied de page propre ; parfaitement responsive sur mobile. Respecte ce plan : " + ((sp.steps.find(s => s.key === "plan").output || "").slice(0, 3000)) + " ET cette charte graphique : " + ((sp.steps.find(s => s.key === "design").output || "").slice(0, 2000)) + ". R\u00e9ponds UNIQUEMENT avec le code HTML complet, sans explication."},
       {role:"user", content: "Site \u00e0 cr\u00e9er : " + sp.desc}
     ], 14000);
     await buildSiteStep("widget", [
@@ -1762,14 +1777,40 @@ function renderHR(){
   }
   el.innerHTML = state.agents.map(a => {
     const st = a.status === "busy" ? "occupé" : a.status === "paused" ? "au café" : "disponible";
-    return '<div class="hrrow"><div><div class="hrname">' + esc(a.name) + '</div><div class="hrole">' + icon(specialtyIcon(a.role)) + " " + esc(a.role || "polyvalent") + '</div></div>' +
+    return '<div class="hrrow"><div><div class="hrname">' + esc(a.name) + '</div><div class="hrole">' + icon(specialtyIcon(a.role)) + " " + esc(a.role || "polyvalent") + (a.persona ? ' <span class="hrpersona">· ' + esc(a.persona) + '</span>' : "") + '</div></div>' +
       '<span class="hstat ' + a.status + '">' + st + '</span>' +
+      '<button class="iconbtn hrEdit" data-id="' + a.id + '" title="Modifier le nom, la spécialité et la personnalité">' + icon("pen") + '</button>' +
       '<button class="iconbtn hrPause" data-id="' + a.id + '" title="Pause / reprise">' + icon(a.status === "paused" ? "play" : "pause") + '</button>' +
       '<button class="iconbtn hrFire" data-id="' + a.id + '" title="Licencier">' + icon("trash") + '</button></div>';
   }).join("");
   el.querySelectorAll(".hrPause").forEach(b => b.addEventListener("click", ()=>{
     const a = state.agents.find(x => x.id === b.dataset.id);
     if(a) togglePause(a);
+  }));
+  el.querySelectorAll(".hrEdit").forEach(b => b.addEventListener("click", ()=>{
+    const a = state.agents.find(x => x.id === b.dataset.id);
+    if(!a) return;
+    const row = b.closest(".hrrow");
+    const curRole = a.role || "polyvalent";
+    const inList = SPECIALTIES.some(sp => sp.value === curRole);
+    const opts = SPECIALTIES.map(sp => '<option value="' + esc(sp.value) + '"' + (sp.value === curRole ? " selected" : "") + ">" + esc(sp.value.charAt(0).toUpperCase() + sp.value.slice(1)) + "</option>").join("") +
+      (inList ? "" : '<option value="' + esc(curRole) + '" selected>' + esc(curRole) + "</option>");
+    row.innerHTML = '<div class="hredit"><input class="heName" value="' + esc(a.name) + '" placeholder="Nom" maxlength="24">' +
+      '<select class="heRole">' + opts + '</select>' +
+      '<input class="hePersona" value="' + esc(a.persona || "") + '" placeholder="Personnalité (ex : créatif et imaginatif)" maxlength="60">' +
+      '<button class="iconbtn heSave" title="Enregistrer">' + icon("check") + '</button>' +
+      '<button class="iconbtn heCancel" title="Annuler">' + icon("cross") + '</button></div>';
+    row.querySelector(".heSave").addEventListener("click", ()=>{
+      const nn = row.querySelector(".heName").value.trim();
+      const nr = row.querySelector(".heRole").value;
+      const np = row.querySelector(".hePersona").value.trim();
+      if(nn) a.name = nn;
+      if(nr) a.role = nr;
+      a.persona = np || a.persona || "professionnel";
+      logGlobal("<b>" + esc(a.name) + "</b> mis à jour (spécialité : " + esc(a.role) + ", style : " + esc(a.persona) + ").", "DRH");
+      renderAgents(); renderHR(); updateOffice(); save();
+    });
+    row.querySelector(".heCancel").addEventListener("click", ()=> renderHR());
   }));
   el.querySelectorAll(".hrFire").forEach(b => b.addEventListener("click", ()=>{
     const a = state.agents.find(x => x.id === b.dataset.id);
@@ -1819,6 +1860,7 @@ function renderOffice(){
       <div class="dtask"></div>
       <div class="bar"><div class="fill"></div></div>`;
     el.querySelector(".dname").textContent = a.name;
+    el.querySelector(".dname").title = a.persona || "";
     el.querySelector(".drole").innerHTML = icon(specialtyIcon(a.role)) + " " + esc(a.role || "polyvalent");
     el.querySelector(".dscreen").innerHTML = icon(specialtyIcon(a.role));
     el.querySelector(".dPause").addEventListener("click", ()=> togglePause(a));
