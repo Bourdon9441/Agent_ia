@@ -159,6 +159,10 @@
   .coffeeList .cup svg{width:10px; height:10px;}
   .floor3d{display:none; height:460px; border-radius:16px; overflow:hidden; border:1px solid var(--line2); background:var(--bg); position:relative;}
   .floor3d.show{display:block;}
+  #officeView:fullscreen{ width:100vw; height:100vh; margin:0; background:var(--bg); }
+  #officeView:fullscreen .floor3d{ height:100vh; border-radius:0; border:none; }
+  #officeView:fullscreen .hud3d{font-size:11px;}
+  #officeView:fullscreen .cambtn{font-size:12px; padding:10px 16px;}
   .floor3d canvas{display:block; cursor:grab;}
   .floor3d canvas:active{cursor:grabbing;}
   .office.threed .floor{display:none;}
@@ -1449,8 +1453,14 @@ document.getElementById("fsBtn").addEventListener("click", e=>{
 });
 document.addEventListener("fullscreenchange", ()=>{
   setTimeout(()=> window.dispatchEvent(new Event("resize")), 80);
+  setTimeout(()=> window.dispatchEvent(new Event("resize")), 350);
   const b = document.getElementById("fsBtn");
   b.textContent = document.fullscreenElement ? "Quitter plein écran" : "Plein écran";
+});
+window.addEventListener("keydown", e=>{
+  if(e.code !== "Escape") return;
+  if(document.pointerLockElement) document.exitPointerLock();
+  if(document.fullscreenElement) document.exitFullscreen();
 });
 
 /* ================= terminal PC (mon PC) ================= */
