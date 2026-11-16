@@ -107,6 +107,8 @@
   .led.idle{background:var(--signal);}
   .led.busy{background:var(--signal); animation:pulse 1.1s infinite;}
   .led.paused{background:var(--amber);}
+  :focus-visible{outline:2px solid var(--signal); outline-offset:2px; border-radius:4px;}
+  @media (prefers-reduced-motion: reduce){ *{animation:none !important; transition:none !important;} }
   @keyframes pulse{50%{opacity:.25;}}
   .agent .head{display:flex; align-items:center; gap:9px;}
   .agent .name{font-weight:700; font-size:15.5px;}
