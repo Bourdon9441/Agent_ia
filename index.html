@@ -189,8 +189,25 @@
   .pn-chip.st-busy::before{background:var(--signal);}
   .pn-chip.st-paused{color:var(--amber);}
   .pn-chip.st-paused::before{background:var(--amber);}
-  .pn-edge{fill:none; stroke:var(--line2); stroke-width:1.6;}
+  .pn-edge{fill:none; stroke:var(--line2); stroke-width:1.6; pointer-events:none;}
   .pn-edge.hot{stroke:var(--signal); stroke-width:2;}
+  .pn-edge.custom{stroke-dasharray:5 4; pointer-events:visibleStroke; cursor:pointer;}
+  .pn-edge.custom.off{stroke-dasharray:2 5; opacity:.45;}
+  .pn-edge.temp{stroke:var(--signal); stroke-dasharray:4 4; opacity:.85;}
+  .pnode.off{opacity:.45;}
+  .pn-out{position:absolute; right:-7px; top:50%; margin-top:-7px; width:14px; height:14px; border-radius:50%; background:var(--raise); border:1.5px solid var(--line2); cursor:crosshair;}
+  .pn-out:hover{border-color:var(--signal); background:var(--signal);}
+  .planPalette{position:absolute; top:10px; right:10px; z-index:7; width:158px; background:rgba(11,13,10,.85); border:1px solid var(--line2); border-radius:10px; padding:8px;}
+  .pp-head{font-family:var(--mono); font-size:9px; letter-spacing:.12em; color:var(--faint); text-transform:uppercase; margin-bottom:6px;}
+  .pp-item{display:flex; align-items:center; gap:7px; width:100%; background:transparent; border:1px solid var(--line2); border-radius:8px; color:var(--ink); font-family:var(--disp); font-size:12px; padding:7px 9px; margin-bottom:5px; cursor:pointer; text-align:left;}
+  .pp-item:hover{border-color:var(--signal); color:var(--signal);}
+  .pp-item svg{width:12px; height:12px;}
+  .pp-hint{font-family:var(--mono); font-size:8.5px; color:var(--faint); line-height:1.6; margin-top:2px;}
+  #planMenu{position:fixed; z-index:600; display:none; background:var(--raise); border:1px solid var(--line2); border-radius:10px; padding:5px; box-shadow:0 8px 30px rgba(0,0,0,.5); min-width:140px;}
+  #planMenu.show{display:block;}
+  #planMenu button{display:flex; width:100%; align-items:center; gap:7px; background:transparent; border:none; color:var(--ink); font-family:var(--disp); font-size:12.5px; padding:7px 10px; border-radius:7px; cursor:pointer; text-align:left;}
+  #planMenu button:hover{background:var(--line);}
+  #planMenu button svg{width:12px; height:12px;}
   .queue{font-family:var(--mono); font-size:10.5px; color:var(--faint); line-height:1.6;}
   .agent .log{max-height:110px; font-size:10.5px;}
   .empty{
@@ -386,6 +403,8 @@
       <div class="floor3d show" id="planWrap">
         <div class="hud3d" id="hud3d"></div>
         <button class="cambtn" id="fsBtn" style="top:48px;">Plein écran</button>
+        <div class="planPalette" id="planPalette"></div>
+        <div id="planMenu"></div>
         <div class="planWorld" id="planWorld"><svg id="planSvg"></svg><div id="planNodes"></div></div>
       </div>
     </div>
@@ -665,7 +684,7 @@ function scopeKey(){
 }
 function freshState(){
   return { agents: [], mission: "", backlog: [], autonomous: false, speed: 1, doneCount: 0,
-           activity: [], results: [], chat: [], sites: [], scheduled: [], meetings: [], groups: [], notes: [], connectors: [], assistantChat: [], drhAuto: false, coffeeClosed: false, meta: { syncedAt: null } };
+           activity: [], results: [], chat: [], sites: [], scheduled: [], meetings: [], groups: [], notes: [], connectors: [], assistantChat: [], drhAuto: false, coffeeClosed: false, planBlocks: [], planLinks: [], meta: { syncedAt: null } };
 }
 let state = freshState();
 const PERSONAS = ["efficace et direct","créatif et imaginatif","rigoureux et méthodique","enthousiaste et positif","pédagogue et clair","analytique et critique","chaleureux et diplomate","pragmatique, orienté résultats"];
@@ -679,6 +698,8 @@ function ensurePersonas(){
   if(!state.connectors) state.connectors = [];
   if(!state.assistantChat) state.assistantChat = [];
   if(state.drhAuto === undefined) state.drhAuto = false;
+  if(!state.planBlocks) state.planBlocks = [];
+  if(!state.planLinks) state.planLinks = [];
   state.agents.forEach(a => { if(a.group === undefined) a.group = ""; });
   if(state.siteProject){
     state.sites.push(Object.assign({ id: uid(), name: (state.siteProject.desc || "site").slice(0, 40), createdAt: new Date().toLocaleString("fr-FR") }, state.siteProject));
@@ -1149,7 +1170,7 @@ async function pullRemote(force){
     if(data && data.data){
       const remoteNewer = !state.meta.syncedAt || (data.updated_at > state.meta.syncedAt);
       if((remoteNewer && !pendingLocal) || force){
-        const keep = { results: state.results, chat: state.chat, sites: state.sites, scheduled: state.scheduled, meetings: state.meetings, groups: state.groups, notes: state.notes, connectors: state.connectors, assistantChat: state.assistantChat, drhAuto: state.drhAuto };
+        const keep = { results: state.results, chat: state.chat, sites: state.sites, scheduled: state.scheduled, meetings: state.meetings, groups: state.groups, notes: state.notes, connectors: state.connectors, assistantChat: state.assistantChat, drhAuto: state.drhAuto, planBlocks: state.planBlocks, planLinks: state.planLinks };
         state = Object.assign(freshState(), data.data, keep, { meta: { syncedAt: data.updated_at } });
         ensurePersonas();
         renderAll(); save();
@@ -2853,6 +2874,8 @@ function buildPlanData(){
   nodes.push({ id: "conn", title: "CONNECTEURS MCP", sub: (state.connectors || []).length + " connecté(s)", icon: "globe", x: col3, y: midY + 100 });
   nodes.push({ id: "self", title: "LE SELF", sub: state.coffeeClosed ? "fermé — pauses coupées" : "ouvert", icon: "cutlery", dot: state.coffeeClosed ? "warn" : "on", x: col3, y: midY + 200 });
   for(const sid of ["taches", "serveurs", "reunions", "conn", "self"]) edges.push({ a: "patron", b: sid });
+  for(const b of (state.planBlocks || [])) nodes.push({ id: b.id, title: b.title, sub: b.sub || "bloc", icon: b.icon || "gears", dot: b.on ? "on" : "", custom: b, x: b.x, y: b.y });
+  for(const l of (state.planLinks || [])) edges.push({ a: l.from, b: l.to, link: l });
   for(const n of nodes){ if(planPos[n.id]){ n.x = planPos[n.id].x; n.y = planPos[n.id].y; } }
   return { nodes, edges };
 }
@@ -2870,10 +2893,11 @@ function renderPlan(){
       chips = '<div class="pn-chips">' + shown.map(a => '<span class="pn-chip st-' + agentChipStatus(a) + '">' + esc(a.name) + '</span>').join("") +
         (n.chips.length > 14 ? '<span class="pn-chip">+' + (n.chips.length - 14) + '</span>' : "") + '</div>';
     }
-    html += '<div class="pnode" data-id="' + esc(n.id) + '" style="left:' + Math.round(n.x) + 'px;top:' + Math.round(n.y) + 'px;">' +
+    html += '<div class="pnode' + (n.custom && !n.custom.on ? " off" : "") + '" data-id="' + esc(n.id) + '" style="left:' + Math.round(n.x) + 'px;top:' + Math.round(n.y) + 'px;">' +
       '<div class="pn-head"><span class="pn-ic">' + icon(n.icon) + '</span><span class="pn-title">' + esc(n.title) + '</span>' +
       (n.dot ? '<span class="pn-dot ' + n.dot + '"></span>' : "") + '</div>' +
-      '<div class="pn-sub">' + esc(n.sub) + '</div>' + chips + '</div>';
+      '<div class="pn-sub">' + esc(n.sub) + '</div>' + chips +
+      '<span class="pn-out" title="Glisser vers un autre bloc pour relier"></span></div>';
   }
   nodesEl.innerHTML = html;
   redrawPlanEdges();
@@ -2881,6 +2905,9 @@ function renderPlan(){
   updatePlanHud();
 }
 
+function planEdgeD(p1, p2, dx){
+  return "M " + p1.x + " " + p1.y + " C " + (p1.x + dx) + " " + p1.y + ", " + (p2.x - dx) + " " + p2.y + ", " + p2.x + " " + p2.y;
+}
 function redrawPlanEdges(){
   const svg = document.getElementById("planSvg");
   if(!svg) return;
@@ -2894,10 +2921,14 @@ function redrawPlanEdges(){
   for(const e of planData.edges){
     const p1 = posOf(e.a), p2 = posOf(e.b);
     if(!p1 || !p2) continue;
-    const tn = planData.nodes.find(x => x.id === e.b);
-    const hot = e.a === "patron" && tn && (tn.chips || []).some(a => a.status === "busy");
     const dx = Math.max(46, Math.abs(p2.x - p1.x) / 2);
-    paths += '<path class="pn-edge' + (hot ? " hot" : "") + '" d="M ' + p1.x + ' ' + p1.y + ' C ' + (p1.x + dx) + ' ' + p1.y + ', ' + (p2.x - dx) + ' ' + p2.y + ', ' + p2.x + ' ' + p2.y + '"/>';
+    if(e.link){
+      paths += '<path class="pn-edge custom' + (e.link.on ? "" : " off") + '" data-link="' + esc(e.link.id) + '" d="' + planEdgeD(p1, p2, dx) + '"/>';
+    } else {
+      const tn = planData.nodes.find(x => x.id === e.b);
+      const hot = e.a === "patron" && tn && (tn.chips || []).some(a => a.status === "busy");
+      paths += '<path class="pn-edge' + (hot ? " hot" : "") + '" d="' + planEdgeD(p1, p2, dx) + '"/>';
+    }
   }
   svg.setAttribute("width", Math.round(maxW));
   svg.setAttribute("height", Math.round(maxH));
@@ -2917,7 +2948,7 @@ function updatePlanHud(){
   if(!el) return;
   const busy = state.agents.filter(a => a.status === "busy").length;
   const paused = state.agents.filter(a => a.status === "paused").length;
-  el.innerHTML = "plan de l'entreprise · glisser le fond : déplacer · molette : zoom · cliquer un bloc pour l'ouvrir" +
+  el.innerHTML = "plan de l'entreprise · glisser le fond : déplacer · molette : zoom · ● d'un bloc vers un autre : relier · cliquer un fil ou un bloc : menu" +
     "<br>" + state.agents.length + " agent(s) · " + busy + " au travail · " + paused + " au self · " + bossQueue.length + " tâche(s) à distribuer";
 }
 
@@ -2934,11 +2965,75 @@ function planOpenNode(id){
   else if(id === "self") setCoffeeClosed(!state.coffeeClosed);
 }
 
+function hidePlanMenu(){
+  const m = document.getElementById("planMenu");
+  if(m) m.classList.remove("show");
+}
+function openPlanMenu(x, y, items){
+  const m = document.getElementById("planMenu");
+  if(!m) return;
+  m.innerHTML = items.map((it, i) => '<button data-i="' + i + '">' + icon(it.icon || "gears") + " " + esc(it.label) + '</button>').join("");
+  m.querySelectorAll("button").forEach((b, i) => b.addEventListener("click", ()=>{ hidePlanMenu(); items[i].fn(); }));
+  m.classList.add("show");
+  const mw = m.offsetWidth || 150, mh = m.offsetHeight || 90;
+  m.style.left = Math.max(6, Math.min(x, window.innerWidth - mw - 10)) + "px";
+  m.style.top = Math.max(6, Math.min(y + 8, window.innerHeight - mh - 10)) + "px";
+}
+function linkMenuItems(l){
+  return [
+    { label: l.on ? "Désactiver" : "Activer", icon: l.on ? "pause" : "play", fn: ()=>{ l.on = !l.on; save(); renderPlan(); } },
+    { label: "Supprimer", icon: "trash", fn: ()=>{ state.planLinks = (state.planLinks || []).filter(x => x.id !== l.id); save(); renderPlan(); } }
+  ];
+}
+function blockMenuItems(b){
+  return [
+    { label: b.on ? "Désactiver" : "Activer", icon: b.on ? "pause" : "play", fn: ()=>{ b.on = !b.on; save(); renderPlan(); } },
+    { label: "Renommer", icon: "pen", fn: ()=>{ const t = prompt("Nom du bloc :", b.title); if(t && t.trim()){ b.title = t.trim().slice(0, 40); save(); renderPlan(); } } },
+    { label: "Supprimer", icon: "trash", fn: ()=>{ state.planBlocks = (state.planBlocks || []).filter(x => x.id !== b.id); state.planLinks = (state.planLinks || []).filter(l => l.from !== b.id && l.to !== b.id); save(); renderPlan(); } }
+  ];
+}
+document.addEventListener("pointerdown", e => {
+  const m = document.getElementById("planMenu");
+  if(m && !m.contains(e.target)) hidePlanMenu();
+});
+const PLAN_TEMPLATES = [
+  { t: "bloc", label: "Bloc", icon: "gears", title: "Nouveau bloc", sub: "bloc libre" },
+  { t: "note", label: "Note", icon: "pen", title: "Note", sub: "bloc note" },
+  { t: "goal", label: "Objectif", icon: "star", title: "Objectif", sub: "à atteindre" }
+];
+(function(){
+  const pal = document.getElementById("planPalette");
+  if(!pal) return;
+  pal.innerHTML = '<div class="pp-head">Blocs à ajouter</div>' + PLAN_TEMPLATES.map(tp =>
+    '<button class="pp-item" data-t="' + tp.t + '">' + icon(tp.icon) + " " + tp.label + '</button>').join("") +
+    '<div class="pp-hint">Glissez le point d\'un bloc (à droite) vers un autre pour créer une liaison. Cliquez un fil ou un bloc pour un menu : activer, désactiver…</div>';
+  pal.addEventListener("mouseleave", hidePlanMenu);
+  pal.querySelectorAll(".pp-item").forEach(b => b.addEventListener("click", ()=>{
+    const tp = PLAN_TEMPLATES.find(x => x.t === b.dataset.t);
+    if(!tp) return;
+    const world = document.getElementById("planWorld");
+    const r = world.getBoundingClientRect();
+    const cx = (r.width / 2 - planView.x) / planView.z, cy = (r.height / 2 - planView.y) / planView.z;
+    const n = (state.planBlocks || []).length;
+    state.planBlocks = state.planBlocks || [];
+    state.planBlocks.push({ id: "b_" + uid(), title: tp.title, sub: tp.sub, icon: tp.icon, on: true, x: Math.round(cx - 115 + (n % 4) * 26), y: Math.round(cy - 40 + (n % 4) * 26) });
+    logGlobal("bloc « " + esc(tp.title) + " » ajouté au plan.", "Système");
+    save(); renderPlan();
+  }));
+})();
+
 (function(){
   const world = document.getElementById("planWorld");
   if(!world) return;
+  const tempEdge = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  tempEdge.setAttribute("class", "pn-edge temp");
+  tempEdge.style.display = "none";
+  const svg0 = document.getElementById("planSvg");
+  if(svg0) svg0.appendChild(tempEdge);
+  const planWorldPoint = (r, cx, cy) => ({ x: (cx - r.left - planView.x) / planView.z, y: (cy - r.top - planView.y) / planView.z });
   world.addEventListener("wheel", e => {
     e.preventDefault();
+    hidePlanMenu();
     const r = world.getBoundingClientRect();
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     const nz = Math.min(2, Math.max(0.35, planView.z * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
@@ -2950,12 +3045,35 @@ function planOpenNode(id){
   }, { passive: false });
   world.addEventListener("pointerdown", e => {
     if(e.button !== 0) return;
+    const outEl = e.target.closest ? e.target.closest(".pn-out") : null;
+    if(outEl){
+      const nodeEl2 = outEl.closest(".pnode");
+      if(!nodeEl2 || !nodeEl2.dataset.id) return;
+      planDrag = { kind: "link", from: nodeEl2.dataset.id, sx: e.clientX, sy: e.clientY, moved: false };
+      const src = planData.nodes.find(x => x.id === planDrag.from);
+      if(src){
+        const p = planWorldPoint(world.getBoundingClientRect(), e.clientX, e.clientY);
+        tempEdge.setAttribute("d", planEdgeD({ x: src.x + PNW, y: src.y + 30 }, p, 46));
+        tempEdge.style.display = "block";
+        const svgEl = document.getElementById("planSvg");
+        if(tempEdge.parentNode !== svgEl) svgEl.appendChild(tempEdge);
+      }
+      try{ world.setPointerCapture(e.pointerId); }catch(err){}
+      return;
+    }
+    const pathEl = e.target.closest ? e.target.closest("path.pn-edge.custom") : null;
+    if(pathEl && pathEl.dataset.link){
+      const l = (state.planLinks || []).find(x => x.id === pathEl.dataset.link);
+      if(l) openPlanMenu(e.clientX, e.clientY, linkMenuItems(l));
+      return;
+    }
     const nodeEl = e.target.closest ? e.target.closest(".pnode") : null;
     if(nodeEl && !e.target.closest(".pn-chip")){
       const n = planData.nodes.find(x => x.id === nodeEl.dataset.id);
       if(!n) return;
       planDrag = { kind: "node", id: n.id, el: nodeEl, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, moved: false };
     } else if(!nodeEl){
+      hidePlanMenu();
       planDrag = { kind: "pan", sx: e.clientX, sy: e.clientY, ox: planView.x, oy: planView.y, moved: false };
     } else return;
     try{ world.setPointerCapture(e.pointerId); }catch(err){}
@@ -2968,6 +3086,14 @@ function planOpenNode(id){
       planView.x = planDrag.ox + dx;
       planView.y = planDrag.oy + dy;
       applyPlanView();
+    } else if(planDrag.kind === "link"){
+      const src = planData.nodes.find(x => x.id === planDrag.from);
+      if(src){
+        const p = planWorldPoint(world.getBoundingClientRect(), e.clientX, e.clientY);
+        tempEdge.setAttribute("d", planEdgeD({ x: src.x + PNW, y: src.y + 30 }, p, 46));
+        const svgEl = document.getElementById("planSvg");
+        if(tempEdge.parentNode !== svgEl) svgEl.appendChild(tempEdge);
+      }
     } else {
       const n = planData.nodes.find(x => x.id === planDrag.id);
       if(!n) return;
@@ -2978,20 +3104,37 @@ function planOpenNode(id){
       redrawPlanEdges();
     }
   });
-  const endDrag = () => {
+  const endDrag = e => {
     if(!planDrag) return;
     const d = planDrag;
     planDrag = null;
+    if(d.kind === "link"){
+      tempEdge.style.display = "none";
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const tgt = el && el.closest ? el.closest(".pnode") : null;
+      if(tgt && tgt.dataset.id && tgt.dataset.id !== d.from){
+        state.planLinks = state.planLinks || [];
+        if(!state.planLinks.some(l => l.from === d.from && l.to === tgt.dataset.id)){
+          state.planLinks.push({ id: uid(), from: d.from, to: tgt.dataset.id, on: true });
+          save(); renderPlan();
+        }
+      }
+      return;
+    }
     if(d.kind === "node" && d.moved){
       const n = planData.nodes.find(x => x.id === d.id);
       if(n){ planPos[n.id] = { x: n.x, y: n.y }; planSavePos(); }
     } else if(d.kind === "node" && !d.moved){
-      planOpenNode(d.id);
+      if(d.id.indexOf("b_") === 0){
+        const b = (state.planBlocks || []).find(x => x.id === d.id);
+        if(b) openPlanMenu(e.clientX, e.clientY, blockMenuItems(b));
+      } else planOpenNode(d.id);
     }
   };
   world.addEventListener("pointerup", endDrag);
-  world.addEventListener("pointercancel", ()=>{ planDrag = null; });
+  world.addEventListener("pointercancel", ()=>{ planDrag = null; tempEdge.style.display = "none"; });
 })();
+
 
 setInterval(()=>{
   if(viewMode === "office" && !planDrag && !document.querySelector(".overlay.show")) renderPlan();
