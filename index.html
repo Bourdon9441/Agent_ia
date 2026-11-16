@@ -219,6 +219,26 @@
   .btn:hover{transform:translateY(-1px);}
   .btn:active{transform:translateY(0);}
   .deskpopup{border-left:2px solid var(--signal);}
+  .bossdlg{position:fixed; bottom:0; left:50%; transform:translate(-50%,110%); width:min(560px,94%); z-index:210; background:var(--surface); border:1px solid var(--line2); border-bottom:none; border-radius:18px 18px 0 0; box-shadow:0 -10px 40px rgba(0,0,0,.55); transition:transform .28s cubic-bezier(.2,.9,.3,1); display:flex; flex-direction:column; max-height:62vh;}
+  .bossdlg.show{transform:translate(-50%,0);}
+  .bossdlg .bdhead{display:flex; align-items:center; gap:12px; padding:14px 16px 10px; border-bottom:1px solid var(--line);}
+  .bossdlg .bdavatar{width:42px; height:42px; border-radius:12px; background:var(--raise); border:1px solid var(--line2); display:grid; place-items:center; color:var(--signal); flex-shrink:0;}
+  .bossdlg .bdavatar svg{width:22px; height:22px;}
+  .bossdlg .bdtitle{font-family:var(--disp); font-weight:700; font-size:14px; letter-spacing:.06em;}
+  .bossdlg .bdsub{font-family:var(--mono); font-size:9.5px; color:var(--faint); text-transform:uppercase; letter-spacing:.14em;}
+  .bossdlg .bdclose{margin-left:auto; font-size:11px; padding:7px 12px;}
+  .bossdlg .chat{flex:1; min-height:130px; max-height:34vh;}
+  .bossdlg .bdrow{display:flex; gap:8px; padding:10px 14px 14px;}
+  .tabs{display:flex; gap:6px; border-bottom:1px solid var(--line); margin-bottom:14px; overflow-x:auto;}
+  .tab{background:none; border:none; border-bottom:2px solid transparent; color:var(--faint); font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; padding:9px 12px; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:7px;}
+  .tab svg{width:13px; height:13px;}
+  .tab.on{color:var(--signal); border-bottom-color:var(--signal);}
+  .hrrow{display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:11px; padding:10px 12px; margin-bottom:8px; background:var(--bg);}
+  .hrrow .hrname{font-weight:600; font-size:13px;}
+  .hrrow .hrole{font-family:var(--mono); font-size:9.5px; color:var(--faint); text-transform:uppercase; letter-spacing:.1em; display:flex; align-items:center; gap:5px;}
+  .hrrow .hrole svg{width:11px; height:11px;}
+  .hrrow .hstat{font-family:var(--mono); font-size:9.5px; text-transform:uppercase; letter-spacing:.1em; margin-left:auto;}
+  .hrrow .hstat.busy{color:var(--amber);} .hrrow .hstat.idle{color:var(--signal);} .hrrow .hstat.paused{color:var(--faint);}
   .footer{font-family:var(--mono); font-size:10px; color:var(--faint); text-align:center; padding:18px; letter-spacing:.08em;}
   .footer a{color:var(--dim);}
 </style>
@@ -301,12 +321,6 @@
         <label>Clé API Groq ou Mistral — reste dans ce navigateur</label>
         <input type="password" id="apiKeyInput" placeholder="gsk_... (Groq) ou sk-... (Mistral)">
         <div class="hint">Sans clé : les agents ne travaillent pas (pas de simulation). Avec clé : chaque tâche est réellement exécutée par votre IA et produit un livrable. Clé Groq (commence par gsk_) depuis console.groq.com/keys — modèle openai/gpt-oss-120b. Sinon clé Mistral (sk-...). La clé n'est jamais synchronisée dans le nuage.</div>
-        <label>Vitesse de simulation</label>
-        <select id="speedSelect">
-          <option value="2">Lente</option>
-          <option value="1" selected>Normale</option>
-          <option value="0.5">Rapide</option>
-        </select>
         <label>Objectifs récurrents du mode autonome <span style="text-transform:none;letter-spacing:0">(un par ligne)</span></label>
         <textarea id="backlogInput" placeholder="Surveiller les tendances du secteur&#10;Préparer le rapport hebdomadaire"></textarea>
       </details>
@@ -374,6 +388,64 @@
     <p class="sub">Livrables réels produits par vos agents avec votre IA. Copiez-les ou téléchargez-les.</p>
     <div id="resultsList"></div>
     <div class="row" id="resultsActions" style="margin-top:14px;"></div>
+  </div>
+</div>
+
+<div class="bossdlg" id="bossDlg">
+  <div class="bdhead">
+    <div class="bdavatar" id="bdAvatar"></div>
+    <div>
+      <div class="bdtitle">LE PATRON</div>
+      <div class="bdsub">direction — dialogue en direct</div>
+    </div>
+    <button class="btn line bdclose" id="bdClose">Reprendre la marche</button>
+  </div>
+  <div class="chat" id="bossChatLog"></div>
+  <div class="bdrow">
+    <input type="text" id="bossChatInput" placeholder="Parlez au Patron (il délègue à vos agents)...">
+    <button class="btn" id="bossChatSend" style="flex:0 0 auto;">Envoyer</button>
+  </div>
+</div>
+
+<div class="overlay" id="pcOverlay">
+  <div class="modal" style="width:min(720px,100%);">
+    <button class="iconbtn close-x" id="pcClose"></button>
+    <h2 id="pcTitle">Votre PC — gestion de l'entreprise</h2>
+    <p class="sub">Tout se gère depuis ce terminal : livrables, conversations, embauches, réglages.</p>
+    <div class="tabs" id="pcTabs">
+      <button class="tab on" data-tab="files"></button>
+      <button class="tab" data-tab="chat"></button>
+      <button class="tab" data-tab="hr"></button>
+      <button class="tab" data-tab="settings"></button>
+    </div>
+    <div class="pcpane" id="pane-files">
+      <div id="pcFilesList"></div>
+      <div class="row" id="pcFilesActions" style="margin-top:14px;"></div>
+    </div>
+    <div class="pcpane" id="pane-chat" style="display:none;">
+      <div class="chat" id="pcChatLog" style="max-height:44vh; border:1px solid var(--line); border-radius:12px; padding:12px;"></div>
+      <div class="row" style="margin-top:12px;">
+        <input type="text" id="pcChatInput" placeholder="Message au Patron...">
+        <button class="btn" id="pcChatSend" style="flex:0 0 auto;">Envoyer</button>
+      </div>
+    </div>
+    <div class="pcpane" id="pane-hr" style="display:none;">
+      <div class="row" style="margin-bottom:14px;">
+        <input type="text" id="hrName" placeholder="Nom du nouvel agent (ex : Nova)" style="flex:1;">
+        <select id="hrRole" style="flex:0 0 auto;"></select>
+      </div>
+      <input type="text" id="hrRoleCustom" placeholder="Précisez la spécialité..." style="display:none; margin-bottom:10px;">
+      <button class="btn wide" id="hrHire"></button>
+      <div style="margin-top:16px;" id="hrList"></div>
+    </div>
+    <div class="pcpane" id="pane-settings" style="display:none;">
+      <label>Clé API Groq ou Mistral — reste dans ce navigateur</label>
+      <input type="password" id="pcKeyInput" placeholder="gsk_... (Groq) ou sk-... (Mistral)">
+      <div class="hint" id="pcKeyHint">Sans clé : rien ne fonctionne. Avec clé : chaque tâche est réellement exécutée par votre IA.</div>
+      <div class="hint" style="margin-top:14px;">Couleur des écrans &amp; accents</div>
+      <div class="dots" id="pcThemeDots"></div>
+      <div class="hint" id="pcSyncInfo" style="margin-top:14px;"></div>
+    </div>
   </div>
 </div>
 
@@ -487,12 +559,6 @@ function stopEngine(){ worker.postMessage("stop"); }
 function engineTick(){
   if(!session) return;
   let changed = false;
-  for(const a of state.agents){
-    if(a.status !== "busy" || !a.currentTask) continue;
-    const t = a.currentTask;
-    if(t.real) continue;
-    if((Date.now() - t.startedAt) / 1000 >= t.duration){ finishTask(a); changed = true; }
-  }
   if(autoBreaks()) changed = true;
   dispatch();
   if(state.autonomous && !bossBusy && state.agents.length > 0 &&
@@ -506,6 +572,7 @@ function engineTick(){
 
 /* pauses café autonomes : les agents y vont seuls, mais il reste toujours quelqu'un au bureau */
 function autoBreaks(){
+  if(!hasKey()) return false;
   let changed = false;
   for(const a of state.agents){
     if(a.status === "paused" && a.autoBreak && Date.now() > a.autoBreak){
@@ -532,11 +599,50 @@ function autoBreaks(){
   return changed;
 }
 
+const SPECIALTY_KEYWORDS = [
+  ["code", ["code", "programme", "script", "bug", "site", "application", "développ", "html", "css", "javascript", "api"]],
+  ["recherche web", ["recherche", "chercher", "trouve", "internet", "web", "concurrent", "marché", "étude"]],
+  ["rédaction", ["rédige", "écris", "article", "texte", "blog", "lettre", "mail", "courrier", "conte", "histoire"]],
+  ["marketing", ["marketing", "campagne", "publicit", "réseaux sociaux", "instagram", "facebook", "communiqu"]],
+  ["ventes", ["vente", "vendre", "client potentiel", "prospect", "devis", "prix", "commercial", "chiffre d'affaires"]],
+  ["support client", ["support", "réclamation", "service client", "aide client", "assistance", "sav"]],
+  ["analyse de données", ["analyse", "données", "statisti", "chiffres", "graphique", "tableau de bord", "excel"]],
+  ["traduction", ["traduis", "traduction", "anglais", "espagnol", "allemand", "traduire"]],
+  ["design", ["design", "logo", "couleur", "maquette", "visuel", "charte graphique"]]
+];
+function bestMatchAgent(text){
+  const free = freeAgents();
+  if(!free.length) return null;
+  const low = (text || "").toLowerCase();
+  for(const [role, words] of SPECIALTY_KEYWORDS){
+    if(words.some(w => low.includes(w))){
+      const m = free.find(a => (a.role || "polyvalent") === role);
+      if(m) return m;
+    }
+  }
+  return null;
+}
+function parseDelegation(line){
+  const m = line.match(/^\s*([A-Za-zÀ-ÿ0-9 _'\-]{1,24}?)\s*[:–—-]\s+(.+)$/);
+  if(m){
+    const who = m[1].trim().toLowerCase();
+    const agent = state.agents.find(a => a.name.toLowerCase() === who)
+      || state.agents.find(a => a.name.toLowerCase().startsWith(who) || who.startsWith(a.name.toLowerCase()));
+    if(agent) return { text: m[2].trim(), target: agent.name };
+  }
+  return { text: line.trim(), target: null };
+}
 function dispatch(){
+  if(!hasKey()) return;
   let g = 0;
   while(freeAgents().length > 0 && bossQueue.length > 0 && g < 20){
     g++;
-    assignTask(freeAgents()[0], bossQueue.shift(), "Patron");
+    const item = bossQueue.shift();
+    const target = item.target
+      ? freeAgents().find(a => a.name.toLowerCase() === item.target.toLowerCase())
+      : null;
+    const agent = target || bestMatchAgent(item.text) || freeAgents()[0];
+    assignTask(agent, item.text, "Patron");
   }
   while(freeAgents().length > 0 && bossQueue.length === 0 && g < 40){
     g++;
@@ -549,25 +655,13 @@ function dispatch(){
 function hasKey(){ return !!mistralKey(); }
 
 function assignTask(agent, text, from){
+  if(!hasKey()) return;
   agent.status = "busy";
-  if(hasKey()){
-    agent.currentTask = { text, startedAt: Date.now(), duration: 0, real: true };
-    executeTask(agent);
-  } else {
-    agent.currentTask = { text, startedAt: Date.now(), duration: (8 + Math.random() * 10) * (state.speed || 1), real: false };
-  }
+  agent.currentTask = { text, startedAt: Date.now(), duration: 0, real: true };
+  executeTask(agent);
   logAgent(agent, "Tâche reçue de " + from + " : " + text);
-  logGlobal("tâche confiée à <b>" + esc(agent.name) + "</b> : " + esc(text), "Patron");
+  logGlobal("le Patron confie à <b>" + esc(agent.name) + "</b> (" + esc(agent.role || "polyvalent") + ") : " + esc(text), "Patron");
   updateDynamicUI(); save();
-}
-
-function finishTask(agent){
-  const t = agent.currentTask;
-  agent.currentTask = null;
-  agent.status = "idle";
-  state.doneCount++;
-  logAgent(agent, "Terminé : " + t.text);
-  logGlobal("<b>" + esc(agent.name) + "</b> a terminé : " + esc(t.text), agent.name);
 }
 
 /* file d'attente : 1 appel IA à la fois (évite les 429 du niveau gratuit Groq) */
@@ -606,7 +700,7 @@ async function executeTask(agent){
     agent.status = "idle";
     state.doneCount++;
     logAgent(agent, "Terminé : " + t.text);
-    logGlobal("livrable prêt : " + esc(t.text), agent.name);
+    logGlobal("<b>" + esc(agent.name) + "</b> rend compte au Patron : « " + esc(t.text) + " » terminé, livrable prêt.", agent.name);
   }catch(e){
     if(agent.currentTask !== t) return;
     const r = state.results.find(x=>x.id===rid);
@@ -624,15 +718,13 @@ function resultsText(){
   return (state.results || []).map(r => "## " + r.task + "\nAgent : " + r.agent + " — " + r.at + "\n\n" + (r.output || "(en cours)"))
     .join("\n\n---\n\n");
 }
-function renderResults(){
-  const btn = document.getElementById("deliverBtn");
-  const done = (state.results || []).filter(r=>r.status==="done").length;
-  btn.innerHTML = icon("tasks") + " Livrables (" + done + ")";
-  const list = document.getElementById("resultsList");
+function renderResultsList(listId, actionsId){
+  const list = document.getElementById(listId);
   if(!list) return;
+  const actions = document.getElementById(actionsId);
   if(!state.results.length){
     list.innerHTML = '<div style="color:var(--faint);font-style:italic;padding:20px 0;text-align:center;">Aucun livrable pour le moment. Donnez un objectif au Patron : chaque tâche terminée produira ici un livrable réel signé de son agent.</div>';
-    document.getElementById("resultsActions").innerHTML = "";
+    if(actions) actions.innerHTML = "";
     return;
   }
   list.innerHTML = state.results.map(r =>
@@ -645,10 +737,11 @@ function renderResults(){
     const r = state.results.find(x=>x.id===b.dataset.id);
     if(r) navigator.clipboard.writeText(r.output).then(()=>{ b.style.color = "var(--signal)"; });
   }));
-  document.getElementById("resultsActions").innerHTML =
-    '<button class="btn line" id="copyAll">Tout copier</button><button class="btn line" id="dlAll">Télécharger (.md)</button>';
-  document.getElementById("copyAll").addEventListener("click", ()=> navigator.clipboard.writeText(resultsText()));
-  document.getElementById("dlAll").addEventListener("click", ()=>{
+  if(!actions) return;
+  actions.innerHTML =
+    '<button class="btn line" data-act="copy">Tout copier</button><button class="btn line" data-act="dl">Télécharger (.md)</button>';
+  actions.querySelector('[data-act="copy"]').addEventListener("click", ()=> navigator.clipboard.writeText(resultsText()));
+  actions.querySelector('[data-act="dl"]').addEventListener("click", ()=>{
     const blob = new Blob([resultsText()], {type:"text/markdown"});
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -656,6 +749,13 @@ function renderResults(){
     a.click();
     URL.revokeObjectURL(a.href);
   });
+}
+function renderResults(){
+  const btn = document.getElementById("deliverBtn");
+  const done = (state.results || []).filter(r=>r.status==="done").length;
+  btn.innerHTML = icon("tasks") + " Livrables (" + done + ")";
+  renderResultsList("resultsList", "resultsActions");
+  renderResultsList("pcFilesList", "pcFilesActions");
 }
 
 /* ================= objectifs & IA ================= */
@@ -666,29 +766,31 @@ async function launchObjective(text){
   if(state.agents.length === 0){ logGlobal("impossible : embauchez au moins un agent.", "Patron"); return; }
   logGlobal("nouvel objectif reçu : « " + esc(text) + " »", "Patron");
   const subtasks = await decompose(text);
+  if(!subtasks.length){ logGlobal("aucune tâche générée — vérifiez votre clé API dans Réglages et réessayez. Aucune simulation.", "Patron"); return; }
   bossQueue.push(...subtasks);
-  logGlobal("objectif découpé en <b>" + subtasks.length + "</b> tâche(s), distribution en cours...", "Patron");
+  logGlobal("le Patron a réparti l'objectif en <b>" + subtasks.length + "</b> tâche(s), distribution en cours...", "Patron");
   dispatch(); updateDynamicUI(); save();
 }
 
 async function decompose(objective){
-  if(mistralKey()){
-    try{
-      const reply = await callLLM([
-        {role:"system", content:"Tu es un manager. Découpe l'objectif donné en sous-tâches courtes et actionnables (max 6). Réponds UNIQUEMENT avec un tableau JSON de chaînes en français, ex: [\"tache 1\",\"tache 2\"]"},
-        {role:"user", content: objective}
-      ]);
-      const m = reply.match(/\[[\s\S]*\]/);
-      if(m){
-        const arr = JSON.parse(m[0]);
-        if(Array.isArray(arr) && arr.length) return arr.map(String).slice(0,6);
-      }
-    }catch(e){
-      logGlobal("IA réelle indisponible (" + esc(e.message) + ") → simulation.", "Patron");
+  if(!hasKey()) return [];
+  try{
+    const agentsDesc = state.agents.length
+      ? state.agents.map(a => a.name + " (spécialité : " + (a.role || "polyvalent") + (a.status === "paused" ? ", en pause" : "") + ")").join("; ")
+      : "aucun";
+    const reply = await callLLM([
+      {role:"system", content:"Tu es le Patron, un vrai manager d'équipe. Ton équipe d'agents : " + agentsDesc + ". Découpe l'objectif donné en sous-tâches courtes et actionnables (max 6), et délègue chaque tâche à l'agent le plus adapté à sa spécialité, comme dans la vraie vie. Réponds UNIQUEMENT avec un tableau JSON de chaînes en français au format exact \"Nom de l'agent : la tâche\", ex: [\"Nova : analyser le marché des cafés\",\"Atlas : rédiger le plan marketing\"]. Si aucun agent ne convient, utilise quand même le plus proche."},
+      {role:"user", content: objective}
+    ]);
+    const m = reply.match(/\[[\s\S]*\]/);
+    if(m){
+      const arr = JSON.parse(m[0]);
+      if(Array.isArray(arr) && arr.length) return arr.map(String).slice(0,6).map(parseDelegation);
     }
+  }catch(e){
+    logGlobal("IA indisponible (" + esc(e.message) + ") : objectif refusé — aucune simulation.", "Patron");
   }
-  const steps = ["Cadrer et analyser", "Préparer les ressources", "Exécuter", "Vérifier la qualité", "Rédiger le bilan"];
-  return steps.map(s => s + " : " + objective);
+  return [];
 }
 
 async function autonomousRound(){
@@ -700,6 +802,7 @@ async function autonomousRound(){
   else objective = "Point d'étape : vérifier l'avancement général et proposer des améliorations";
   logGlobal("cycle autonome : " + esc(objective), "Patron");
   const subtasks = await decompose(objective);
+  if(!subtasks.length){ logGlobal("aucune tâche générée — vérifiez votre clé API dans Réglages et réessayez. Aucune simulation.", "Patron"); return; }
   bossQueue.push(...subtasks);
   dispatch(); updateDynamicUI(); save();
 }
@@ -871,6 +974,7 @@ function buildCard(a){
     const inp = e.target.querySelector("input");
     const text = inp.value.trim();
     if(!text) return;
+    if(!hasKey()){ logGlobal("clé IA requise : ajoutez votre clé Groq dans Réglages. Aucune simulation.", "Patron"); return; }
     inp.value = "";
     if(a.currentTask){ if(a.queue.length < 5) a.queue.push(text); }
     else assignTask(a, text, "Vous");
@@ -908,13 +1012,13 @@ function togglePause(a){
     delete a.autoBreak;
   } else a.status = "paused";
   logGlobal("<b>" + esc(a.name) + "</b> " + (a.status === "paused" ? "part se reposer au coin café." : "reprend le travail."), "Système");
-  updateDynamicUI(); save();
+  updateDynamicUI(); renderHR(); save();
 }
 function removeAgent(a){
   state.agents = state.agents.filter(x => x.id !== a.id);
   cards.delete(a.id);
-  logGlobal("<b>" + esc(a.name) + "</b> a quitté l'équipe.", "Système");
-  renderAgents(); save();
+  logGlobal("<b>" + esc(a.name) + "</b> a quitté l'équipe.", "DRH");
+  renderAgents(); renderHR(); save();
 }
 
 function updateDynamicUI(){
@@ -995,7 +1099,6 @@ function loadLocalInputs(){
   document.getElementById("missionInput").value = state.mission || "";
   document.getElementById("backlogInput").value = (state.backlog || []).join("\n");
   document.getElementById("apiKeyInput").value = mistralKey();
-  document.getElementById("speedSelect").value = String(state.speed || 1);
 }
 
 function renderAll(){
@@ -1011,20 +1114,21 @@ function renderAll(){
 }
 
 /* ================= chat avec le Patron ================= */
+const CHAT_EMPTY_HTML = '<div style="color:var(--faint);font-style:italic;padding:14px 4px;">Dites bonjour au Patron, ou confiez-lui un travail : il le répartira entre vos agents.</div>';
 function renderChatLog(){
-  const el = document.getElementById("chatLog");
-  if(!state.chat || !state.chat.length){
-    el.innerHTML = '<div style="color:var(--faint);font-style:italic;padding:14px 4px;">Dites bonjour au Patron, ou confiez-lui un travail : il le répartira entre vos agents.</div>';
-    return;
+  for(const id of ["chatLog", "pcChatLog", "bossChatLog"]){
+    const el = document.getElementById(id);
+    if(!el) continue;
+    if(!state.chat || !state.chat.length){ el.innerHTML = CHAT_EMPTY_HTML; continue; }
+    el.innerHTML = state.chat.map(m =>
+      '<div class="bub ' + (m.role === "user" ? "user" : "boss") + '"><span class="who">' + (m.role === "user" ? "vous" : "le patron") + " · " + esc(m.t) + '</span>' + esc(m.text) + '</div>'
+    ).join("");
+    el.scrollTop = el.scrollHeight;
   }
-  el.innerHTML = state.chat.map(m =>
-    '<div class="bub ' + (m.role === "user" ? "user" : "boss") + '"><span class="who">' + (m.role === "user" ? "vous" : "le patron") + " · " + esc(m.t) + '</span>' + esc(m.text) + '</div>'
-  ).join("");
-  el.scrollTop = el.scrollHeight;
 }
 
-async function sendChat(){
-  const inp = document.getElementById("chatInput");
+async function sendChatFrom(inputId){
+  const inp = document.getElementById(inputId);
   const text = inp.value.trim();
   if(!text) return;
   if(!hasKey()){
@@ -1035,13 +1139,13 @@ async function sendChat(){
   inp.value = "";
   state.chat.push({ role: "user", text, t: nowT() });
   renderChatLog(); save();
-  const btn = document.getElementById("chatSend");
-  btn.disabled = true;
+  const btns = ["chatSend", "pcChatSend", "bossChatSend"].map(id => document.getElementById(id)).filter(Boolean);
+  btns.forEach(b => b.disabled = true);
   try{
     const agentsDesc = state.agents.length ? state.agents.map(a=>a.name + " (" + (a.role || "polyvalent") + ")").join(", ") : "aucun agent pour l'instant";
     const history = state.chat.slice(0, -1).slice(-10).map(m => ({role: m.role === "user" ? "user" : "assistant", content: m.text}));
     const reply = await enqueueLLM(()=> callLLM([
-      {role:"system", content:"Tu es le Patron, le manager de l'équipe d'agents IA de l'entreprise de l'utilisateur. Tes agents : " + agentsDesc + ". Réponds en français, de façon directe, concrète et utile (max 120 mots). Si l'utilisateur te confie un travail à exécuter, termine ta réponse par une ligne contenant exactement TACHES: puis une tâche claire et actionnable par ligne (max 6), qui seront distribuées à tes agents. Si c'est une question ou une discussion, ne mets pas de section TACHES."},
+      {role:"system", content:"Tu es le Patron, le manager de l'équipe d'agents IA de l'entreprise de l'utilisateur. Tes agents : " + agentsDesc + ". Réponds en français, de façon directe, concrète et utile (max 120 mots). Si l'utilisateur te confie un travail à exécuter, délègue comme un vrai manager : termine ta réponse par une ligne contenant exactement TACHES: puis une ligne par tâche au format \"Nom de l'agent : la tâche\" (max 6), en choisissant l'agent dont la spécialité correspond le mieux au travail. Si c'est une question ou une discussion, ne mets pas de section TACHES."},
       ...history,
       {role:"user", content: text}
     ]));
@@ -1049,7 +1153,7 @@ async function sendChat(){
     const idx = reply.search(/^TACHES:?\s*$/im);
     if(idx >= 0){
       msg = reply.slice(0, idx).trim();
-      tasks = reply.slice(idx).split("\n").slice(1).map(s=>s.replace(/^[-*\d.\s]+/, "").trim()).filter(Boolean).slice(0,6);
+      tasks = reply.slice(idx).split("\n").slice(1).map(s=>s.replace(/^[-*\d.\s]+/, "").trim()).filter(Boolean).slice(0,6).map(parseDelegation);
     }
     state.chat.push({ role: "boss", text: msg || "C'est noté.", t: nowT() });
     if(state.chat.length > 60) state.chat.splice(0, state.chat.length - 60);
@@ -1063,7 +1167,7 @@ async function sendChat(){
     state.chat.push({ role: "boss", text: "Problème de connexion à l'IA (" + e.message + "). Vérifiez la clé API dans Réglages.", t: nowT() });
     renderChatLog();
   }
-  btn.disabled = false;
+  btns.forEach(b => b.disabled = false);
   updateDynamicUI(); updateKPIs(); save();
 }
 
@@ -1074,6 +1178,7 @@ document.getElementById("resultsClose").innerHTML = icon("cross");
 document.getElementById("resultsClose").addEventListener("click", ()=> resultsOverlay.classList.remove("show"));
 resultsOverlay.addEventListener("click", e=>{ if(e.target === resultsOverlay) resultsOverlay.classList.remove("show"); });
 document.getElementById("deliverBtn").addEventListener("click", ()=>{ renderResults(); resultsOverlay.classList.add("show"); });
+
 
 /* ================= modale connexion ================= */
 const authOverlay = document.getElementById("authOverlay");
@@ -1216,16 +1321,22 @@ document.getElementById("launchBtn").insertAdjacentHTML("afterbegin", icon("play
 document.getElementById("cloudSummary").insertAdjacentHTML("afterbegin", icon("globe"));
 document.getElementById("aiSummary").insertAdjacentHTML("afterbegin", icon("sparkles"));
 
+const AGENT_NAMES = ["Nova","Atlas","Zéphyr","Orion","Luna","Vega","Comet","Echo","Iris","Juno"];
+function hireAgent(name, role){
+  name = (name || "").trim() || AGENT_NAMES[state.agents.length % AGENT_NAMES.length] + "-" + (state.agents.length + 1);
+  role = role || "polyvalent";
+  state.agents.push({ id: uid(), name, role, status: "idle", currentTask: null, queue: [], log: [] });
+  logGlobal("<b>" + esc(name) + "</b> a rejoint l'équipe (spécialité : " + esc(role) + ").", "DRH");
+  renderAgents(); renderHR(); save();
+  return name;
+}
 document.getElementById("addAgentBtn").addEventListener("click", ()=>{
   if(state.agents.length >= MAX_AGENTS) return;
-  const names = ["Nova","Atlas","Zéphyr","Orion","Luna","Vega","Comet","Echo","Iris","Juno"];
-  const name = document.getElementById("agentNameInput").value.trim() || names[state.agents.length % names.length] + "-" + (state.agents.length + 1);
+  const name = document.getElementById("agentNameInput").value.trim();
   const role = (roleSelect.value === "autre" ? document.getElementById("agentRoleCustom").value.trim() : roleSelect.value) || "polyvalent";
-  state.agents.push({ id: uid(), name, role, status: "idle", currentTask: null, queue: [], log: [] });
+  hireAgent(name, role);
   document.getElementById("agentNameInput").value = "";
   document.getElementById("agentRoleCustom").value = "";
-  logGlobal("<b>" + esc(name) + "</b> a rejoint l'équipe" + (role ? " (spécialité : " + esc(role) + ")" : "") + ".", "Système");
-  renderAgents(); save();
 });
 
 document.getElementById("launchBtn").addEventListener("click", ()=>{
@@ -1241,8 +1352,8 @@ document.getElementById("autoSwitch").addEventListener("click", ()=>{
   renderChips(); save();
   logGlobal("mode autonome " + (state.autonomous ? "ACTIVÉ — le Patron travaille sans vous." : "désactivé."), "Patron");
 });
-document.getElementById("chatSend").addEventListener("click", sendChat);
-document.getElementById("chatInput").addEventListener("keydown", e=>{ if(e.key === "Enter") sendChat(); });
+document.getElementById("chatSend").addEventListener("click", ()=> sendChatFrom("chatInput"));
+document.getElementById("chatInput").addEventListener("keydown", e=>{ if(e.key === "Enter") sendChatFrom("chatInput"); });
 document.getElementById("missionInput").addEventListener("input", e=>{ state.mission = e.target.value; save(); });
 document.getElementById("backlogInput").addEventListener("input", e=>{
   state.backlog = e.target.value.split("\n").map(s=>s.trim()).filter(Boolean); save();
@@ -1254,9 +1365,7 @@ document.getElementById("apiKeyInput").addEventListener("input", e=>{
   }catch(err){}
   renderChips();
 });
-document.getElementById("speedSelect").addEventListener("change", e=>{
-  state.speed = parseFloat(e.target.value); save();
-});
+
 
 /* ================= spécialités & bureau virtuel ================= */
 const SPECIALTIES = [
@@ -1276,6 +1385,109 @@ const roleSelect = document.getElementById("agentRoleSelect");
 roleSelect.innerHTML = SPECIALTIES.map(s => '<option value="' + s.value + '">' + s.value.charAt(0).toUpperCase() + s.value.slice(1) + '</option>').join("");
 roleSelect.addEventListener("change", ()=>{
   document.getElementById("agentRoleCustom").style.display = roleSelect.value === "autre" ? "" : "none";
+});
+
+/* ================= dialogue RPG avec le Patron (en jeu) ================= */
+const bossDlg = document.getElementById("bossDlg");
+document.getElementById("bdAvatar").innerHTML = icon("crown");
+document.getElementById("bdClose").addEventListener("click", ()=> bossDlg.classList.remove("show"));
+function openBossDlg(){
+  renderChatLog();
+  bossDlg.classList.add("show");
+  setTimeout(()=> document.getElementById("bossChatInput").focus(), 300);
+}
+document.getElementById("bossChatSend").addEventListener("click", ()=> sendChatFrom("bossChatInput"));
+document.getElementById("bossChatInput").addEventListener("keydown", e=>{ if(e.key === "Enter") sendChatFrom("bossChatInput"); });
+
+/* ================= terminal PC (mon PC) ================= */
+const pcOverlay = document.getElementById("pcOverlay");
+const PC_TABS = [
+  { id: "files", label: "Fichiers", icon: "folder" },
+  { id: "chat", label: "Conversations", icon: "text-bubble" },
+  { id: "hr", label: "DRH", icon: "user" },
+  { id: "settings", label: "Réglages", icon: "gears" }
+];
+function initPcTabs(){
+  document.querySelectorAll("#pcTabs .tab").forEach(t => {
+    const def = PC_TABS.find(x => x.id === t.dataset.tab);
+    if(def) t.innerHTML = icon(def.icon) + " " + def.label;
+    t.addEventListener("click", ()=> switchPcTab(t.dataset.tab));
+  });
+}
+initPcTabs();
+function switchPcTab(name){
+  document.querySelectorAll("#pcTabs .tab").forEach(t => t.classList.toggle("on", t.dataset.tab === name));
+  for(const id of ["files", "chat", "hr", "settings"]){
+    document.getElementById("pane-" + id).style.display = id === name ? "" : "none";
+  }
+  if(name === "files") renderResults();
+  if(name === "chat") renderChatLog();
+  if(name === "hr") renderHR();
+  if(name === "settings") renderPcSettings();
+}
+function openPc(tab){
+  switchPcTab(tab || "files");
+  pcOverlay.classList.add("show");
+}
+document.getElementById("pcClose").innerHTML = icon("cross");
+document.getElementById("pcClose").addEventListener("click", ()=> pcOverlay.classList.remove("show"));
+pcOverlay.addEventListener("click", e=>{ if(e.target === pcOverlay) pcOverlay.classList.remove("show"); });
+
+const hrRoleEl = document.getElementById("hrRole");
+hrRoleEl.innerHTML = SPECIALTIES.map(s => '<option value="' + s.value + '">' + s.value.charAt(0).toUpperCase() + s.value.slice(1) + '</option>').join("");
+hrRoleEl.addEventListener("change", ()=>{
+  document.getElementById("hrRoleCustom").style.display = hrRoleEl.value === "autre" ? "" : "none";
+});
+document.getElementById("hrHire").innerHTML = icon("add") + " Embaucher";
+document.getElementById("hrHire").addEventListener("click", ()=>{
+  if(state.agents.length >= MAX_AGENTS){ logGlobal("équipe complète (" + MAX_AGENTS + " agents maximum).", "DRH"); return; }
+  const role = hrRoleEl.value === "autre" ? document.getElementById("hrRoleCustom").value.trim() : hrRoleEl.value;
+  const name = hireAgent(document.getElementById("hrName").value, role || "polyvalent");
+  document.getElementById("hrName").value = "";
+  document.getElementById("hrRoleCustom").value = "";
+  logGlobal("le Patron accueille <b>" + esc(name) + "</b> dans l'équipe.", "DRH");
+  renderHR();
+});
+function renderHR(){
+  const el = document.getElementById("hrList");
+  if(!el || !pcOverlay.classList.contains("show")) return;
+  if(!state.agents.length){
+    el.innerHTML = '<div style="color:var(--faint);font-style:italic;padding:14px 0;text-align:center;">Aucun agent. Embauchez votre premier employé IA ci-dessus.</div>';
+    return;
+  }
+  el.innerHTML = state.agents.map(a => {
+    const st = a.status === "busy" ? "occupé" : a.status === "paused" ? "au café" : "disponible";
+    return '<div class="hrrow"><div><div class="hrname">' + esc(a.name) + '</div><div class="hrole">' + icon(specialtyIcon(a.role)) + " " + esc(a.role || "polyvalent") + '</div></div>' +
+      '<span class="hstat ' + a.status + '">' + st + '</span>' +
+      '<button class="iconbtn hrPause" data-id="' + a.id + '" title="Pause / reprise">' + icon(a.status === "paused" ? "play" : "pause") + '</button>' +
+      '<button class="iconbtn hrFire" data-id="' + a.id + '" title="Licencier">' + icon("trash") + '</button></div>';
+  }).join("");
+  el.querySelectorAll(".hrPause").forEach(b => b.addEventListener("click", ()=>{
+    const a = state.agents.find(x => x.id === b.dataset.id);
+    if(a) togglePause(a);
+  }));
+  el.querySelectorAll(".hrFire").forEach(b => b.addEventListener("click", ()=>{
+    const a = state.agents.find(x => x.id === b.dataset.id);
+    if(a) removeAgent(a);
+  }));
+}
+function renderPcSettings(){
+  const keyEl = document.getElementById("pcKeyInput");
+  if(keyEl && document.activeElement !== keyEl) keyEl.value = mistralKey();
+  renderThemeDots();
+  const info = document.getElementById("pcSyncInfo");
+  if(info){
+    if(session && session.user) info.textContent = "Connecté : " + (session.user.email || session.user.id) + " — vos données suivent votre compte sur tous vos appareils.";
+    else info.textContent = "Mode local : connectez-vous (page principale) pour synchroniser sur tous vos appareils.";
+  }
+}
+document.getElementById("pcKeyInput").addEventListener("input", e=>{
+  try{
+    if(e.target.value.trim()) localStorage.setItem(MISTRAL_KEY_STORE, e.target.value.trim());
+    else localStorage.removeItem(MISTRAL_KEY_STORE);
+  }catch(err){}
+  renderChips();
+  document.getElementById("apiKeyInput").value = e.target.value;
 });
 
 const deskRefs = new Map();
@@ -1328,7 +1540,7 @@ function updateOffice(){
   }
   document.getElementById("bossLed").className = "led " + (bossBusy ? "busy" : "idle");
   document.getElementById("bossStatus").textContent = bossBusy ? "organise le travail..." : "prêt — donnez-lui un objectif ou parlez-lui dans le chat.";
-  document.getElementById("bossTask").textContent = bossQueue.length ? bossQueue.length + " tâche(s) en distribution, prochaine : " + bossQueue[0] : "Aucun objectif en distribution.";
+  document.getElementById("bossTask").textContent = bossQueue.length ? bossQueue.length + " tâche(s) en distribution, prochaine : " + (bossQueue[0].target ? "[" + bossQueue[0].target + "] " : "") + bossQueue[0].text : "Aucun objectif en distribution.";
   const done = (state.results || []).filter(r => r.status === "done").length;
   document.getElementById("pcCount").innerHTML = icon("folder") + " " + done + " livrable" + (done > 1 ? "s" : "");
   const paused = state.agents.filter(a => a.status === "paused");
@@ -1340,7 +1552,7 @@ document.getElementById("pcIcon").innerHTML = icon("folder");
 document.getElementById("pcScreen").innerHTML = icon("folder");
 document.getElementById("coffeeIcon").innerHTML = icon("cutlery");
 document.getElementById("bossRole").innerHTML = icon("crown") + " direction";
-document.getElementById("pcDesk").addEventListener("click", ()=>{ renderResults(); resultsOverlay.classList.add("show"); });
+document.getElementById("pcDesk").addEventListener("click", ()=> openPc("files"));
 
 let viewMode = "office";
 try{ viewMode = localStorage.getItem("ac_view") || "office"; }catch(e){}
@@ -1380,15 +1592,17 @@ function applyTheme(name){
   recolor3D();
   renderThemeDots();
 }
-function renderThemeDots(){
-  const el = document.getElementById("themeDots");
-  if(!el) return;
-  let current = "vert";
-  try{ current = localStorage.getItem("ac_theme") || "vert"; }catch(e){}
-  el.innerHTML = Object.entries(THEMES).map(([k, t]) =>
-    '<button class="dot' + (k === current ? " on" : "") + '" data-t="' + k + '" title="' + t.label + '" style="background:' + t.signal + '"></button>'
-  ).join("");
-  el.querySelectorAll(".dot").forEach(d => d.addEventListener("click", ()=> applyTheme(d.dataset.t)));
+function renderThemeDots(containerId){
+  for(const id of [containerId || "themeDots", "pcThemeDots"]){
+    const el = document.getElementById(id);
+    if(!el) continue;
+    let current = "vert";
+    try{ current = localStorage.getItem("ac_theme") || "vert"; }catch(e){}
+    el.innerHTML = Object.entries(THEMES).map(([k, t]) =>
+      '<button class="dot' + (k === current ? " on" : "") + '" data-t="' + k + '" title="' + t.label + '" style="background:' + t.signal + '"></button>'
+    ).join("");
+    el.querySelectorAll(".dot").forEach(d => d.addEventListener("click", ()=>{ applyTheme(d.dataset.t); renderPcSettings(); }));
+  }
 }
 
 /* ================= bureau 3D ================= */
@@ -1412,12 +1626,9 @@ function interactNear(){
   if(!nt) return;
   if(document.pointerLockElement) document.exitPointerLock();
   if(nt.type === "boss"){
-    const c = document.getElementById("chatInput");
-    c.scrollIntoView({ behavior: "smooth", block: "center" });
-    setTimeout(()=> c.focus(), 350);
+    openBossDlg();
   } else if(nt.type === "pc"){
-    renderResults();
-    resultsOverlay.classList.add("show");
+    openPc("files");
   } else if(nt.type === "agent"){
     showAgentPopup(nt.agent, window.innerWidth / 2 - 100, window.innerHeight / 2 - 60);
   }
@@ -1432,7 +1643,7 @@ function checkNear(){
     if(d < maxD && d < bestD){ bestD = d; best = data; }
   };
   consider(0, -4.3, 3.4, { type: "boss", label: "Parler au Patron" });
-  consider(6.7, 4.4, 2.6, { type: "pc", label: "Récupérer vos fichiers" });
+  consider(6.7, 4.4, 2.6, { type: "pc", label: "Ouvrir votre PC (fichiers, conversations, DRH)" });
   for(const a of state.agents){
     const rec = agent3d.get(a.id);
     if(rec) consider(rec.group.position.x, rec.group.position.z, 2.3,
@@ -1738,12 +1949,8 @@ function init3D(){
         const a = state.agents.find(x => x.id === u.agentId);
         if(a){ showAgentPopup(a, e.clientX + 8, e.clientY + 8); return; }
       }
-      if(u.pc){ renderResults(); resultsOverlay.classList.add("show"); return; }
-      if(u.boss){
-        document.getElementById("chatInput").focus();
-        document.getElementById("chatInput").scrollIntoView({ behavior: "smooth", block: "center" });
-        return;
-      }
+      if(u.pc){ openPc("files"); return; }
+      if(u.boss){ openBossDlg(); return; }
     }
     hidePopup();
   });
@@ -1876,6 +2083,7 @@ applyView();
 try{ init3D(); }catch(e){ console.warn("3D indisponible", e); }
 applyTheme((function(){ try{ return localStorage.getItem("ac_theme"); }catch(e){ return null; } })() || "vert");
 document.getElementById("themeSummary").insertAdjacentHTML("afterbegin", icon("palette"));
+renderPcSettings();
 (function(){
   const h = new URLSearchParams(location.hash.slice(1));
   const q = new URLSearchParams(location.search);
