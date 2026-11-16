@@ -832,7 +832,12 @@ function bestMatchAgent(text){
   for(const g of (state.groups || [])){
     if(g.name && low.includes(g.name.toLowerCase())){
       const mg = free.filter(a => a.group === g.id);
-      if(mg.length){ mg.sort((x, y) => (x.done || 0) - (y.done || 0)); return mg[0]; }
+      if(mg.length){
+        const nonBoss = g.boss ? mg.filter(a => a.id !== g.boss) : mg;
+        const pool = nonBoss.length ? nonBoss : mg;
+        pool.sort((x, y) => (x.done || 0) - (y.done || 0));
+        return pool[0];
+      }
     }
   }
   for(const [role, words] of SPECIALTY_KEYWORDS){
@@ -867,12 +872,25 @@ function dispatch(){
       const tLow = item.target.toLowerCase();
       target = freeAgents().find(a => a.name.toLowerCase() === tLow);
       if(!target){
-        const g = groupByName(item.target);
-        if(g) target = freeAgents().find(a => a.group === g.id);
+        const gr = groupByName(item.target);
+        if(gr) target = freeAgents().find(a => a.group === gr.id);
       }
     }
     const agent = target || bestMatchAgent(item.text) || freeAgents()[0];
-    assignTask(agent, item.text, "Patron");
+    let from = "Patron";
+    if(agent){
+      const low = item.text.toLowerCase();
+      const gr = (state.groups || []).find(g2 => g2.boss && g2.boss !== agent.id && agent.group === g2.id &&
+        ((item.target && groupByName(item.target) && groupByName(item.target).id === g2.id) || low.includes(g2.name.toLowerCase())));
+      if(gr){
+        const bp = state.agents.find(a => a.id === gr.boss);
+        if(bp){
+          from = bp.name + " (sous-patron)";
+          logAgent(bp, "Je répartis « " + item.text.slice(0, 70) + " » dans mon équipe " + gr.name + ".");
+        }
+      }
+    }
+    assignTask(agent, item.text, from);
   }
   while(freeAgents().length > 0 && bossQueue.length === 0 && g < 40){
     g++;
@@ -890,7 +908,7 @@ function assignTask(agent, text, from){
   agent.currentTask = { text, startedAt: Date.now(), duration: 0, real: true };
   executeTask(agent);
   logAgent(agent, "Tâche reçue de " + from + " : " + text);
-  logGlobal("le Patron confie à <b>" + esc(agent.name) + "</b> (" + esc(agent.role || "polyvalent") + ") : " + esc(text), "Patron");
+  logGlobal("<b>" + esc(from) + "</b> confie à <b>" + esc(agent.name) + "</b> (" + esc(agent.role || "polyvalent") + ") : " + esc(text), from === "Patron" ? "Patron" : "Équipe");
   updateDynamicUI(); save();
 }
 
@@ -1056,7 +1074,7 @@ async function decompose(objective){
     const agentsDesc = state.agents.length
       ? state.agents.map(a => a.name + " (spécialité : " + (a.role || "polyvalent") + (a.persona ? ", style : " + a.persona : "") + (a.status === "paused" ? ", en pause" : "") + ")").join("; ")
       : "aucun";
-    const groupsDesc = (state.groups || []).filter(g => g.name).map(g => "groupe '" + g.name + "'" + (g.instructions ? " (consignes : " + g.instructions + ")" : "") + " : membres = " + (state.agents.filter(a => a.group === g.id).map(a => a.name).join(", ") || "aucun")).join(" ; ") || "";
+    const groupsDesc = (state.groups || []).filter(g => g.name).map(g => "groupe '" + g.name + "'" + (g.instructions ? " (consignes : " + g.instructions + ")" : "") + " : membres = " + (state.agents.filter(a => a.group === g.id).map(a => a.name).join(", ") || "aucun") + (g.boss ? ", sous-patron = " + ((state.agents.find(a => a.id === g.boss) || {}).name || "?") : "")).join(" ; ") || "";
     const reply = await callLLM([
       {role:"system", content:"Tu es le Patron, un vrai manager d'équipe. Ton équipe d'agents : " + agentsDesc + (groupsDesc ? ". Groupes constitués : " + groupsDesc + " — confiez les tâches d'un groupe à un de ses membres" : "") + ". Découpe l'objectif donné en sous-tâches courtes et actionnables (max 6) et répartis-les comme un vrai chef d'équipe, en équilibrant la charge (ne surcharge pas toujours les mêmes) : la recherche d'informations à l'agent spécialisé en recherche web, les textes à la rédaction, le développement au code, le visuel au design, la communication au marketing, etc. Chaque tâche doit aller à l'agent dont la spécialité correspond vraiment. Réponds UNIQUEMENT avec un tableau JSON de chaînes en français au format exact \"Nom de l'agent : la tâche\", ex: [\"Nova : analyser le marché des cafés\",\"Atlas : rédiger le plan marketing\"]. Si aucun agent ne convient, utilise quand même le plus proche."},
       {role:"user", content: objective}
@@ -1317,6 +1335,7 @@ function togglePause(a){
 }
 function removeAgent(a){
   state.agents = state.agents.filter(x => x.id !== a.id);
+  (state.groups || []).forEach(g2 => { if(g2.boss === a.id) g2.boss = ""; });
   cards.delete(a.id);
   logGlobal("<b>" + esc(a.name) + "</b> a quitté l'équipe.", "DRH");
   renderAgents(); renderHR(); save();
@@ -2583,6 +2602,8 @@ function renderTeams(){
       const members = state.agents.filter(a => a.group === g.id);
       return '<div class="hrrow" style="flex-wrap:wrap;"><div style="min-width:200px;"><div class="hrname">' + icon("user") + " " + esc(g.name) + '</div><div class="hrole">' + esc(g.instructions || "aucune consigne") + '</div>' +
         '<div style="margin-top:6px;">' + (members.length ? members.map(m => '<span class="hstat idle" style="margin-right:6px;">' + esc(m.name) + '</span>').join("") : '<span class="hstat paused">aucun membre</span>') + '</div></div>' +
+        '<select class="teamBoss" data-id="' + g.id + '" style="flex:0 0 auto;max-width:180px;" title="Sous-patron du groupe"><option value="">sous-patron : personne</option>' +
+        members.map(m => '<option value="' + m.id + '"' + (g.boss === m.id ? " selected" : "") + '>' + esc(m.name) + '</option>').join("") + '</select>' +
         '<select class="teamAdd" data-id="' + g.id + '" style="flex:0 0 auto;max-width:180px;"><option value="">+ ajouter un agent…</option>' +
         state.agents.filter(a => a.group !== g.id).map(a => '<option value="' + a.id + '">' + esc(a.name) + '</option>').join("") + '</select>' +
         '<button class="iconbtn teamDel" data-id="' + g.id + '" title="Supprimer le groupe">' + icon("trash") + '</button></div>';
@@ -2594,8 +2615,16 @@ function renderTeams(){
   box.querySelectorAll(".teamAdd").forEach(s => s.addEventListener("change", ()=>{
     const a = state.agents.find(x => x.id === s.value);
     const g = (state.groups || []).find(x => x.id === s.dataset.id);
-    if(a && g){ a.group = g.id; logGlobal("<b>" + esc(a.name) + "</b> rejoint le groupe « " + esc(g.name) + " ».", "DRH"); renderTeams(); renderHR(); save(); }
+    if(a && g){ (state.groups || []).forEach(g2 => { if(g2.boss === a.id && g2.id !== g.id) g2.boss = ""; }); a.group = g.id; logGlobal("<b>" + esc(a.name) + "</b> rejoint le groupe « " + esc(g.name) + " ».", "DRH"); renderTeams(); renderHR(); save(); }
     s.value = "";
+  }));
+  box.querySelectorAll(".teamBoss").forEach(s => s.addEventListener("change", ()=>{
+    const g = (state.groups || []).find(x => x.id === s.dataset.id);
+    if(!g) return;
+    g.boss = s.value;
+    const bp = s.value ? state.agents.find(a => a.id === s.value) : null;
+    logGlobal(bp ? "<b>" + esc(bp.name) + "</b> est nommé sous-patron du groupe « " + esc(g.name) + " » : il répartira les tâches de son équipe." : "Le groupe « " + esc(g.name) + " » n'a plus de sous-patron.", "DRH");
+    renderTeams(); save(); renderPlan();
   }));
   box.querySelectorAll(".teamDel").forEach(b => b.addEventListener("click", ()=>{
     const g = state.groups.find(x => x.id === b.dataset.id);
@@ -2847,6 +2876,7 @@ function buildPlanData(){
     if(!b.ref) return true;
     if(b.ref.kind === "agent") return state.agents.some(x => x.id === b.ref.id);
     if(b.ref.kind === "group") return (state.groups || []).some(x => x.id === b.ref.id);
+    if(b.ref.kind === "subboss") return (state.groups || []).some(x => x.id === b.ref.id);
     return true;
   });
   const col2 = 40 + (PNW + PGAPX) * 2, col3 = 40 + (PNW + PGAPX) * 3;
@@ -2864,7 +2894,8 @@ function buildPlanData(){
   let gy = midY - 200;
   for(const g of groups){
     const members = byGroup.get(g.id) || [];
-    nodes.push({ id: "g_" + g.id, title: g.name, sub: members.length + " agent(s) — " + (g.instructions ? "consignes actives" : "sans consignes"), icon: "user", chips: members, x: col2, y: gy });
+    const bp = g.boss ? state.agents.find(a => a.id === g.boss) : null;
+    nodes.push({ id: "g_" + g.id, title: g.name, sub: members.length + " agent(s) — " + (g.instructions ? "consignes actives" : "sans consignes") + (bp ? " · chef : " + bp.name : ""), icon: "user", chips: members, x: col2, y: gy });
     edges.push({ a: "patron", b: "g_" + g.id });
     gy += planNodeH({ chips: members }) + PGAPY;
   }
@@ -2895,6 +2926,14 @@ function buildPlanData(){
         bn.title = "LE PATRON"; bn.icon = "crown"; bn.sub = bossBusy ? "organise le travail..." : (bossQueue.length + " tâche(s) en distribution"); bn.dot = bossBusy ? "busy" : "on";
       } else if(r.kind === "drh"){
         bn.title = "DRH SYLVIE"; bn.icon = "shield"; bn.sub = state.drhAuto ? "recrutement automatique activé" : "recrutement manuel"; bn.dot = state.drhAuto ? "on" : "";
+      } else if(r.kind === "subboss"){
+        const g2 = (state.groups || []).find(x => x.id === r.id);
+        if(g2){
+          const bp2 = g2.boss ? state.agents.find(a => a.id === g2.boss) : null;
+          bn.title = "SOUS-PATRON — " + g2.name; bn.icon = "crown";
+          bn.sub = bp2 ? bp2.name + " · " + (bp2.status === "busy" ? "au travail" : (bp2.status === "paused" ? "au self" : "prêt à répartir")) : "aucun désigné — PC → Équipes";
+          bn.dot = bp2 ? (bp2.status === "busy" ? "busy" : (bp2.status === "paused" ? "warn" : "on")) : "";
+        } else { bn.sub = "groupe dissous"; bn.dot = ""; }
       } else if(r.kind === "service"){
         if(r.id === "taches"){ bn.title = "TÂCHES & AUTONOMIE"; bn.icon = "tasks"; bn.sub = state.autonomous ? "mode autonome actif — " + state.backlog.length + " en liste" : (state.backlog.length + " tâche(s) en attente"); bn.dot = state.autonomous ? "on" : ""; }
         else if(r.id === "serveurs"){ bn.title = "SALLE SERVEURS"; bn.icon = "gears"; bn.sub = (state.sites || []).length + " site(s) · " + done + " livrable(s)"; bn.dot = "on"; }
@@ -2999,6 +3038,7 @@ function planOpenNode(id){
 const PLAN_TEMPLATES = [
   { t: "agent", label: "Assistant", icon: "user" },
   { t: "group", label: "Groupe", icon: "user" },
+  { t: "subboss", label: "Sous-patron", icon: "crown" },
   { t: "patron", label: "Patron", icon: "crown" },
   { t: "drh", label: "Admin (DRH)", icon: "shield" },
   { t: "service", label: "Service", icon: "gears" },
@@ -3024,6 +3064,10 @@ function planChooserItems(kind){
   if(kind === "group"){
     if(!(state.groups || []).length) return [{ label: "Aucun groupe — créez-en un (PC → Équipes)", icon: "ghost", fn: ()=> openPc("teams") }];
     return state.groups.map(g => ({ label: g.name, icon: "user", fn: ()=> addRefBlock("group", g.id, g.name) }));
+  }
+  if(kind === "subboss"){
+    if(!(state.groups || []).length) return [{ label: "Aucun groupe — créez-en un (PC → Équipes)", icon: "ghost", fn: ()=> openPc("teams") }];
+    return state.groups.map(g => ({ label: g.name, icon: "crown", fn: ()=> addRefBlock("subboss", g.id, "SOUS-PATRON — " + g.name) }));
   }
   if(kind === "patron") return [{ label: "LE PATRON", icon: "crown", fn: ()=> addRefBlock("patron", "", "LE PATRON") }];
   if(kind === "drh") return [{ label: "DRH SYLVIE", icon: "shield", fn: ()=> addRefBlock("drh", "", "DRH SYLVIE") }];
@@ -3064,7 +3108,7 @@ function openChooserInPalette(tp, anchor){
   pal.querySelectorAll(".pp-item").forEach(b => b.addEventListener("click", e => {
     const tp = PLAN_TEMPLATES.find(x => x.t === b.dataset.t);
     if(!tp) return;
-    if(tp.t === "agent" || tp.t === "group" || tp.t === "patron" || tp.t === "drh" || tp.t === "service"){
+    if(tp.t === "agent" || tp.t === "group" || tp.t === "subboss" || tp.t === "patron" || tp.t === "drh" || tp.t === "service"){
       openChooserInPalette(tp, b);
       return;
     }
@@ -3210,7 +3254,7 @@ function openChooserInPalette(tp, anchor){
           if(b.ref){
             const r = b.ref;
             if(r.kind === "agent") openPc("hr");
-            else if(r.kind === "group") openPc("teams");
+            else if(r.kind === "group" || r.kind === "subboss") openPc("teams");
             else if(r.kind === "patron") openBossDlg();
             else if(r.kind === "drh") openDrhDlg();
             else if(r.kind === "service"){
