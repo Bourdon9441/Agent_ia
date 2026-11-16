@@ -203,9 +203,9 @@
       </details>
       <details class="settings">
         <summary id="aiSummary">IA réelle (optionnel)</summary>
-        <label>Clé API Mistral — reste dans ce navigateur</label>
-        <input type="password" id="apiKeyInput" placeholder="sk-...">
-        <div class="hint">Sans clé : mode simulation réaliste. Avec clé : les agents utilisent une vraie IA. La clé n'est jamais synchronisée dans le nuage.</div>
+        <label>Clé API Groq ou Mistral — reste dans ce navigateur</label>
+        <input type="password" id="apiKeyInput" placeholder="gsk_... (Groq) ou sk-... (Mistral)">
+        <div class="hint">Sans clé : mode simulation réaliste. Avec clé : les agents utilisent une vraie IA. Clé Groq (commence par gsk_) depuis console.groq.com/keys — modèle openai/gpt-oss-120b. Sinon clé Mistral (sk-...). La clé n'est jamais synchronisée dans le nuage.</div>
         <label>Vitesse de simulation</label>
         <select id="speedSelect">
           <option value="2">Lente</option>
@@ -438,10 +438,16 @@ function mistralKey(){
 }
 
 async function callLLM(messages){
-  const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+  const key = mistralKey();
+  const isGroq = key.startsWith("gsk_");
+  const url = isGroq
+    ? "https://api.groq.com/openai/v1/chat/completions"
+    : "https://api.mistral.ai/v1/chat/completions";
+  const model = isGroq ? "openai/gpt-oss-120b" : "mistral-small-latest";
+  const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + mistralKey() },
-    body: JSON.stringify({ model: "mistral-small-latest", messages, temperature: 0.4, max_tokens: 500 })
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+    body: JSON.stringify({ model, messages, temperature: 0.4, max_tokens: 500 })
   });
   if(!res.ok) throw new Error("HTTP " + res.status);
   const data = await res.json();
