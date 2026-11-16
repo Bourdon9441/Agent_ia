@@ -2844,6 +2844,12 @@ function planNodeH(n){
 function buildPlanData(){
   const nodes = [], edges = [];
   const groups = state.groups || [];
+  state.planBlocks = (state.planBlocks || []).filter(b => {
+    if(!b.ref) return true;
+    if(b.ref.kind === "agent") return state.agents.some(x => x.id === b.ref.id);
+    if(b.ref.kind === "group") return (state.groups || []).some(x => x.id === b.ref.id);
+    return true;
+  });
   const col2 = 40 + (PNW + PGAPX) * 2, col3 = 40 + (PNW + PGAPX) * 3;
   const midY = 300;
   nodes.push({ id: "vous", title: "VOUS", sub: "propriétaire — tout se pilote d'ici", icon: "user", dot: "on", x: 40, y: midY });
@@ -2973,7 +2979,7 @@ function updatePlanHud(){
   if(!el) return;
   const busy = state.agents.filter(a => a.status === "busy").length;
   const paused = state.agents.filter(a => a.status === "paused").length;
-  el.innerHTML = "plan de l'entreprise · glisser le fond : déplacer · molette : zoom · ● d'un bloc vers un autre : relier · cliquer un fil ou un bloc : menu" +
+  el.innerHTML = "plan de l'entreprise · glisser le fond : déplacer · molette : zoom · ● d'un bloc vers un autre : relier · cliquer un fil : le supprimer" +
     "<br>" + state.agents.length + " agent(s) · " + busy + " au travail · " + paused + " au self · " + bossQueue.length + " tâche(s) à distribuer";
 }
 
@@ -3003,46 +3009,6 @@ function openPlanMenu(x, y, items){
   const mw = m.offsetWidth || 150, mh = m.offsetHeight || 90;
   m.style.left = Math.max(6, Math.min(x, window.innerWidth - mw - 10)) + "px";
   m.style.top = Math.max(6, Math.min(y + 8, window.innerHeight - mh - 10)) + "px";
-}
-function linkMenuItems(l){
-  return [
-    { label: l.on ? "Désactiver" : "Activer", icon: l.on ? "pause" : "play", fn: ()=>{ l.on = !l.on; save(); renderPlan(); } },
-    { label: "Supprimer", icon: "trash", fn: ()=>{ state.planLinks = (state.planLinks || []).filter(x => x.id !== l.id); save(); renderPlan(); } }
-  ];
-}
-function blockMenuItems(b){
-  const base = [
-    { label: b.on ? "Désactiver" : "Activer", icon: b.on ? "pause" : "play", fn: ()=>{ b.on = !b.on; save(); renderPlan(); } },
-    { label: "Renommer", icon: "pen", fn: ()=>{ const t = prompt("Nom du bloc :", b.title); if(t && t.trim()){ b.title = t.trim().slice(0, 40); save(); renderPlan(); } } },
-    { label: "Supprimer le bloc", icon: "trash", fn: ()=>{ state.planBlocks = (state.planBlocks || []).filter(x => x.id !== b.id); state.planLinks = (state.planLinks || []).filter(l => l.from !== b.id && l.to !== b.id); save(); renderPlan(); } }
-  ];
-  if(!b.ref || b.on === false) return base;
-  const r = b.ref;
-  let extra = [];
-  if(r.kind === "agent"){
-    const a = state.agents.find(x => x.id === r.id);
-    if(a) extra = [
-      { label: a.status === "paused" ? "Activer (reprendre)" : "Désactiver (pause self)", icon: a.status === "paused" ? "play" : "pause", fn: ()=>{ togglePause(a); renderPlan(); } },
-      { label: "Ouvrir la fiche", icon: "user", fn: ()=> openPc("hr") }
-    ];
-  } else if(r.kind === "group"){
-    extra = [{ label: "Ouvrir Équipes", icon: "user", fn: ()=> openPc("teams") }];
-  } else if(r.kind === "patron"){
-    extra = [
-      { label: "Parler au Patron", icon: "crown", fn: ()=> openBossDlg() },
-      { label: "Voir les tâches", icon: "tasks", fn: ()=> openPc("tasks") }
-    ];
-  } else if(r.kind === "drh"){
-    extra = [
-      { label: "Parler à la DRH", icon: "shield", fn: ()=> openDrhDlg() },
-      { label: state.drhAuto ? "DRH auto : désactiver" : "DRH auto : activer", icon: "gears", fn: ()=>{ state.drhAuto = !state.drhAuto; logGlobal("DRH automatique " + (state.drhAuto ? "activée." : "désactivée."), "DRH"); renderDrhAuto(); save(); renderPlan(); setTimeout(drhAutoTick, 800); } },
-      { label: "Gérer l'équipe", icon: "user", fn: ()=> openPc("hr") }
-    ];
-  } else if(r.kind === "service"){
-    if(r.id === "self") extra = [{ label: state.coffeeClosed ? "Ouvrir le self" : "Fermer le self", icon: "cutlery", fn: ()=> setCoffeeClosed(!state.coffeeClosed) }];
-    else extra = [{ label: "Ouvrir", icon: "gears", fn: ()=> planOpenNode(r.id) }];
-  }
-  return extra.concat(base);
 }
 document.addEventListener("pointerdown", e => {
   const m = document.getElementById("planMenu");
@@ -3092,7 +3058,7 @@ function planChooserItems(kind){
   if(!pal) return;
   pal.innerHTML = '<div class="pp-head">Blocs à ajouter</div>' + PLAN_TEMPLATES.map(tp =>
     '<button class="pp-item" data-t="' + tp.t + '">' + icon(tp.icon) + " " + tp.label + '</button>').join("") +
-    '<div class="pp-hint">Cliquez un bloc pour le menu (activer, désactiver…). Glissez le point d\'un bloc vers un autre pour relier.</div>';
+    '<div class="pp-hint">Cliquez un bloc pour l\'ouvrir. Glissez le point d\'un bloc vers un autre pour relier. Cliquez un fil pour le supprimer.</div>';
   pal.addEventListener("mouseleave", hidePlanMenu);
   pal.querySelectorAll(".pp-item").forEach(b => b.addEventListener("click", e => {
     const tp = PLAN_TEMPLATES.find(x => x.t === b.dataset.t);
@@ -3153,8 +3119,8 @@ function planChooserItems(kind){
     }
     const pathEl = e.target.closest ? e.target.closest("path.pn-edge.custom") : null;
     if(pathEl && pathEl.dataset.link){
-      const l = (state.planLinks || []).find(x => x.id === pathEl.dataset.link);
-      if(l) openPlanMenu(e.clientX, e.clientY, linkMenuItems(l));
+      state.planLinks = (state.planLinks || []).filter(x => x.id !== pathEl.dataset.link);
+      save(); renderPlan();
       return;
     }
     const nodeEl = e.target.closest ? e.target.closest(".pnode") : null;
@@ -3217,7 +3183,28 @@ function planChooserItems(kind){
     } else if(d.kind === "node" && !d.moved){
       if(d.id.indexOf("b_") === 0){
         const b = (state.planBlocks || []).find(x => x.id === d.id);
-        if(b) openPlanMenu(e.clientX, e.clientY, blockMenuItems(b));
+        if(b){
+          if(b.ref){
+            const r = b.ref;
+            if(r.kind === "agent") openPc("hr");
+            else if(r.kind === "group") openPc("teams");
+            else if(r.kind === "patron") openBossDlg();
+            else if(r.kind === "drh") openDrhDlg();
+            else if(r.kind === "service"){
+              if(r.id === "self") setCoffeeClosed(!state.coffeeClosed);
+              else planOpenNode(r.id);
+            }
+          } else {
+            const t = prompt("Nom du bloc (laissez vide pour supprimer) :", b.title);
+            if(t !== null){
+              if(!t.trim()){
+                state.planBlocks = (state.planBlocks || []).filter(x => x.id !== b.id);
+                state.planLinks = (state.planLinks || []).filter(l => l.from !== b.id && l.to !== b.id);
+              } else b.title = t.trim().slice(0, 40);
+              save(); renderPlan();
+            }
+          }
+        }
       } else planOpenNode(d.id);
     }
   };
