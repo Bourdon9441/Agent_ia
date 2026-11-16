@@ -326,6 +326,24 @@
     </div>
 
     <div class="panel">
+      <div class="panel-head" id="schedHead">Tâches programmées &amp; notifications</div>
+      <label>Tâche programmée <span style="text-transform:none;letter-spacing:0">(exécutée à l'heure choisie, page ouverte)</span></label>
+      <div class="row">
+        <input type="text" id="dschedText" placeholder="Ex : envoyer les actualités du jour par email">
+        <input type="datetime-local" id="dschedWhen" style="flex:0 0 auto;width:auto;background:var(--raise);border:1px solid var(--line);border-radius:9px;color:var(--ink);padding:9px 10px;font-family:var(--disp);">
+      </div>
+      <div class="row" style="margin-top:8px;align-items:center;">
+        <label style="margin:0;display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:11px;"><input type="checkbox" id="dschedEmail" checked> Envoyer le résultat par email</label>
+        <button class="btn" id="dschedAdd" style="flex:0 0 auto;margin-left:auto;">Programmer</button>
+      </div>
+      <div id="dschedList" style="margin-top:10px;"></div>
+      <label style="margin-top:16px;">Notifications par email</label>
+      <input type="text" id="dejTo" placeholder="Votre email (ex : vous@gmail.com)">
+      <div class="row"><button class="btn line" id="dejTest" style="flex:0 0 auto;">Tester l'envoi</button></div>
+      <div class="hint">Au premier envoi, FormSubmit vous envoie un email d'activation : cliquez une seule fois sur le lien. Ensuite tout arrive dans votre boîte.</div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head" id="settingsHead">Réglages</div>
       <details class="settings" id="cloudSettings">
         <summary id="cloudSummary">Connexion &amp; synchronisation</summary>
@@ -1272,6 +1290,8 @@ function renderAll(){
   renderActivity();
   renderResults();
   renderDashSites();
+  renderPcSched();
+  renderPcEmail();
   renderChatLog();
   updateKPIs();
   refreshAccountUI();
@@ -2114,50 +2134,63 @@ async function sendEmail(subject, message){
 }
 function renderPcEmail(){
   const c = emailCfg();
-  const el = document.getElementById("ejTo");
-  if(el && document.activeElement !== el) el.value = c.to || "";
+  for(const id of ["ejTo", "dejTo"]){
+    const el = document.getElementById(id);
+    if(el && document.activeElement !== el) el.value = c.to || "";
+  }
 }
-document.getElementById("ejTo").addEventListener("input", e=>{
-  const c = emailCfg();
-  c.to = e.target.value.trim();
-  try{ localStorage.setItem(EJ_STORE, JSON.stringify(c)); }catch(err){}
+["ejTo", "dejTo"].forEach(id => {
+  document.getElementById(id).addEventListener("input", e=>{
+    const c = emailCfg();
+    c.to = e.target.value.trim();
+    try{ localStorage.setItem(EJ_STORE, JSON.stringify(c)); }catch(err){}
+    const other = document.getElementById(id === "ejTo" ? "dejTo" : "ejTo");
+    if(other && document.activeElement !== other) other.value = c.to;
+  });
 });
-document.getElementById("ejTest").addEventListener("click", async ()=>{
-  const b = document.getElementById("ejTest");
-  b.disabled = true;
-  try{
-    const note = await sendEmail("Test Agent_ia", "Notification de test : la connexion email de vos agents fonctionne. — " + new Date().toLocaleString("fr-FR"));
-    logGlobal("email de test envoyé vers " + esc(emailCfg().to || "votre boîte") + "." + (note ? " (" + esc(note) + ")" : ""), "Système");
-  }catch(e){ logGlobal("échec de l'email de test : " + esc(e.message), "Système"); }
-  b.disabled = false;
-});
+function testEmail(btn){
+  btn.disabled = true;
+  sendEmail("Test Agent_ia", "Notification de test : la connexion email de vos agents fonctionne. — " + new Date().toLocaleString("fr-FR"))
+    .then(note => logGlobal("email de test envoyé vers " + esc(emailCfg().to || "votre boîte") + "." + (note ? " (" + esc(note) + ")" : ""), "Système"))
+    .catch(e => logGlobal("échec de l'email de test : " + esc(e.message), "Système"))
+    .finally(()=>{ btn.disabled = false; });
+}
+document.getElementById("ejTest").addEventListener("click", function(){ testEmail(this); });
+document.getElementById("dejTest").addEventListener("click", function(){ testEmail(this); });
 
 /* ===== tâches programmées ===== */
 function renderPcSched(){
-  const el = document.getElementById("schedList");
-  if(!el) return;
   const ST = { pending: ["programmée", "var(--faint)"], running: ["en cours...", "var(--amber)"], sent: ["travail lancé...", "var(--amber)"], done: ["terminée", "var(--signal)"], error: ["échec", "var(--red)"] };
-  el.innerHTML = (state.scheduled || []).map(sc => {
+  const rows = (state.scheduled || []).map(sc => {
     const pair = ST[sc.status] || ST.pending;
     return '<div class="hrrow"><div><div class="hrname">' + esc(sc.text) + '</div><div class="hrole">' + icon("clock") + " " + esc(new Date(sc.due).toLocaleString("fr-FR")) + (sc.email ? " · email" : "") + '</div></div><span class="hstat" style="color:' + pair[1] + ';">' + pair[0] + '</span><button class="iconbtn schedDel" data-id="' + sc.id + '" title="Annuler">' + icon("cross") + '</button></div>';
   }).join("") || '<div class="hint">Aucune tâche programmée.</div>';
-  el.querySelectorAll(".schedDel").forEach(b => b.addEventListener("click", ()=>{
-    state.scheduled = state.scheduled.filter(x => x.id !== b.dataset.id);
-    renderPcSched(); save();
-  }));
+  for(const id of ["schedList", "dschedList"]){
+    const el = document.getElementById(id);
+    if(!el) continue;
+    el.innerHTML = rows;
+    el.querySelectorAll(".schedDel").forEach(b => b.addEventListener("click", ()=>{
+      state.scheduled = state.scheduled.filter(x => x.id !== b.dataset.id);
+      renderPcSched(); save();
+    }));
+  }
 }
-document.getElementById("schedAdd").addEventListener("click", ()=>{
-  const text = document.getElementById("schedText").value.trim();
-  const when = document.getElementById("schedWhen").value;
-  const wantEmail = document.getElementById("schedEmail").checked;
+function addScheduled(text, when, wantEmail){
   if(!text){ logGlobal("décrivez la tâche programmée.", "Patron"); return; }
   if(!when){ logGlobal("choisissez la date et l'heure d'exécution.", "Patron"); return; }
   const due = new Date(when).getTime();
   if(due <= Date.now()){ logGlobal("l'heure choisie est passée : choisissez une heure future.", "Patron"); return; }
   state.scheduled.push({ id: uid(), text, due, email: wantEmail, status: "pending" });
-  document.getElementById("schedText").value = "";
   logGlobal("tâche programmée : « " + esc(text) + " » le " + esc(new Date(due).toLocaleString("fr-FR")) + (wantEmail ? " (résultat envoyé par email)" : "") + ".", "Patron");
   renderPcSched(); save();
+}
+document.getElementById("schedAdd").addEventListener("click", ()=>{
+  addScheduled(document.getElementById("schedText").value.trim(), document.getElementById("schedWhen").value, document.getElementById("schedEmail").checked);
+  document.getElementById("schedText").value = "";
+});
+document.getElementById("dschedAdd").addEventListener("click", ()=>{
+  addScheduled(document.getElementById("dschedText").value.trim(), document.getElementById("dschedWhen").value, document.getElementById("dschedEmail").checked);
+  document.getElementById("dschedText").value = "";
 });
 async function processSchedule(){
   if(!state.scheduled || !state.scheduled.length) return;
