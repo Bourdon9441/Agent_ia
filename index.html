@@ -237,6 +237,8 @@
   .bossdlg .bdclose{margin-left:auto; font-size:11px; padding:7px 12px;}
   .bossdlg .chat{flex:1; min-height:130px; max-height:34vh;}
   .bossdlg .bdrow{display:flex; gap:8px; padding:10px 14px 14px;}
+  .drhmsg{padding:18px 4px; color:var(--dim); font-size:13.5px; line-height:1.55;}
+  .drhsec{font-family:var(--mono); font-size:10px; color:var(--faint); text-transform:uppercase; letter-spacing:.14em; margin:14px 0 8px;}
   .tabs{display:flex; gap:6px; border-bottom:1px solid var(--line); margin-bottom:14px; overflow-x:auto;}
   .tab{background:none; border:none; border-bottom:2px solid transparent; color:var(--faint); font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; padding:9px 12px; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:7px;}
   .tab svg{width:13px; height:13px;}
@@ -424,6 +426,15 @@
   </div>
 </div>
 
+<div class="overlay" id="drhDlg">
+  <div class="modal" style="width:min(580px,100%);">
+    <button class="iconbtn close-x" id="drhClose"></button>
+    <h2>Administration — la DRH</h2>
+    <p class="sub">La DRH ajuste l'effectif selon les besoins réels : elle propose des embauches et des licenciements, vous validez en un clic. Vos agents configurés (comme le boulanger) ne sont jamais licenciés automatiquement.</p>
+    <div id="drhBody"></div>
+  </div>
+</div>
+
 <div class="overlay" id="pcOverlay">
   <div class="modal" style="width:min(720px,100%);">
     <button class="iconbtn close-x" id="pcClose"></button>
@@ -478,6 +489,7 @@
       </div>
       <input type="text" id="hrRoleCustom" placeholder="Précisez la spécialité..." style="display:none; margin-bottom:10px;">
       <button class="btn wide" id="hrHire"></button>
+      <button class="btn line wide" id="hrAskDrh" style="margin-top:8px;"></button>
       <div style="margin-top:16px;" id="hrList"></div>
     </div>
     <div class="pcpane" id="pane-servers" style="display:none;">
@@ -1636,7 +1648,7 @@ function syncFsBtn(){
   const b = document.getElementById("fsBtn");
   if(b) b.textContent = isGameFullscreen() ? "Quitter plein écran" : "Plein écran";
 }
-const GAME_OVERLAYS = ["deskPopup", "resultsOverlay", "bossDlg", "pcOverlay", "authOverlay"].map(id => document.getElementById(id)).filter(Boolean);
+const GAME_OVERLAYS = ["deskPopup", "resultsOverlay", "bossDlg", "drhDlg", "pcOverlay", "authOverlay"].map(id => document.getElementById(id)).filter(Boolean);
 function parkOverlays(host){ for(const el of GAME_OVERLAYS) host.appendChild(el); }
 parkOverlays(document.body);
 function enterGameFullscreen(){
@@ -1945,6 +1957,68 @@ document.getElementById("hrHire").addEventListener("click", ()=>{
   logGlobal("le Patron accueille <b>" + esc(name) + "</b> dans l'équipe.", "DRH");
   renderHR();
 });
+document.getElementById("hrAskDrh").innerHTML = icon("user") + " Demander à la DRH d'ajuster l'équipe";
+document.getElementById("hrAskDrh").addEventListener("click", ()=> openDrhDlg());
+const drhDlg = document.getElementById("drhDlg");
+document.getElementById("drhClose").innerHTML = icon("cross");
+document.getElementById("drhClose").addEventListener("click", ()=> drhDlg.classList.remove("show"));
+drhDlg.addEventListener("click", e=>{ if(e.target === drhDlg) drhDlg.classList.remove("show"); });
+function isCustomAgent(a){
+  if(AGENT_NAMES.includes(a.name)) return false;
+  return !new RegExp("^(" + AGENT_NAMES.join("|") + ")-[0-9]+$").test(a.name);
+}
+async function openDrhDlg(){
+  drhDlg.classList.add("show");
+  const body = document.getElementById("drhBody");
+  if(!hasKey()){
+    body.innerHTML = `<div class="drhmsg">La DRH a besoin de votre clé IA pour analyser les besoins de l'entreprise. Ajoutez votre clé Groq dans Réglages → IA réelle (depuis votre PC virtuel ou la page principale).</div>`;
+    return;
+  }
+  body.innerHTML = `<div class="drhmsg">La DRH analyse les besoins de l'entreprise...</div>`;
+  const agentsDesc = state.agents.map(a => "- " + a.name + " | spécialité : " + (a.role || "polyvalent") + " | personnalité : " + (a.persona || "") + " | statut : " + a.status).join("\n") || "(aucun agent pour le moment)";
+  const backlogDesc = (state.backlog || []).slice(0, 15).map((t, i) => (i + 1) + ". " + t).join("\n") || "(aucune)";
+  try{
+    const rep = await enqueueLLM(()=> callLLM([
+      { role: "system", content: "Tu es la DRH d'une entreprise d'agents IA. Tu décides des embauches et des licenciements selon les besoins réels du travail à faire. Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte autour, au format exact : {\"hire\":[{\"name\":\"Prénom\",\"role\":\"spécialité\"}],\"fire\":[\"Nom\"]}. Spécialités possibles : polyvalent, code, recherche web, rédaction, marketing, ventes, support client, analyse de données, traduction, design, ou une autre spécialité courte en français. Équipe maximum : 10 agents. Sois sobre : embauche seulement si une compétence manque pour la mission ou les tâches en attente ; ne propose de licencier que des agents en doublon dans une même spécialité, jamais un agent occupé. Noms : prénoms courts." },
+      { role: "user", content: "Mission de l'entreprise : " + (state.mission || "(non définie)") + "\n\nTâches en attente :\n" + backlogDesc + "\n\nÉquipe actuelle (" + state.agents.length + "/10) :\n" + agentsDesc + "\n\nPropose les mouvements de personnel nécessaires (peut être vide). Ne propose jamais de licencier un agent au nom original configuré par le patron." }
+    ], 800));
+    let prop = null;
+    try{
+      const s = rep.indexOf("{"), e2 = rep.lastIndexOf("}");
+      prop = JSON.parse(rep.slice(s, e2 + 1));
+    }catch(err){}
+    if(!prop){
+      body.innerHTML = `<div class="drhmsg">La DRH n'a pas pu analyser la situation (réponse illisible). Réessayez dans un instant.</div>`;
+      return;
+    }
+    let room = MAX_AGENTS - state.agents.length;
+    const hires = (Array.isArray(prop.hire) ? prop.hire : [])
+      .filter(h => h && h.name && h.role && room-- > 0).slice(0, 3);
+    const fireables = state.agents.filter(a => a.status !== "busy" && !isCustomAgent(a)
+      && state.agents.filter(x => (x.role || "polyvalent") === (a.role || "polyvalent")).length > 1);
+    const fires = (Array.isArray(prop.fire) ? prop.fire : [])
+      .map(n => fireables.find(a => a.name.toLowerCase() === String(n).trim().toLowerCase()))
+      .filter(Boolean).slice(0, 2);
+    if(!hires.length && !fires.length){
+      body.innerHTML = `<div class="drhmsg">L'équipe est bien dimensionnée pour le travail en cours. Aucun mouvement de personnel nécessaire.<br><br><span style="color:var(--faint);">Vos agents configurés (nom, spécialité, personnalité) sont conservés quoi qu'il arrive.</span></div>`;
+      return;
+    }
+    body.innerHTML =
+      (hires.length ? '<div class="drhsec">Embauches proposées</div>' + hires.map(h => '<div class="hrrow"><div><div class="hrname">' + esc(String(h.name)) + '</div><div class="hrole">' + icon("user") + " " + esc(String(h.role)) + '</div></div><span class="hstat idle">à embaucher</span></div>').join("") : "") +
+      (fires.length ? '<div class="drhsec">Licenciements proposés</div>' + fires.map(a => '<div class="hrrow"><div><div class="hrname">' + esc(a.name) + '</div><div class="hrole">' + icon(specialtyIcon(a.role)) + " " + esc(a.role || "polyvalent") + '</div></div><span class="hstat paused">à licencier</span></div>').join("") : "") +
+      '<div class="row" style="margin-top:14px;"><button class="btn" id="drhApply">Appliquer les décisions</button><button class="btn line" id="drhLater">Plus tard</button></div>';
+    document.getElementById("drhLater").addEventListener("click", ()=> drhDlg.classList.remove("show"));
+    document.getElementById("drhApply").addEventListener("click", ()=>{
+      hires.forEach(h => hireAgent(String(h.name).slice(0, 24), String(h.role).slice(0, 30).toLowerCase()));
+      fires.forEach(a => removeAgent(a));
+      logGlobal("la DRH a ajusté l'effectif : " + hires.length + " embauche(s), " + fires.length + " départ(s).", "DRH");
+      body.innerHTML = `<div class="drhmsg">Décisions appliquées. L'effectif est à jour.</div>`;
+      renderHR();
+    });
+  }catch(e){
+    body.innerHTML = `<div class="drhmsg">La DRH ne peut pas joindre l'IA (` + esc(e.message || "erreur") + `). Vérifiez votre clé.</div>`;
+  }
+}
 function renderHR(){
   const el = document.getElementById("hrList");
   if(!el || !pcOverlay.classList.contains("show")) return;
@@ -2291,6 +2365,7 @@ function renderThemeDots(containerId){
 let three = null;
 let camMode = "orbit";
 const agent3d = new Map();
+const zoneLabels = new Map();
 const fpsState = { x: 0, z: 5.6, yaw: 0, pitch: 0 };
 let nearTarget = null;
 const fpsPromptEl = document.getElementById("fpsPrompt");
@@ -2309,6 +2384,8 @@ function interactNear(){
   if(document.pointerLockElement) document.exitPointerLock();
   if(nt.type === "boss"){
     openBossDlg();
+  } else if(nt.type === "drh"){
+    openDrhDlg();
   } else if(nt.type === "pc"){
     openPc("files");
   } else if(nt.type === "servers"){
@@ -2327,6 +2404,7 @@ function checkNear(){
     if(d < maxD && d < bestD){ bestD = d; best = data; }
   };
   consider(0, -4.3, 3.4, { type: "boss", label: "Parler au Patron" });
+  consider(3.85, -4.5, 2.5, { type: "drh", label: "Administration — parler à la DRH" });
   consider(6.7, 4.4, 2.6, { type: "pc", label: "Ouvrir votre PC (fichiers, tâches, DRH)" });
   consider(6.9, -4.6, 2.4, { type: "servers", label: "Salle serveurs — héberger un site à coder" });
   for(const a of state.agents){
@@ -2521,6 +2599,53 @@ function init3D(){
   const rug = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 2.7, .03, 26), new THREE.MeshStandardMaterial({ color: 0x6e3b3b, roughness: 1 }));
   rug.position.set(0, .03, -4.3); scene.add(rug);
 
+  /* salle de réunion (fond gauche) */
+  const inWallMat = new THREE.MeshStandardMaterial({ color: 0xded8c8, roughness: 1 });
+  function roomWall(w, d, x, z){
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 3.2, d), inWallMat);
+    m.position.set(x, 1.6, z);
+    scene.add(m);
+    return m;
+  }
+  roomWall(2.9, .18, -7.15, -2.4);
+  roomWall(2.1, .18, -3.65, -2.4);
+  roomWall(.18, 4.2, -2.6, -4.5);
+  const meetTable = new THREE.Mesh(new THREE.BoxGeometry(3, .1, 1.4), new THREE.MeshStandardMaterial({ color: 0x6e4f33, roughness: .75 }));
+  meetTable.position.set(-5.6, .95, -4.5); scene.add(meetTable);
+  for(const [lx, lz] of [[-1.2, -.5], [1.2, -.5], [-1.2, .5], [1.2, .5]]){
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .9, 8), new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: .85 }));
+    leg.position.set(-5.6 + lx, .45, -4.5 + lz); scene.add(leg);
+  }
+  const chairMat = new THREE.MeshStandardMaterial({ color: 0x5c4630, roughness: .85 });
+  for(const [cx, cz, back] of [[-6.6, -3.5, -.18], [-5.6, -3.5, -.18], [-4.6, -3.5, -.18], [-6.6, -5.5, .18], [-5.6, -5.5, .18], [-4.6, -5.5, .18]]){
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(.42, .07, .42), chairMat);
+    seat.position.set(cx, .5, cz); scene.add(seat);
+    const backr = new THREE.Mesh(new THREE.BoxGeometry(.42, .5, .07), chairMat);
+    backr.position.set(cx, .78, cz + back); scene.add(backr);
+    const cleg = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, .5, 8), chairMat);
+    cleg.position.set(cx, .25, cz); scene.add(cleg);
+  }
+  const meetScreen = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.3, .08), screenMat(0xc6f542, .55));
+  meetScreen.position.set(-5.6, 2.3, -6.44); scene.add(meetScreen);
+  const meetLabel = makeLabel("SALLE DE RÉUNION", "réunions d'équipe");
+  meetLabel.position.set(-5.6, 3.1, -4.5); scene.add(meetLabel);
+
+  /* bureau administration / DRH (fond droite) */
+  roomWall(.18, 4.2, 2.5, -4.5);
+  roomWall(.4, .18, 2.7, -2.4);
+  roomWall(1.3, .18, 4.55, -2.4);
+  const drhDesk = makeDeskGroup({ w: 2.2, d: 1.1, sw: 1.4, sh: .75, screen: 0xffb454, glow: .5, wood: 0x6e4f33 });
+  drhDesk.position.set(3.85, 0, -5.3);
+  drhDesk.traverse(o => o.userData.drh = true);
+  const drhLabel = makeLabel("ADMINISTRATION", "DRH — embauche & licencie");
+  drhLabel.position.set(3.85, 2.9, -4.9);
+  const drhChar = makeCharacter(0x6e3b3b);
+  drhChar.position.set(3.85, 0, -4.5);
+  drhChar.traverse(o => o.userData.drh = true);
+  const drhBadge = new THREE.Mesh(new THREE.BoxGeometry(.14, .1, .04), screenMat(0xffb454, .9));
+  drhBadge.position.set(0, .78, .18); drhChar.add(drhBadge);
+  scene.add(drhDesk, drhLabel, drhChar);
+
   const bossGroup = makeDeskGroup({ w: 3.4, d: 1.6, sw: 2.3, sh: .85, screen: 0xc6f542, glow: .5, wood: 0x6e4f33 });
   bossGroup.position.set(0, 0, -4.3);
   bossGroup.traverse(o => o.userData.boss = true);
@@ -2591,7 +2716,18 @@ function init3D(){
     camMode = m;
     document.getElementById("camBtn").textContent = m === "fps" ? "Vue libre" : "1ère personne";
     ceil.visible = panelGroup.visible = (m === "fps");
-    if(m === "fps"){ fpsState.x = 0; fpsState.z = 5.6; fpsState.yaw = 0; fpsState.pitch = 0; }
+    if(m === "fps"){
+      let px = 0, pz = 5.6, pyaw = 0, ppitch = 0;
+      try{
+        const sp = JSON.parse(localStorage.getItem("ac_pos") || "null");
+        if(sp && isFinite(sp.x) && isFinite(sp.z)){
+          px = Math.min(8, Math.max(-8, sp.x));
+          pz = Math.min(5.8, Math.max(-5.8, sp.z));
+          pyaw = sp.yaw || 0; ppitch = sp.pitch || 0;
+        }
+      }catch(err){}
+      fpsState.x = px; fpsState.z = pz; fpsState.yaw = pyaw; fpsState.pitch = ppitch;
+    }
     else updateCam();
     updateHud();
     setPrompt(null);
@@ -2659,6 +2795,7 @@ function init3D(){
       if(u.pc){ openPc("files"); return; }
       if(u.servers){ openPc("servers"); return; }
       if(u.boss){ openBossDlg(); return; }
+      if(u.drh){ openDrhDlg(); return; }
     }
     hidePopup();
   });
@@ -2672,6 +2809,7 @@ function init3D(){
   syncCoffeeUI();
   const clock = new THREE.Clock();
   let lastT = performance.now();
+  let lastPosSave = 0;
   (function animate(){
     requestAnimationFrame(animate);
     if(viewMode !== "office") return;
@@ -2695,7 +2833,7 @@ function init3D(){
           const rec = agent3d.get(a.id);
           if(rec) circles.push([rec.group.position.x, rec.group.position.z, 1.05]);
         }
-        circles.push([0, -4.3, 1.7], [6.7, 4.4, 1.1], [-6.7, 4.4, 1], [-7.6, 4.4, .55], [6.9, -5.55, 1.5]);
+        circles.push([0, -4.3, 1.7], [6.7, 4.4, 1.1], [-6.7, 4.4, 1], [-7.6, 4.4, .55], [6.9, -5.55, 1.5], [-5.6, -4.5, 1.7], [3.85, -5.15, 1.5], [3.85, -4.5, .55]);
         for(const [cx, cz, cr] of circles){
           const dx = fpsState.x - cx, dz = fpsState.z - cz;
           const d = Math.hypot(dx, dz);
@@ -2705,10 +2843,30 @@ function init3D(){
           }
         }
       }
+      const walls3d = [
+        [-8.6, -5.7, -2.5, -2.3], [-4.7, -2.6, -2.5, -2.3], [-2.7, -2.5, -6.6, -2.4],
+        [2.4, 2.6, -6.6, -2.4], [2.5, 2.9, -2.5, -2.3], [3.9, 5.2, -2.5, -2.3]
+      ];
+      for(const [x1, x2, z1, z2] of walls3d){
+        if(fpsState.x > x1 - .35 && fpsState.x < x2 + .35 && fpsState.z > z1 - .35 && fpsState.z < z2 + .35){
+          const dl = fpsState.x - (x1 - .35), dr2 = (x2 + .35) - fpsState.x;
+          const dtp = fpsState.z - (z1 - .35), dbt = (z2 + .35) - fpsState.z;
+          const m = Math.min(dl, dr2, dtp, dbt);
+          if(m === dl) fpsState.x = x1 - .35;
+          else if(m === dr2) fpsState.x = x2 + .35;
+          else if(m === dtp) fpsState.z = z1 - .35;
+          else fpsState.z = z2 + .35;
+        }
+      }
       camera.position.set(fpsState.x, 1.62, fpsState.z);
       camera.rotation.order = "YXZ";
       camera.rotation.set(fpsState.pitch, fpsState.yaw, 0);
       checkNear();
+      const np = performance.now();
+      if(np - lastPosSave > 2500){
+        lastPosSave = np;
+        try{ localStorage.setItem("ac_pos", JSON.stringify({ x: fpsState.x, z: fpsState.z, yaw: fpsState.yaw, pitch: fpsState.pitch })); }catch(err){}
+      }
     } else lastT = performance.now();
     for(const a of state.agents){
       const rec = agent3d.get(a.id);
@@ -2744,12 +2902,30 @@ function sync3D(){
       agent3d.delete(id);
     }
   }
-  const cols = 5;
-  state.agents.forEach((a, i) => {
-    if(agent3d.has(a.id)) return;
-    const row = Math.floor(i / cols), col = i % cols;
-    const x = -5.4 + col * 2.7;
-    const z = row === 0 ? -1.4 : 1.3;
+  const SLOTS = [[-6.2, -1.4], [-3.5, -1.4], [-0.8, -1.4], [1.9, -1.4], [4.6, -1.4], [-6.2, 1.6], [-3.5, 1.6], [-0.8, 1.6], [1.9, 1.6], [4.6, 1.6]];
+  const clusters = [];
+  state.agents.forEach(a => {
+    const r = a.role || "polyvalent";
+    let c = clusters.find(x => x.role === r);
+    if(!c){ c = { role: r, members: [] }; clusters.push(c); }
+    c.members.push(a);
+  });
+  const posOf = new Map();
+  let si = 0;
+  clusters.forEach(c => c.members.forEach(a => {
+    posOf.set(a.id, SLOTS[si] || [-5.4 + (si % 5) * 2.7, Math.floor(si / 5) === 0 ? -1.4 : 1.6]);
+    si++;
+  }));
+  state.agents.forEach(a => {
+    const slot = posOf.get(a.id) || [0, 1.6];
+    const x = slot[0], z = slot[1];
+    if(agent3d.has(a.id)){
+      const rec = agent3d.get(a.id);
+      rec.home = { x, z: z + .95 };
+      rec.group.position.set(x, 0, z);
+      rec.label.position.set(x, 2.35, z);
+      return;
+    }
     const group = makeDeskGroup({ w: 1.7, d: 1.05, sw: 1.05, sh: .62, screen: 0xc6f542, glow: .3 });
     group.position.set(x, 0, z);
     group.traverse(o => o.userData.agentId = a.id);
@@ -2759,6 +2935,25 @@ function sync3D(){
     char.position.set(x, 0, z + .95);
     three.scene.add(group, label, char);
     agent3d.set(a.id, { group, label, char, mat: group.userData.screenMat, home: { x, z: z + .95 } });
+  });
+  for(const [role, lbl] of Array.from(zoneLabels)){
+    if(!clusters.find(c => c.role === role)){
+      three.scene.remove(lbl);
+      zoneLabels.delete(role);
+    }
+  }
+  clusters.forEach(c => {
+    const pts = c.members.map(a => posOf.get(a.id)).filter(Boolean);
+    if(!pts.length) return;
+    const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+    const cz = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+    let lbl = zoneLabels.get(c.role);
+    if(!lbl){
+      lbl = makeLabel(c.role.toUpperCase(), "pôle " + c.role);
+      three.scene.add(lbl);
+      zoneLabels.set(c.role, lbl);
+    }
+    lbl.position.set(cx, 3.05, cz);
   });
   updateHud();
 }
