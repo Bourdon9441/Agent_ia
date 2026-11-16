@@ -203,11 +203,8 @@
   .pp-item:hover{border-color:var(--signal); color:var(--signal);}
   .pp-item svg{width:12px; height:12px;}
   .pp-hint{font-family:var(--mono); font-size:8.5px; color:var(--faint); line-height:1.6; margin-top:2px;}
-  #planMenu{position:fixed; z-index:600; display:none; background:var(--raise); border:1px solid var(--line2); border-radius:10px; padding:5px; box-shadow:0 8px 30px rgba(0,0,0,.5); min-width:140px; max-height:60vh; overflow:auto;}
-  #planMenu.show{display:block;}
-  #planMenu button{display:flex; width:100%; align-items:center; gap:7px; background:transparent; border:none; color:var(--ink); font-family:var(--disp); font-size:12.5px; padding:7px 10px; border-radius:7px; cursor:pointer; text-align:left;}
-  #planMenu button:hover{background:var(--line);}
-  #planMenu button svg{width:12px; height:12px;}
+  #ppChooser{max-height:190px; overflow:auto; border:1px solid var(--line2); border-radius:8px; padding:4px; margin-bottom:5px; background:rgba(11,13,10,.6);}
+  #ppChooser .pp-item{margin-bottom:4px; font-size:11px; padding:6px 8px;}
   .queue{font-family:var(--mono); font-size:10.5px; color:var(--faint); line-height:1.6;}
   .agent .log{max-height:110px; font-size:10.5px;}
   .empty{
@@ -404,7 +401,6 @@
         <div class="hud3d" id="hud3d"></div>
         <button class="cambtn" id="fsBtn" style="top:48px;">Plein écran</button>
         <div class="planPalette" id="planPalette"></div>
-        <div id="planMenu"></div>
         <div class="planWorld" id="planWorld"><svg id="planSvg"></svg><div id="planNodes"></div></div>
       </div>
     </div>
@@ -2979,7 +2975,7 @@ function updatePlanHud(){
   if(!el) return;
   const busy = state.agents.filter(a => a.status === "busy").length;
   const paused = state.agents.filter(a => a.status === "paused").length;
-  el.innerHTML = "plan de l'entreprise · glisser le fond : déplacer · molette : zoom · ● d'un bloc vers un autre : relier · cliquer un fil : le supprimer" +
+  el.innerHTML = "plan de l'entreprise · glisser le fond : déplacer · molette : zoom · ● : relier · cliquer un fil : le supprimer · clic droit sur un bloc : le supprimer" +
     "<br>" + state.agents.length + " agent(s) · " + busy + " au travail · " + paused + " au self · " + bossQueue.length + " tâche(s) à distribuer";
 }
 
@@ -2996,25 +2992,6 @@ function planOpenNode(id){
   else if(id === "self") setCoffeeClosed(!state.coffeeClosed);
 }
 
-function hidePlanMenu(){
-  const m = document.getElementById("planMenu");
-  if(m) m.classList.remove("show");
-}
-function openPlanMenu(x, y, items){
-  const m = document.getElementById("planMenu");
-  if(!m) return;
-  m.innerHTML = items.map((it, i) => '<button data-i="' + i + '">' + icon(it.icon || "gears") + " " + esc(it.label) + '</button>').join("");
-  m.querySelectorAll("button").forEach((b, i) => b.addEventListener("click", ()=>{ hidePlanMenu(); items[i].fn(); }));
-  m.classList.add("show");
-  const mw = m.offsetWidth || 150, mh = m.offsetHeight || 90;
-  m.style.left = Math.max(6, Math.min(x, window.innerWidth - mw - 10)) + "px";
-  m.style.top = Math.max(6, Math.min(y + 8, window.innerHeight - mh - 10)) + "px";
-  m.addEventListener("mouseleave", hidePlanMenu);
-}
-document.addEventListener("pointerdown", e => {
-  const m = document.getElementById("planMenu");
-  if(m && !m.contains(e.target)) hidePlanMenu();
-});
 const PLAN_TEMPLATES = [
   { t: "agent", label: "Assistant", icon: "user" },
   { t: "group", label: "Groupe", icon: "user" },
@@ -3054,17 +3031,37 @@ function planChooserItems(kind){
     { label: "Le self", icon: "cutlery", fn: ()=> addRefBlock("service", "self", "LE SELF") }
   ];
 }
+function closeChooser(){
+  const old = document.getElementById("ppChooser");
+  if(old) old.remove();
+}
+function openChooserInPalette(tp, anchor){
+  const pal = document.getElementById("planPalette");
+  if(!pal) return;
+  const old = document.getElementById("ppChooser");
+  if(old){
+    if(old.dataset.t === tp.t){ old.remove(); return; }
+    old.remove();
+  }
+  const items = planChooserItems(tp.t);
+  const box = document.createElement("div");
+  box.id = "ppChooser";
+  box.dataset.t = tp.t;
+  box.innerHTML = items.map((it, i) => '<button class="pp-item" data-i="' + i + '">' + icon(it.icon || "gears") + " " + esc(it.label) + '</button>').join("");
+  box.querySelectorAll("button").forEach((b, i) => b.addEventListener("click", ()=>{ box.remove(); items[i].fn(); }));
+  anchor.after(box);
+}
 (function(){
   const pal = document.getElementById("planPalette");
   if(!pal) return;
   pal.innerHTML = '<div class="pp-head">Blocs à ajouter</div>' + PLAN_TEMPLATES.map(tp =>
     '<button class="pp-item" data-t="' + tp.t + '">' + icon(tp.icon) + " " + tp.label + '</button>').join("") +
-    '<div class="pp-hint">Cliquez un bloc pour l\'ouvrir. Glissez le point d\'un bloc vers un autre pour relier. Cliquez un fil pour le supprimer.</div>';
+    '<div class="pp-hint">Cliquez un bloc pour l\'ouvrir · clic droit : supprimer le bloc · glissez le point d\'un bloc vers un autre pour relier · cliquez un fil pour le supprimer.</div>';
   pal.querySelectorAll(".pp-item").forEach(b => b.addEventListener("click", e => {
     const tp = PLAN_TEMPLATES.find(x => x.t === b.dataset.t);
     if(!tp) return;
     if(tp.t === "agent" || tp.t === "group" || tp.t === "patron" || tp.t === "drh" || tp.t === "service"){
-      openPlanMenu(Math.max(6, e.clientX - 200), e.clientY - 6, planChooserItems(tp.t));
+      openChooserInPalette(tp, b);
       return;
     }
     const world = document.getElementById("planWorld");
@@ -3087,9 +3084,20 @@ function planChooserItems(kind){
   const svg0 = document.getElementById("planSvg");
   if(svg0) svg0.appendChild(tempEdge);
   const planWorldPoint = (r, cx, cy) => ({ x: (cx - r.left - planView.x) / planView.z, y: (cy - r.top - planView.y) / planView.z });
+  world.addEventListener("contextmenu", e => {
+    const nodeEl = e.target.closest ? e.target.closest(".pnode") : null;
+    if(!nodeEl || !nodeEl.dataset.id) return;
+    e.preventDefault();
+    const b = (state.planBlocks || []).find(x => x.id === nodeEl.dataset.id);
+    if(!b) return;
+    state.planBlocks = state.planBlocks.filter(x => x.id !== b.id);
+    state.planLinks = (state.planLinks || []).filter(l => l.from !== b.id && l.to !== b.id);
+    logGlobal("bloc « " + esc(b.title) + " » supprimé du plan (clic droit).", "Système");
+    save(); renderPlan();
+  });
   world.addEventListener("wheel", e => {
     e.preventDefault();
-    hidePlanMenu();
+    closeChooser();
     const r = world.getBoundingClientRect();
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     const nz = Math.min(2, Math.max(0.35, planView.z * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
@@ -3129,7 +3137,7 @@ function planChooserItems(kind){
       if(!n) return;
       planDrag = { kind: "node", id: n.id, el: nodeEl, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, moved: false };
     } else if(!nodeEl){
-      hidePlanMenu();
+      closeChooser();
       planDrag = { kind: "pan", sx: e.clientX, sy: e.clientY, ox: planView.x, oy: planView.y, moved: false };
     } else return;
     try{ world.setPointerCapture(e.pointerId); }catch(err){}
