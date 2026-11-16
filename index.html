@@ -118,6 +118,13 @@
   .task .none{color:var(--faint); font-style:italic;}
   .bar{height:5px; background:var(--bg); border-radius:3px; overflow:hidden;}
   .bar .fill{height:100%; width:0%; background:var(--signal); transition:width .5s linear;}
+  .bar .fill.pulse{background:var(--amber); animation:barpulse 1.2s ease-in-out infinite;}
+  @keyframes barpulse{0%,100%{opacity:.4;}50%{opacity:1;}}
+  .chat{max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;}
+  .chat .bub{max-width:88%; padding:9px 12px; border-radius:12px; font-size:12.5px; line-height:1.55; white-space:pre-wrap; word-break:break-word;}
+  .chat .bub.user{align-self:flex-end; background:var(--raise); border:1px solid var(--line2); color:var(--ink);}
+  .chat .bub.boss{align-self:flex-start; background:var(--surface); border:1px solid var(--line2); border-left:2px solid var(--signal); color:var(--dim);}
+  .chat .bub .who{display:block; font-family:var(--mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); margin-bottom:4px;}
   .queue{font-family:var(--mono); font-size:10.5px; color:var(--faint); line-height:1.6;}
   .agent .log{max-height:110px; font-size:10.5px;}
   .empty{
@@ -194,6 +201,16 @@
     </div>
 
     <div class="panel">
+      <div class="panel-head" id="chatHead">Chat avec le Patron</div>
+      <div class="chat" id="chatLog"></div>
+      <div class="row" style="margin-top:10px;">
+        <input type="text" id="chatInput" placeholder="Parlez au Patron...">
+        <button class="btn" id="chatSend" style="flex:0 0 auto;">Envoyer</button>
+      </div>
+      <div class="hint" id="chatHint">Le Patron répond avec votre IA et peut confier du travail à vos agents.</div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head" id="hireHead">Embaucher un agent <span class="right" id="agentCount"></span></div>
       <div class="row">
         <input type="text" id="agentNameInput" placeholder="Nom (ex : Nova)">
@@ -213,7 +230,7 @@
         <summary id="aiSummary">IA réelle (optionnel)</summary>
         <label>Clé API Groq ou Mistral — reste dans ce navigateur</label>
         <input type="password" id="apiKeyInput" placeholder="gsk_... (Groq) ou sk-... (Mistral)">
-        <div class="hint">Sans clé : mode simulation réaliste. Avec clé : les agents utilisent une vraie IA. Clé Groq (commence par gsk_) depuis console.groq.com/keys — modèle openai/gpt-oss-120b. Sinon clé Mistral (sk-...). La clé n'est jamais synchronisée dans le nuage.</div>
+        <div class="hint">Sans clé : les agents ne travaillent pas (pas de simulation). Avec clé : chaque tâche est réellement exécutée par votre IA et produit un livrable. Clé Groq (commence par gsk_) depuis console.groq.com/keys — modèle openai/gpt-oss-120b. Sinon clé Mistral (sk-...). La clé n'est jamais synchronisée dans le nuage.</div>
         <label>Vitesse de simulation</label>
         <select id="speedSelect">
           <option value="2">Lente</option>
@@ -315,7 +332,7 @@ function scopeKey(){
 }
 function freshState(){
   return { agents: [], mission: "", backlog: [], autonomous: false, speed: 1, doneCount: 0,
-           activity: [], results: [], meta: { syncedAt: null } };
+           activity: [], results: [], chat: [], meta: { syncedAt: null } };
 }
 let state = freshState();
 
@@ -365,6 +382,7 @@ function engineTick(){
   for(const a of state.agents){
     if(a.status !== "busy" || !a.currentTask) continue;
     const t = a.currentTask;
+    if(t.real) continue;
     if((Date.now() - t.startedAt) / 1000 >= t.duration){ finishTask(a); changed = true; }
   }
   dispatch();
@@ -391,10 +409,16 @@ function dispatch(){
   }
 }
 
+function hasKey(){ return !!mistralKey(); }
+
 function assignTask(agent, text, from){
-  const duration = (8 + Math.random() * 10) * (state.speed || 1);
   agent.status = "busy";
-  agent.currentTask = { text, startedAt: Date.now(), duration };
+  if(hasKey()){
+    agent.currentTask = { text, startedAt: Date.now(), duration: 0, real: true };
+    executeTask(agent);
+  } else {
+    agent.currentTask = { text, startedAt: Date.now(), duration: (8 + Math.random() * 10) * (state.speed || 1), real: false };
+  }
   logAgent(agent, "Tâche reçue de " + from + " : " + text);
   logGlobal("tâche confiée à <b>" + esc(agent.name) + "</b> : " + esc(text), "Patron");
   updateDynamicUI(); save();
@@ -407,7 +431,6 @@ function finishTask(agent){
   state.doneCount++;
   logAgent(agent, "Terminé : " + t.text);
   logGlobal("<b>" + esc(agent.name) + "</b> a terminé : " + esc(t.text), agent.name);
-  if(mistralKey()) produceDeliverable(agent, t.text);
 }
 
 /* file d'attente : 1 appel IA à la fois (évite les 429 du niveau gratuit Groq) */
@@ -428,26 +451,36 @@ async function pumpLLM(){
   setTimeout(pumpLLM, 1500);
 }
 
-async function produceDeliverable(agent, taskText){
+async function executeTask(agent){
+  const t = agent.currentTask;
   const rid = uid();
-  state.results.unshift({ id: rid, agent: agent.name, task: taskText, output: "", status: "pending", at: new Date().toLocaleString("fr-FR") });
+  state.results.unshift({ id: rid, agent: agent.name, task: t.text, output: "", status: "pending", at: new Date().toLocaleString("fr-FR") });
   if(state.results.length > 50) state.results.length = 50;
   renderResults(); save();
-  logGlobal("<b>" + esc(agent.name) + "</b> rédige le livrable : " + esc(taskText), agent.name);
   try{
     const out = await enqueueLLM(()=> callLLM([
       {role:"system", content:"Tu es l'agent " + agent.name + " (spécialité : " + (agent.role || "polyvalent") + ") d'une équipe de travail. Exécute la tâche suivante et produis directement le livrable concret, en français, prêt à l'emploi (texte structuré, complet, actionnable). Pas d'introduction, pas de commentaire : uniquement le livrable."},
-      {role:"user", content: taskText}
+      {role:"user", content: t.text}
     ]));
+    if(agent.currentTask !== t) return;
     const r = state.results.find(x=>x.id===rid);
     if(r){ r.output = out; r.status = "done"; }
-    logGlobal("livrable prêt : " + esc(taskText), agent.name);
+    agent.currentTask = null;
+    agent.status = "idle";
+    state.doneCount++;
+    logAgent(agent, "Terminé : " + t.text);
+    logGlobal("livrable prêt : " + esc(t.text), agent.name);
   }catch(e){
+    if(agent.currentTask !== t) return;
     const r = state.results.find(x=>x.id===rid);
     if(r){ r.status = "error"; r.output = "Échec de la génération (" + e.message + "). Vérifiez la clé API et les limites du niveau gratuit."; }
-    logGlobal("échec du livrable (" + esc(e.message) + ")", agent.name);
+    agent.currentTask = null;
+    agent.status = "idle";
+    logAgent(agent, "Échec : " + t.text + " (" + e.message + ")");
+    logGlobal("échec de la tâche (« " + esc(e.message) + " »)", agent.name);
   }
-  renderResults(); updateKPIs(); save();
+  renderResults(); updateDynamicUI(); updateKPIs(); save();
+  dispatch();
 }
 
 function resultsText(){
@@ -492,6 +525,7 @@ function renderResults(){
 async function launchObjective(text){
   text = (text || "").trim();
   if(!text) return;
+  if(!hasKey()){ logGlobal("clé IA absente : ajoutez votre clé Groq dans Réglages → IA réelle. Pas de simulation — seulement du vrai travail.", "Patron"); return; }
   if(state.agents.length === 0){ logGlobal("impossible : embauchez au moins un agent.", "Patron"); return; }
   logGlobal("nouvel objectif reçu : « " + esc(text) + " »", "Patron");
   const subtasks = await decompose(text);
@@ -521,6 +555,7 @@ async function decompose(objective){
 }
 
 async function autonomousRound(){
+  if(!hasKey()){ state.autonomous = false; renderChips(); return; }
   if(state.agents.length === 0) return;
   let objective;
   if(state.backlog.length) objective = state.backlog[state.doneCount % state.backlog.length];
@@ -774,7 +809,7 @@ function updateKPIs(){
 function renderChips(){
   const m = document.getElementById("chipMode");
   if(mistralKey()){ m.className = "chip on"; m.innerHTML = "<span class='led'></span>ia réelle"; }
-  else { m.className = "chip"; m.innerHTML = "<span class='led'></span>simulation"; }
+  else { m.className = "chip"; m.innerHTML = "<span class='led'></span>clé IA requise"; }
   const a = document.getElementById("chipAuto");
   if(state.autonomous){ a.className = "chip on"; a.innerHTML = "<span class='led'></span>autonome on"; }
   else { a.className = "chip"; a.innerHTML = "<span class='led'></span>autonome off"; }
@@ -824,8 +859,66 @@ function renderAll(){
   renderAgents();
   renderActivity();
   renderResults();
+  renderChatLog();
   updateKPIs();
   refreshAccountUI();
+}
+
+/* ================= chat avec le Patron ================= */
+function renderChatLog(){
+  const el = document.getElementById("chatLog");
+  if(!state.chat || !state.chat.length){
+    el.innerHTML = '<div style="color:var(--faint);font-style:italic;padding:14px 4px;">Dites bonjour au Patron, ou confiez-lui un travail : il le répartira entre vos agents.</div>';
+    return;
+  }
+  el.innerHTML = state.chat.map(m =>
+    '<div class="bub ' + (m.role === "user" ? "user" : "boss") + '"><span class="who">' + (m.role === "user" ? "vous" : "le patron") + " · " + esc(m.t) + '</span>' + esc(m.text) + '</div>'
+  ).join("");
+  el.scrollTop = el.scrollHeight;
+}
+
+async function sendChat(){
+  const inp = document.getElementById("chatInput");
+  const text = inp.value.trim();
+  if(!text) return;
+  if(!hasKey()){
+    state.chat.push({ role: "boss", text: "Ajoutez d'abord votre clé API Groq dans Réglages → IA réelle, et je pourrai vraiment travailler avec vous.", t: nowT() });
+    renderChatLog(); save();
+    return;
+  }
+  inp.value = "";
+  state.chat.push({ role: "user", text, t: nowT() });
+  renderChatLog(); save();
+  const btn = document.getElementById("chatSend");
+  btn.disabled = true;
+  try{
+    const agentsDesc = state.agents.length ? state.agents.map(a=>a.name + " (" + (a.role || "polyvalent") + ")").join(", ") : "aucun agent pour l'instant";
+    const history = state.chat.slice(0, -1).slice(-10).map(m => ({role: m.role === "user" ? "user" : "assistant", content: m.text}));
+    const reply = await enqueueLLM(()=> callLLM([
+      {role:"system", content:"Tu es le Patron, le manager de l'équipe d'agents IA de l'entreprise de l'utilisateur. Tes agents : " + agentsDesc + ". Réponds en français, de façon directe, concrète et utile (max 120 mots). Si l'utilisateur te confie un travail à exécuter, termine ta réponse par une ligne contenant exactement TACHES: puis une tâche claire et actionnable par ligne (max 6), qui seront distribuées à tes agents. Si c'est une question ou une discussion, ne mets pas de section TACHES."},
+      ...history,
+      {role:"user", content: text}
+    ]));
+    let msg = reply, tasks = [];
+    const idx = reply.search(/^TACHES:?\s*$/im);
+    if(idx >= 0){
+      msg = reply.slice(0, idx).trim();
+      tasks = reply.slice(idx).split("\n").slice(1).map(s=>s.replace(/^[-*\d.\s]+/, "").trim()).filter(Boolean).slice(0,6);
+    }
+    state.chat.push({ role: "boss", text: msg || "C'est noté.", t: nowT() });
+    if(state.chat.length > 60) state.chat.splice(0, state.chat.length - 60);
+    renderChatLog();
+    if(tasks.length){
+      bossQueue.push(...tasks);
+      logGlobal("le Patron a créé <b>" + tasks.length + "</b> tâche(s) depuis le chat, distribution en cours...", "Patron");
+      dispatch();
+    }
+  }catch(e){
+    state.chat.push({ role: "boss", text: "Problème de connexion à l'IA (" + e.message + "). Vérifiez la clé API dans Réglages.", t: nowT() });
+    renderChatLog();
+  }
+  btn.disabled = false;
+  updateDynamicUI(); updateKPIs(); save();
 }
 
 /* ================= modale livrables ================= */
@@ -997,10 +1090,13 @@ document.getElementById("objectiveInput").addEventListener("keydown", e=>{
   if(e.key === "Enter"){ launchObjective(e.target.value); e.target.value = ""; }
 });
 document.getElementById("autoSwitch").addEventListener("click", ()=>{
+  if(!state.autonomous && !hasKey()){ logGlobal("mode autonome impossible sans clé IA — ajoutez votre clé Groq dans Réglages → IA réelle.", "Patron"); return; }
   state.autonomous = !state.autonomous;
   renderChips(); save();
   logGlobal("mode autonome " + (state.autonomous ? "ACTIVÉ — le Patron travaille sans vous." : "désactivé."), "Patron");
 });
+document.getElementById("chatSend").addEventListener("click", sendChat);
+document.getElementById("chatInput").addEventListener("keydown", e=>{ if(e.key === "Enter") sendChat(); });
 document.getElementById("missionInput").addEventListener("input", e=>{ state.mission = e.target.value; save(); });
 document.getElementById("backlogInput").addEventListener("input", e=>{
   state.backlog = e.target.value.split("\n").map(s=>s.trim()).filter(Boolean); save();
