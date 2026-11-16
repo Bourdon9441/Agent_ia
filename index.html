@@ -356,9 +356,11 @@ function logAgent(agent, msg){
 const workerSrc = "let id=null;onmessage=e=>{if(e.data==='start'&&!id){id=setInterval(()=>postMessage('tick'),1000)};if(e.data==='stop'){clearInterval(id);id=null}};";
 const worker = new Worker(URL.createObjectURL(new Blob([workerSrc], {type:"application/javascript"})));
 worker.onmessage = () => engineTick();
-worker.postMessage("start");
+function startEngine(){ worker.postMessage("start"); }
+function stopEngine(){ worker.postMessage("stop"); }
 
 function engineTick(){
+  if(!session) return;
   let changed = false;
   for(const a of state.agents){
     if(a.status !== "busy" || !a.currentTask) continue;
@@ -560,7 +562,7 @@ function initSupabase(){
   sb.auth.getSession().then(({data})=>{ if(data.session) applySession(data.session); refreshAccountUI(); });
   sb.auth.onAuthStateChange((event, s)=>{
     if(event === "SIGNED_IN" && s) applySession(s);
-    if(event === "SIGNED_OUT"){ session = null; loadLocal(); renderAll(); }
+    if(event === "SIGNED_OUT"){ session = null; stopEngine(); loadLocal(); renderAll(); openAuthModal(); }
     refreshAccountUI();
   });
 }
@@ -570,6 +572,8 @@ function applySession(s){
   session = s;
   loadLocal();
   renderAll();
+  startEngine();
+  authOverlay.classList.remove("show");
   pullRemote(!sameUser);
 }
 
@@ -847,6 +851,7 @@ create policy "proprietaire"
 
 function openAuthModal(){
   document.getElementById("authTitle").innerHTML = icon("login") + " Connexion";
+  document.getElementById("authClose").style.display = session ? "" : "none";
   const body = document.getElementById("authBody");
   if(supabaseReady()){
     document.getElementById("authSub").textContent = "Connectez-vous pour retrouver vos agents et vos tâches sur tous vos appareils, avec le même compte.";
@@ -885,11 +890,18 @@ function openAuthModal(){
     document.getElementById("copySql").addEventListener("click", ()=>{
       navigator.clipboard.writeText(SETUP_SQL).then(()=>{ document.getElementById("copySql").textContent = "Copié ✓"; });
     });
-    document.getElementById("cfgSave").addEventListener("click", ()=>{
+    document.getElementById("cfgSave").addEventListener("click", async ()=>{
       const url = document.getElementById("cfgUrl").value.trim().replace(/\/+$/, "");
       const key = document.getElementById("cfgKey").value.trim();
-      if(!url.startsWith("https://") || key.length < 20){
-        showAuthMsg("URL ou clé invalide.", true); return;
+      if(!url.startsWith("https://")){ showAuthMsg("L'URL doit commencer par https:// (ex : https://xxxx.supabase.co).", true); return; }
+      if(!key.startsWith("eyJ")){ showAuthMsg("Le champ clé doit contenir la « anon public key » (elle commence par eyJ…), PAS l'URL du projet. Copiez-la dans Project Settings → API.", true); return; }
+      showAuthMsg("Vérification de la clé en cours...", false);
+      try{
+        const res = await fetch(url + "/auth/v1/health", { headers: { apikey: key } });
+        if(res.status === 401){ showAuthMsg("Clé refusée par Supabase (401). Recopiez la « anon public key » dans Project Settings → API.", true); return; }
+        if(!res.ok){ showAuthMsg("Supabase a répondu avec une erreur " + res.status + ". Vérifiez l'URL du projet.", true); return; }
+      }catch(e){
+        showAuthMsg("Impossible de joindre " + esc(url) + " — vérifiez l'URL, ou le projet est en pause (cliquez Restore dans le dashboard).", true); return;
       }
       cfg = { url, key };
       localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
@@ -908,8 +920,8 @@ function showAuthMsg(msg, isErr){
 }
 
 document.getElementById("authClose").innerHTML = icon("cross");
-document.getElementById("authClose").addEventListener("click", ()=> authOverlay.classList.remove("show"));
-authOverlay.addEventListener("click", e=>{ if(e.target === authOverlay) authOverlay.classList.remove("show"); });
+document.getElementById("authClose").addEventListener("click", ()=>{ if(session) authOverlay.classList.remove("show"); });
+authOverlay.addEventListener("click", e=>{ if(e.target === authOverlay && session) authOverlay.classList.remove("show"); });
 
 function renderCloudSettings(){
   const body = document.getElementById("cloudBody");
@@ -1010,6 +1022,7 @@ if(!session) loadLocal();
 if(!state.results) state.results = [];
 renderAll();
 logGlobal("centre de contrôle démarré" + (supabaseReady() ? " (synchro prête)." : " en mode local."), "Système");
+if(session) startEngine(); else openAuthModal();
 (function(){
   const h = new URLSearchParams(location.hash.slice(1));
   const q = new URLSearchParams(location.search);
