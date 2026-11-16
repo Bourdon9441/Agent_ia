@@ -162,6 +162,12 @@
   .hud3d{position:absolute; top:10px; left:10px; z-index:5; font-family:var(--mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); background:rgba(11,13,10,.72); border:1px solid var(--line); border-radius:8px; padding:6px 10px; line-height:1.8; pointer-events:none;}
   .cambtn{position:absolute; top:10px; right:10px; z-index:6; background:var(--raise); border:1px solid var(--line2); color:var(--signal); font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; padding:8px 12px; border-radius:8px; cursor:pointer;}
   .cambtn:hover{background:var(--line);}
+  .fpscross{position:absolute; top:50%; left:50%; width:16px; height:16px; margin:-8px; border:1.5px solid rgba(198,245,66,.95); border-radius:50%; z-index:6; display:none; pointer-events:none; box-shadow:0 0 10px rgba(198,245,66,.55);}
+  .fpscross::after{content:''; position:absolute; top:50%; left:50%; width:3px; height:3px; margin:-1.5px; background:var(--signal); border-radius:50%;}
+  .fpscross.show{display:block;}
+  .fpsprompt{position:absolute; bottom:36px; left:50%; transform:translateX(-50%); z-index:6; display:none; background:rgba(11,13,10,.88); border:1px solid var(--line2); border-radius:10px; padding:10px 16px; font-family:var(--disp); font-size:13.5px; color:var(--ink); pointer-events:none; white-space:nowrap;}
+  .fpsprompt.show{display:block;}
+  .fpsprompt b{font-family:var(--mono); background:var(--signal); color:var(--signal-ink); border-radius:5px; padding:2px 8px; margin-right:9px; font-size:11px;}
   .deskpopup{position:fixed; display:none; z-index:220; background:var(--raise); border:1px solid var(--line2); border-radius:10px; padding:10px 12px; min-width:180px; box-shadow:0 8px 30px rgba(0,0,0,.5);}
   .deskpopup.show{display:block;}
   .deskpopup b{font-family:var(--disp); font-size:13px; color:var(--ink);}
@@ -202,6 +208,14 @@
   .res pre{font-family:var(--mono); font-size:11.5px; line-height:1.65; color:var(--dim); white-space:pre-wrap; word-break:break-word; max-height:260px; overflow-y:auto; margin:0;}
   .res.pending pre{color:var(--faint); font-style:italic;}
   .res.error pre{color:var(--red);}
+  .topbar{border-bottom:1px solid var(--line);}
+  ::-webkit-scrollbar{width:8px; height:8px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:var(--line2); border-radius:4px;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--faint);}
+  .btn:hover{transform:translateY(-1px);}
+  .btn:active{transform:translateY(0);}
+  .deskpopup{border-left:2px solid var(--signal);}
   .footer{font-family:var(--mono); font-size:10px; color:var(--faint); text-align:center; padding:18px; letter-spacing:.08em;}
   .footer a{color:var(--dim);}
 </style>
@@ -298,7 +312,7 @@
 
   <div>
     <div class="office" id="officeView">
-      <div class="floor3d" id="floor3d"><div class="hud3d" id="hud3d"></div><button class="cambtn" id="camBtn">1ère personne</button></div>
+      <div class="floor3d" id="floor3d"><div class="hud3d" id="hud3d"></div><button class="cambtn" id="camBtn">1ère personne</button><div class="fpscross" id="fpsCross"></div><div class="fpsprompt" id="fpsPrompt"></div></div>
       <div class="floor">
         <div class="bosszone">
           <div class="desk boss">
@@ -1337,6 +1351,51 @@ document.getElementById("vtList").addEventListener("click", ()=>{ viewMode = "li
 let three = null;
 let camMode = "orbit";
 const agent3d = new Map();
+const fpsState = { x: 0, z: 5.6, yaw: 0, pitch: 0 };
+let nearTarget = null;
+const fpsPromptEl = document.getElementById("fpsPrompt");
+const fpsCrossEl = document.getElementById("fpsCross");
+function setPrompt(nt){
+  nearTarget = nt;
+  if(nt && camMode === "fps"){
+    fpsPromptEl.innerHTML = '<b>E</b> ' + esc(nt.label);
+    fpsPromptEl.classList.add("show");
+  } else fpsPromptEl.classList.remove("show");
+  fpsCrossEl.classList.toggle("show", camMode === "fps" && !!document.pointerLockElement);
+}
+function interactNear(){
+  const nt = nearTarget;
+  if(!nt) return;
+  if(document.pointerLockElement) document.exitPointerLock();
+  if(nt.type === "boss"){
+    const c = document.getElementById("chatInput");
+    c.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(()=> c.focus(), 350);
+  } else if(nt.type === "pc"){
+    renderResults();
+    resultsOverlay.classList.add("show");
+  } else if(nt.type === "agent"){
+    showAgentPopup(nt.agent, window.innerWidth / 2 - 100, window.innerHeight / 2 - 60);
+  }
+  setPrompt(null);
+}
+function checkNear(){
+  if(camMode !== "fps" || !document.pointerLockElement){ setPrompt(null); return; }
+  const x = fpsState.x, z = fpsState.z;
+  let best = null, bestD = 1e9;
+  const consider = (tx, tz, maxD, data) => {
+    const d = Math.hypot(x - tx, z - tz);
+    if(d < maxD && d < bestD){ bestD = d; best = data; }
+  };
+  consider(0, -4.3, 3.4, { type: "boss", label: "Parler au Patron" });
+  consider(6.7, 4.4, 2.6, { type: "pc", label: "Récupérer vos fichiers" });
+  for(const a of state.agents){
+    const rec = agent3d.get(a.id);
+    if(rec) consider(rec.group.position.x, rec.group.position.z, 2.3,
+      { type: "agent", agent: a, label: a.name + " — " + (a.status === "paused" ? "le faire revenir" : "options") });
+  }
+  setPrompt(best);
+}
 const deskPopup = document.getElementById("deskPopup");
 function showAgentPopup(a, x, y){
   deskPopup.innerHTML = '<b>' + esc(a.name) + '</b><span class="prole">' + esc(a.role || "polyvalent") + '</span>' +
@@ -1448,6 +1507,44 @@ function init3D(){
   wallL.position.set(-8.6, 2.2, 0); scene.add(wallL);
   const wallR = new THREE.Mesh(new THREE.BoxGeometry(.2, 4.4, 13), wallMat);
   wallR.position.set(8.6, 2.2, 0); scene.add(wallR);
+  const ceil = new THREE.Mesh(new THREE.BoxGeometry(17, .2, 13), new THREE.MeshStandardMaterial({ color: 0x0e110c, roughness: 1 }));
+  ceil.position.set(0, 4.5, 0); scene.add(ceil);
+  const panelGroup = new THREE.Group();
+  const panelMat = new THREE.MeshStandardMaterial({ color: 0x0b0d0a, emissive: 0xfff6dd, emissiveIntensity: .95 });
+  for(const px of [-4.5, 0, 4.5]){
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(3.4, .06, 1.6), panelMat);
+    panel.position.set(px, 4.36, 0); panelGroup.add(panel);
+    const pl = new THREE.PointLight(0xfff4d6, .3, 15);
+    pl.position.set(px, 3.9, 0); panelGroup.add(pl);
+  }
+  scene.add(panelGroup);
+  ceil.visible = panelGroup.visible = false;
+  const stripeMat = new THREE.MeshStandardMaterial({ color: 0x0b0d0a, emissive: 0xc6f542, emissiveIntensity: .75 });
+  const stripeB = new THREE.Mesh(new THREE.BoxGeometry(16.6, .09, .06), stripeMat);
+  stripeB.position.set(0, 2.9, -6.47); scene.add(stripeB);
+  const stripeL = new THREE.Mesh(new THREE.BoxGeometry(.06, .09, 12.6), stripeMat);
+  stripeL.position.set(-8.47, 2.9, 0); scene.add(stripeL);
+  const stripeR = new THREE.Mesh(new THREE.BoxGeometry(.06, .09, 12.6), stripeMat);
+  stripeR.position.set(8.47, 2.9, 0); scene.add(stripeR);
+  const sc = document.createElement("canvas");
+  sc.width = 1024; sc.height = 256;
+  const sctx = sc.getContext("2d");
+  sctx.fillStyle = "#0b0d0a"; sctx.fillRect(0, 0, 1024, 256);
+  sctx.strokeStyle = "#333a2a"; sctx.lineWidth = 8; sctx.strokeRect(8, 8, 1008, 240);
+  sctx.fillStyle = "#c6f542"; sctx.font = "bold 120px monospace"; sctx.textAlign = "center";
+  sctx.fillText("AGENT_IA", 512, 160);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc) }));
+  sign.position.set(0, 3.55, -6.48); scene.add(sign);
+  const potMat = new THREE.MeshStandardMaterial({ color: 0x262b1f, roughness: .9 });
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x2c3a22, roughness: .9 });
+  for(const [px, pz] of [[-7.7, -5.7], [7.7, -5.7], [7.7, 5.7]]){
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(.3, .22, .5, 10), potMat);
+    pot.position.set(px, .25, pz); scene.add(pot);
+    const foliage = new THREE.Mesh(new THREE.ConeGeometry(.45, 1.3, 8), leafMat);
+    foliage.position.set(px, 1.15, pz); scene.add(foliage);
+  }
+  const rug = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 2.7, .03, 26), new THREE.MeshStandardMaterial({ color: 0x1a2013, roughness: 1 }));
+  rug.position.set(0, .03, -4.3); scene.add(rug);
 
   const bossGroup = makeDeskGroup({ w: 3.4, d: 1.6, sw: 2.3, sh: .85, screen: 0xc6f542, glow: .5 });
   bossGroup.position.set(0, 0, -4.3);
@@ -1492,14 +1589,15 @@ function init3D(){
   const mouse = new THREE.Vector2();
   let downX = 0, downY = 0, dragged = false;
   const dom = renderer.domElement;
-  const fpsState = { x: 0, z: 5.6, yaw: 0, pitch: 0 };
   const fpsKeys = { forward: false, back: false, left: false, right: false, sprint: false };
   function setCamMode(m){
     camMode = m;
     document.getElementById("camBtn").textContent = m === "fps" ? "Vue libre" : "1ère personne";
+    ceil.visible = panelGroup.visible = (m === "fps");
     if(m === "fps"){ fpsState.x = 0; fpsState.z = 5.6; fpsState.yaw = 0; fpsState.pitch = 0; }
     else updateCam();
     updateHud();
+    setPrompt(null);
   }
   document.getElementById("camBtn").addEventListener("click", e=>{
     e.stopPropagation();
@@ -1512,8 +1610,10 @@ function init3D(){
     if(["KeyA","KeyQ","ArrowLeft"].includes(e.code)) fpsKeys.left = true;
     if(["KeyD","ArrowRight"].includes(e.code)) fpsKeys.right = true;
     if(e.code === "ShiftLeft" || e.code === "ShiftRight") fpsKeys.sprint = true;
+    if(e.code === "KeyE") interactNear();
     if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code)) e.preventDefault();
   });
+  document.addEventListener("pointerlockchange", ()=> setPrompt(nearTarget));
   window.addEventListener("keyup", e => {
     if(["KeyW","KeyZ","ArrowUp"].includes(e.code)) fpsKeys.forward = false;
     if(["KeyS","ArrowDown"].includes(e.code)) fpsKeys.back = false;
@@ -1613,6 +1713,7 @@ function init3D(){
       camera.position.set(fpsState.x, 1.62, fpsState.z);
       camera.rotation.order = "YXZ";
       camera.rotation.set(fpsState.pitch, fpsState.yaw, 0);
+      checkNear();
     } else lastT = performance.now();
     for(const a of state.agents){
       const rec = agent3d.get(a.id);
