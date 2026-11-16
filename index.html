@@ -321,7 +321,7 @@
         <label>Clé API Groq ou Mistral — reste dans ce navigateur</label>
         <input type="password" id="apiKeyInput" placeholder="gsk_... (Groq) ou sk-... (Mistral)">
         <div class="hint">Sans clé : les agents ne travaillent pas (pas de simulation). Avec clé : chaque tâche est réellement exécutée par votre IA et produit un livrable. Clé Groq (commence par gsk_) depuis console.groq.com/keys — modèle openai/gpt-oss-120b. Sinon clé Mistral (sk-...). La clé n'est jamais synchronisée dans le nuage.</div>
-        <label>Objectifs récurrents du mode autonome <span style="text-transform:none;letter-spacing:0">(un par ligne)</span></label>
+        <label>Objectifs récurrents du mode autonome <span style="text-transform:none;letter-spacing:0">(une tâche par ligne, exécutées dans l'ordre — jamais au hasard)</span></label>
         <textarea id="backlogInput" placeholder="Surveiller les tendances du secteur&#10;Préparer le rapport hebdomadaire"></textarea>
       </details>
     </div>
@@ -334,7 +334,7 @@
 
   <div>
     <div class="office" id="officeView">
-      <div class="floor3d" id="floor3d"><div class="hud3d" id="hud3d"></div><button class="cambtn" id="camBtn">1ère personne</button><div class="fpscross" id="fpsCross"></div><div class="fpsprompt" id="fpsPrompt"></div></div>
+      <div class="floor3d" id="floor3d"><div class="hud3d" id="hud3d"></div><button class="cambtn" id="camBtn">1ère personne</button><button class="cambtn" id="fsBtn" style="top:48px;">Plein écran</button><div class="fpscross" id="fpsCross"></div><div class="fpsprompt" id="fpsPrompt"></div></div>
       <div class="floor">
         <div class="bosszone">
           <div class="desk boss">
@@ -414,13 +414,28 @@
     <p class="sub">Tout se gère depuis ce terminal : livrables, conversations, embauches, réglages.</p>
     <div class="tabs" id="pcTabs">
       <button class="tab on" data-tab="files"></button>
+      <button class="tab" data-tab="tasks"></button>
       <button class="tab" data-tab="chat"></button>
       <button class="tab" data-tab="hr"></button>
+      <button class="tab" data-tab="servers"></button>
       <button class="tab" data-tab="settings"></button>
     </div>
     <div class="pcpane" id="pane-files">
       <div id="pcFilesList"></div>
       <div class="row" id="pcFilesActions" style="margin-top:14px;"></div>
+    </div>
+    <div class="pcpane" id="pane-tasks" style="display:none;">
+      <label>Objectif ponctuel pour le Patron</label>
+      <div class="row">
+        <input type="text" id="pcObjective" placeholder="Ex : préparer la newsletter de mars">
+        <button class="btn" id="pcLaunch" style="flex:0 0 auto;"></button>
+      </div>
+      <label style="margin-top:16px;">Mode autonome — le Patron travaille seul</label>
+      <button class="btn line wide" id="pcAuto"></button>
+      <label style="margin-top:16px;">Liste des tâches du mode autonome <span style="text-transform:none;letter-spacing:0">(une par ligne, exécutées dans l'ordre, sans improvisation)</span></label>
+      <textarea id="pcBacklog" placeholder="Surveiller les tendances du secteur&#10;Préparer le rapport hebdomadaire"></textarea>
+      <label style="margin-top:16px;">Mission de l'entreprise</label>
+      <input type="text" id="pcMission" placeholder="La mission de vos agents...">
     </div>
     <div class="pcpane" id="pane-chat" style="display:none;">
       <div class="chat" id="pcChatLog" style="max-height:44vh; border:1px solid var(--line); border-radius:12px; padding:12px;"></div>
@@ -437,6 +452,12 @@
       <input type="text" id="hrRoleCustom" placeholder="Précisez la spécialité..." style="display:none; margin-bottom:10px;">
       <button class="btn wide" id="hrHire"></button>
       <div style="margin-top:16px;" id="hrList"></div>
+    </div>
+    <div class="pcpane" id="pane-servers" style="display:none;">
+      <label>Salle serveurs — site internet à produire</label>
+      <textarea id="srvDesc" placeholder="Décrivez le site à créer. Ex : site vitrine pour ma boulangerie avec menu, horaires et formulaire de contact"></textarea>
+      <button class="btn wide" id="srvLaunch" style="margin-top:10px;"></button>
+      <div class="hint" style="margin-top:12px;">Le Patron découpe le projet et le confie à vos agents (code, rédaction, design…). Les livrables (code du site, textes, structure) apparaissent dans l'onglet Fichiers dès qu'ils ont terminé.</div>
     </div>
     <div class="pcpane" id="pane-settings" style="display:none;">
       <label>Clé API Groq ou Mistral — reste dans ce navigateur</label>
@@ -570,10 +591,24 @@ function engineTick(){
   updateKPIs();
 }
 
-/* pauses café autonomes : les agents y vont seuls, mais il reste toujours quelqu'un au bureau */
+/* pauses café autonomes : uniquement quand il n'y a AUCUNE tâche en attente ; rappel immédiat sinon */
 function autoBreaks(){
   if(!hasKey()) return false;
   let changed = false;
+  const workPending = bossQueue.length > 0 || state.agents.some(a => a.currentTask || a.queue.length > 0);
+  if(workPending){
+    for(const a of state.agents){
+      if(a.status === "paused" && a.autoBreak){
+        a.status = "idle";
+        delete a.autoBreak;
+        logAgent(a, "Travail en attente : pause écourtée.");
+        logGlobal("<b>" + esc(a.name) + "</b> est rappelé au bureau : du travail attend.", "Patron");
+        changed = true;
+      }
+    }
+    if(changed) updateDynamicUI();
+    return changed;
+  }
   for(const a of state.agents){
     if(a.status === "paused" && a.autoBreak && Date.now() > a.autoBreak){
       a.status = "idle";
@@ -793,14 +828,21 @@ async function decompose(objective){
   return [];
 }
 
+let autoWaitLogged = false;
 async function autonomousRound(){
   if(!hasKey()){ state.autonomous = false; renderChips(); return; }
   if(state.agents.length === 0) return;
-  let objective;
-  if(state.backlog.length) objective = state.backlog[state.doneCount % state.backlog.length];
-  else if(state.mission) objective = "Faire avancer la mission : " + state.mission;
-  else objective = "Point d'étape : vérifier l'avancement général et proposer des améliorations";
-  logGlobal("cycle autonome : " + esc(objective), "Patron");
+  if(!state.backlog.length){
+    if(!autoWaitLogged){
+      logGlobal("mode autonome en attente : votre liste de tâches est vide. Remplissez-la dans Réglages → Objectifs récurrents, ou depuis votre PC → Tâches. Le Patron ne fait rien au hasard.", "Patron");
+      autoWaitLogged = true;
+    }
+    return;
+  }
+  autoWaitLogged = false;
+  const objective = state.backlog[(state.autoIdx || 0) % state.backlog.length];
+  state.autoIdx = ((state.autoIdx || 0) + 1) % state.backlog.length;
+  logGlobal("cycle autonome (liste, tâche " + state.autoIdx + "/" + state.backlog.length + ") : " + esc(objective), "Patron");
   const subtasks = await decompose(objective);
   if(!subtasks.length){ logGlobal("aucune tâche générée — vérifiez votre clé API dans Réglages et réessayez. Aucune simulation.", "Patron"); return; }
   bossQueue.push(...subtasks);
@@ -1399,12 +1441,26 @@ function openBossDlg(){
 document.getElementById("bossChatSend").addEventListener("click", ()=> sendChatFrom("bossChatInput"));
 document.getElementById("bossChatInput").addEventListener("keydown", e=>{ if(e.key === "Enter") sendChatFrom("bossChatInput"); });
 
+document.getElementById("fsBtn").addEventListener("click", e=>{
+  e.stopPropagation();
+  const el = document.getElementById("officeView");
+  if(document.fullscreenElement) document.exitFullscreen();
+  else if(el.requestFullscreen) el.requestFullscreen().catch(()=> logGlobal("plein écran refusé par le navigateur.", "Système"));
+});
+document.addEventListener("fullscreenchange", ()=>{
+  setTimeout(()=> window.dispatchEvent(new Event("resize")), 80);
+  const b = document.getElementById("fsBtn");
+  b.textContent = document.fullscreenElement ? "Quitter plein écran" : "Plein écran";
+});
+
 /* ================= terminal PC (mon PC) ================= */
 const pcOverlay = document.getElementById("pcOverlay");
 const PC_TABS = [
   { id: "files", label: "Fichiers", icon: "folder" },
+  { id: "tasks", label: "Tâches", icon: "tasks" },
   { id: "chat", label: "Conversations", icon: "text-bubble" },
   { id: "hr", label: "DRH", icon: "user" },
+  { id: "servers", label: "Serveurs", icon: "code" },
   { id: "settings", label: "Réglages", icon: "gears" }
 ];
 function initPcTabs(){
@@ -1417,12 +1473,14 @@ function initPcTabs(){
 initPcTabs();
 function switchPcTab(name){
   document.querySelectorAll("#pcTabs .tab").forEach(t => t.classList.toggle("on", t.dataset.tab === name));
-  for(const id of ["files", "chat", "hr", "settings"]){
+  for(const id of ["files", "tasks", "chat", "hr", "servers", "settings"]){
     document.getElementById("pane-" + id).style.display = id === name ? "" : "none";
   }
   if(name === "files") renderResults();
+  if(name === "tasks") renderPcTasks();
   if(name === "chat") renderChatLog();
   if(name === "hr") renderHR();
+  if(name === "servers") renderPcServers();
   if(name === "settings") renderPcSettings();
 }
 function openPc(tab){
@@ -1432,6 +1490,49 @@ function openPc(tab){
 document.getElementById("pcClose").innerHTML = icon("cross");
 document.getElementById("pcClose").addEventListener("click", ()=> pcOverlay.classList.remove("show"));
 pcOverlay.addEventListener("click", e=>{ if(e.target === pcOverlay) pcOverlay.classList.remove("show"); });
+
+function renderPcTasks(){
+  document.getElementById("pcLaunch").innerHTML = icon("play") + " Lancer";
+  document.getElementById("pcBacklog").value = (state.backlog || []).join("\n");
+  document.getElementById("pcMission").value = state.mission || "";
+  const auto = document.getElementById("pcAuto");
+  auto.innerHTML = icon(state.autonomous ? "pause" : "play") + " Mode autonome : " + (state.autonomous ? "ACTIVÉ — cliquez pour arrêter" : "arrêté — cliquez pour activer");
+}
+function renderPcServers(){
+  document.getElementById("srvLaunch").innerHTML = icon("code") + " Lancer la production du site";
+}
+document.getElementById("pcLaunch").addEventListener("click", ()=>{
+  const inp = document.getElementById("pcObjective");
+  launchObjective(inp.value);
+  inp.value = "";
+});
+document.getElementById("pcObjective").addEventListener("keydown", e=>{
+  if(e.key === "Enter"){ launchObjective(e.target.value); e.target.value = ""; }
+});
+document.getElementById("pcAuto").addEventListener("click", ()=>{
+  if(!state.autonomous && !hasKey()){ logGlobal("mode autonome impossible sans clé IA — ajoutez votre clé Groq dans Réglages.", "Patron"); return; }
+  state.autonomous = !state.autonomous;
+  renderChips(); renderPcTasks(); save();
+  logGlobal("mode autonome " + (state.autonomous ? "ACTIVÉ — le Patron suit votre liste de tâches." : "désactivé."), "Patron");
+});
+document.getElementById("pcBacklog").addEventListener("input", e=>{
+  state.backlog = e.target.value.split("\n").map(s=>s.trim()).filter(Boolean);
+  document.getElementById("backlogInput").value = e.target.value;
+  save();
+});
+document.getElementById("pcMission").addEventListener("input", e=>{
+  state.mission = e.target.value;
+  document.getElementById("missionInput").value = e.target.value;
+  save();
+});
+document.getElementById("srvLaunch").addEventListener("click", ()=>{
+  const inp = document.getElementById("srvDesc");
+  const desc = inp.value.trim();
+  if(!desc){ logGlobal("décrivez d'abord le site à créer dans la salle serveurs.", "Patron"); return; }
+  inp.value = "";
+  launchObjective("Créer un site internet : " + desc);
+  logGlobal("projet site internet envoyé à la salle serveurs : « " + esc(desc) + " »", "Patron");
+});
 
 const hrRoleEl = document.getElementById("hrRole");
 hrRoleEl.innerHTML = SPECIALTIES.map(s => '<option value="' + s.value + '">' + s.value.charAt(0).toUpperCase() + s.value.slice(1) + '</option>').join("");
@@ -1629,6 +1730,8 @@ function interactNear(){
     openBossDlg();
   } else if(nt.type === "pc"){
     openPc("files");
+  } else if(nt.type === "servers"){
+    openPc("servers");
   } else if(nt.type === "agent"){
     showAgentPopup(nt.agent, window.innerWidth / 2 - 100, window.innerHeight / 2 - 60);
   }
@@ -1643,7 +1746,8 @@ function checkNear(){
     if(d < maxD && d < bestD){ bestD = d; best = data; }
   };
   consider(0, -4.3, 3.4, { type: "boss", label: "Parler au Patron" });
-  consider(6.7, 4.4, 2.6, { type: "pc", label: "Ouvrir votre PC (fichiers, conversations, DRH)" });
+  consider(6.7, 4.4, 2.6, { type: "pc", label: "Ouvrir votre PC (fichiers, tâches, DRH)" });
+  consider(6.9, -4.6, 2.4, { type: "servers", label: "Salle serveurs — héberger un site à coder" });
   for(const a of state.agents){
     const rec = agent3d.get(a.id);
     if(rec) consider(rec.group.position.x, rec.group.position.z, 2.3,
@@ -1855,6 +1959,28 @@ function init3D(){
   pcLabel.position.set(6.7, 2.5, 4.4);
   scene.add(pcGroup, pcLabel);
 
+  /* salle serveurs : héberger un site internet à coder */
+  const rackMat = new THREE.MeshStandardMaterial({ color: 0x23262b, roughness: .45, metalness: .35 });
+  const srvGroup = new THREE.Group();
+  const srvLeds = [];
+  for(const [rx, rz] of [[5.9, -5.55], [6.9, -5.55], [7.9, -5.55]]){
+    const rack = new THREE.Mesh(new THREE.BoxGeometry(.9, 2.2, .8), rackMat);
+    rack.position.set(rx, 1.1, rz);
+    rack.userData.servers = true;
+    srvGroup.add(rack);
+    for(let r = 0; r < 6; r++){
+      for(let c = 0; c < 3; c++){
+        const led = new THREE.Mesh(new THREE.BoxGeometry(.07, .07, .03), screenMat(0xc6f542, .9));
+        led.position.set(rx - .25 + c * .25, .35 + r * .3, rz + .41);
+        srvGroup.add(led);
+        srvLeds.push(led);
+      }
+    }
+  }
+  const srvLabel = makeLabel("SALLE SERVEURS", "héberger un site à coder");
+  srvLabel.position.set(6.9, 3, -5.55);
+  scene.add(srvGroup, srvLabel);
+
   const coffeeTable = new THREE.Mesh(new THREE.CylinderGeometry(.85, .85, .1, 20), new THREE.MeshStandardMaterial({ color: 0x9c7a52, roughness: .8 }));
   coffeeTable.position.set(-6.7, .85, 4.4); scene.add(coffeeTable);
   const coffeeLeg = new THREE.Mesh(new THREE.CylinderGeometry(.12, .2, .85, 10), new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: .8 }));
@@ -1950,6 +2076,7 @@ function init3D(){
         if(a){ showAgentPopup(a, e.clientX + 8, e.clientY + 8); return; }
       }
       if(u.pc){ openPc("files"); return; }
+      if(u.servers){ openPc("servers"); return; }
       if(u.boss){ openBossDlg(); return; }
     }
     hidePopup();
@@ -1986,7 +2113,7 @@ function init3D(){
           const rec = agent3d.get(a.id);
           if(rec) circles.push([rec.group.position.x, rec.group.position.z, 1.05]);
         }
-        circles.push([0, -4.3, 1.7], [6.7, 4.4, 1.1], [-6.7, 4.4, 1], [-7.6, 4.4, .55]);
+        circles.push([0, -4.3, 1.7], [6.7, 4.4, 1.1], [-6.7, 4.4, 1], [-7.6, 4.4, .55], [6.9, -5.55, 1.5]);
         for(const [cx, cz, cr] of circles){
           const dx = fpsState.x - cx, dz = fpsState.z - cz;
           const d = Math.hypot(dx, dz);
@@ -2019,6 +2146,7 @@ function init3D(){
       rec.char.rotation.y = paused ? Math.atan2(coffeeTable.position.x - rec.char.position.x, coffeeTable.position.z - rec.char.position.z) : 0;
     }
     bossChar.rotation.y = Math.sin(t * .8) * .25;
+    for(let i = 0; i < srvLeds.length; i++) srvLeds[i].material.emissiveIntensity = Math.sin(t * 3 + i * 1.7) > 0 ? .95 : .12;
     renderer.render(scene, camera);
   })();
   document.getElementById("officeView").classList.add("threed");
