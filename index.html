@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261117-1936">
+<meta name="build" content="b-20261117-1945">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -418,7 +418,7 @@
 
   <div>
     <div class="office" id="officeView">
-      <div class="floor3d" id="floor3d"><div class="hud3d" id="hud3d"></div><button class="cambtn" id="camBtn">1ère personne</button><button class="cambtn" id="fsBtn" style="top:48px;">Plein écran</button><div class="fpscross" id="fpsCross"></div><div class="fpsprompt" id="fpsPrompt"></div></div>
+      <div class="floor3d" id="floor3d"><div class="hud3d" id="hud3d"></div><button class="cambtn" id="camBtn">1ère personne</button><button class="cambtn" id="fsBtn" style="top:48px;">Plein écran</button><button class="cambtn" id="ovBtn" style="top:96px;">Vue d’ensemble</button><div class="fpscross" id="fpsCross"></div><div class="fpsprompt" id="fpsPrompt"></div></div>
       <div class="floor">
         <div class="bosszone">
           <div class="desk boss">
@@ -710,6 +710,31 @@
     </div>
   </div>
 </div>
+<div class="overlay" id="ivPick">
+  <div class="modal" style="width:min(520px,100%);">
+    <button class="iconbtn close-x" id="ivPickClose"></button>
+    <h2>Convoquer des agents</h2>
+    <p class="sub">Ils viendront vous voir UN PAR UN, dans votre bureau (entretiens individuels).</p>
+    <div id="ivPickList" style="max-height:40vh; overflow-y:auto; border:1px solid var(--line); border-radius:12px; padding:6px 12px;"></div>
+    <button class="btn wide" id="ivPickGo" style="margin-top:12px;">Les recevoir dans mon bureau</button>
+  </div>
+</div>
+<div class="overlay" id="ivOverlay">
+  <div class="modal" style="width:min(640px,100%);">
+    <button class="iconbtn close-x" id="ivClose"></button>
+    <h2 id="ivTitle">Entretien</h2>
+    <p class="sub" id="ivSub"></p>
+    <div id="ivLog" class="chat" style="max-height:38vh; overflow-y:auto; border:1px solid var(--line); border-radius:12px; padding:12px;"></div>
+    <div class="row" style="margin-top:12px;">
+      <input type="text" id="ivInput" placeholder="Parlez à votre employé (vous êtes le patron)...">
+      <button class="btn" id="ivSend" style="flex:0 0 auto;">Parler</button>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn line" id="ivNext" style="flex:1;">Recevoir l'agent suivant</button>
+      <button class="btn line" id="ivEnd" style="flex:1;">Terminer les entretiens</button>
+    </div>
+  </div>
+</div>
 <div class="footer">Agent_IA · <a href="https://github.com/PapillonApp/Papicons" target="_blank" rel="noopener">Papicons</a> · design <a href="https://github.com/pbakaus/impeccable" target="_blank" rel="noopener">Impeccable</a></div>
 
 <div class="overlay" id="authOverlay">
@@ -791,7 +816,7 @@ function scopeKey(){
 }
 function freshState(){
   return { agents: [], mission: "", backlog: [], autonomous: false, speed: 1, doneCount: 0,
-           activity: [], results: [], chat: [], sites: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], files: [], templates: [], roomNames: {}, drhAuto: false, coffeeClosed: false, liveMeeting: null, meta: { syncedAt: null } };
+           activity: [], results: [], chat: [], sites: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], files: [], templates: [], roomNames: {}, drhAuto: false, coffeeClosed: false, liveMeeting: null, liveInterview: null, meta: { syncedAt: null } };
 }
 let state = freshState();
 const PERSONAS = ["efficace et direct, va droit au but", "créatif et imaginatif, propose toujours une idée en plus", "rigoureux et méthodique, ne laisse rien au hasard", "enthousiaste et positif, motive l\u2019équipe", "pédagogue et clair, explique simplement", "analytique et critique, questionne chaque choix", "chaleureux et diplomate, apaise les tensions", "pragmatique et orienté résultats, livre vite", "perfectionniste du détail, soigne la finition", "curieux et explorateur, teste de nouvelles approches", "calme et fiable, garde son sang-froid sous pression", "proactif et autonome, anticipe les besoins", "minutieux et organisé, structure tout en listes", "audacieux et ambitieux, vise toujours plus haut", "patient et à l\u2019écoute, reformule avant d\u2019agir", "énergique et rapide, préfère itérer vite"];
@@ -1510,7 +1535,9 @@ async function pushRemote(){
     });
     try{ localStorage.setItem(scopeKey(), JSON.stringify(state)); }catch(e){}
     renderSyncChip();
-  }catch(e){ console.warn("push échoué", e); }
+  }catch(e){
+    if(!window.__syncErrShown){ window.__syncErrShown = true; logGlobal("Synchronisation impossible (" + e.message + ") — vérifiez la connexion et la configuration Supabase.", "Système"); }
+  }
 }
 
 async function pullRemote(force){
@@ -1521,7 +1548,7 @@ async function pullRemote(force){
     if(data && data.data){
       const remoteNewer = !state.meta.syncedAt || (data.updated_at > state.meta.syncedAt);
       if((remoteNewer && !pendingLocal) || force){
-        const keep = { results: state.results, chat: state.chat, sites: state.sites, scheduled: state.scheduled, meetings: state.meetings, groups: state.groups, skills: state.skills, notes: state.notes, connectors: state.connectors, assistantChat: state.assistantChat, drhAuto: state.drhAuto, liveMeeting: state.liveMeeting, apiStats: state.apiStats };
+        const keep = { results: state.results, chat: state.chat, sites: state.sites, scheduled: state.scheduled, meetings: state.meetings, groups: state.groups, skills: state.skills, notes: state.notes, connectors: state.connectors, assistantChat: state.assistantChat, drhAuto: state.drhAuto, liveMeeting: state.liveMeeting, liveInterview: state.liveInterview, apiStats: state.apiStats };
         state = Object.assign(freshState(), data.data, keep, { meta: { syncedAt: data.updated_at } });
         ["groups", "skills", "notes"].forEach(k => { if(Array.isArray(data.data[k])) state[k] = data.data[k]; });
         ensurePersonas();
@@ -1531,7 +1558,9 @@ async function pullRemote(force){
       pushRemote();
     }
     renderSyncChip();
-  }catch(e){ console.warn("pull échoué", e); }
+  }catch(e){
+    if(!window.__syncErrShown){ window.__syncErrShown = true; logGlobal("Synchronisation impossible (" + e.message + ") — vérifiez la connexion et la configuration Supabase.", "Système"); }
+  }
 }
 
 setInterval(()=>{ if(session && !pendingLocal) pullRemote(false); }, 20000);
@@ -2117,7 +2146,7 @@ function syncFsBtn(){
   const b = document.getElementById("fsBtn");
   if(b) b.textContent = isGameFullscreen() ? "Quitter plein écran" : "Plein écran";
 }
-const GAME_OVERLAYS = ["deskPopup", "resultsOverlay", "bossDlg", "drhDlg", "pcOverlay", "authOverlay", "meetOverlay"].map(id => document.getElementById(id)).filter(Boolean);
+const GAME_OVERLAYS = ["deskPopup", "resultsOverlay", "bossDlg", "drhDlg", "pcOverlay", "authOverlay", "meetOverlay", "ivOverlay", "ivPick"].map(id => document.getElementById(id)).filter(Boolean);
 function parkOverlays(host){ for(const el of GAME_OVERLAYS) host.appendChild(el); }
 parkOverlays(document.body);
 function enterGameFullscreen(){
@@ -2133,6 +2162,13 @@ function exitGameFullscreen(){
   syncFsBtn();
   setTimeout(()=> window.dispatchEvent(new Event("resize")), 80);
 }
+document.getElementById("ovBtn").addEventListener("click", e=>{
+  e.stopPropagation();
+  if(camMode !== "orbit") setCamMode("orbit");
+  overviewMode = true;
+  target.set(28, 0, -5); dist = 115; pol = .62; az = -.85;
+  updateCam();
+});
 document.getElementById("fsBtn").addEventListener("click", e=>{
   e.stopPropagation();
   if(isGameFullscreen()) return exitGameFullscreen();
@@ -2150,8 +2186,13 @@ document.addEventListener("fullscreenchange", ()=>{
 });
 window.addEventListener("keydown", e=>{
   if(e.code !== "Escape") return;
+  const ov = document.querySelector(".overlay.show");
+  if(ov){
+    if(ov.id === "authOverlay"){ if(session) ov.classList.remove("show"); }
+    else ov.classList.remove("show");
+    return;
+  }
   if(document.pointerLockElement) document.exitPointerLock();
-  if(isGameFullscreen()) exitGameFullscreen();
 });
 window.addEventListener("keydown", e=>{
   if(e.code !== "KeyP") return;
@@ -3152,6 +3193,113 @@ document.getElementById("meetFs").addEventListener("click", e=>{
 document.getElementById("meetClose").innerHTML = icon("cross");
 document.getElementById("meetClose").addEventListener("click", ()=>{ meetOverlay.classList.remove("show"); });
 meetOverlay.addEventListener("click", e=>{ if(e.target === meetOverlay) meetOverlay.classList.remove("show"); });
+
+/* entretiens individuels : les agents viennent un par un au bureau du patron */
+const ivOverlay = document.getElementById("ivOverlay");
+const ivPick = document.getElementById("ivPick");
+const IV_SEAT = [1.4, -18.6];
+function renderIvPick(){
+  const box = document.getElementById("ivPickList");
+  box.innerHTML = state.agents.map(a => '<label style="display:flex;gap:10px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--line);cursor:pointer;"><input type="checkbox" class="ivCk" value="' + a.id + '"><span><b>' + esc(a.name) + '</b> <span class="prole">' + esc(a.role || "polyvalent") + '</span></span></label>').join("") || '<div class="hint">Aucun agent pour le moment.</div>';
+}
+function openIvPick(){
+  renderIvPick();
+  if(document.pointerLockElement) document.exitPointerLock();
+  ivPick.classList.add("show");
+}
+function openIvOverlay(){
+  renderIvLog();
+  const iv = state.liveInterview;
+  const a = iv && iv.current ? state.agents.find(x => x.id === iv.current) : null;
+  if(a){
+    document.getElementById("ivTitle").textContent = "Entretien — " + a.name;
+    document.getElementById("ivSub").textContent = "Il est assis en face de vous, dans votre bureau. Vous êtes le patron.";
+  }
+  if(document.pointerLockElement) document.exitPointerLock();
+  ivOverlay.classList.add("show");
+}
+function renderIvLog(){
+  const iv = state.liveInterview;
+  const box = document.getElementById("ivLog");
+  if(!box) return;
+  box.innerHTML = iv ? iv.log.map(t => '<div style="margin-bottom:8px;"><b style="color:' + (t.who === "Vous" ? "var(--signal)" : "var(--amber)") + ';">' + esc(t.who) + ' :</b> <span style="color:var(--ink);">' + esc(t.text) + '</span></div>').join("") : "";
+  box.scrollTop = box.scrollHeight;
+}
+document.getElementById("ivPickClose").innerHTML = icon("cross");
+document.getElementById("ivPickClose").addEventListener("click", ()=> ivPick.classList.remove("show"));
+ivPick.addEventListener("click", e=>{ if(e.target === ivPick) ivPick.classList.remove("show"); });
+document.getElementById("ivPickGo").addEventListener("click", ()=>{
+  const ids = Array.from(document.querySelectorAll(".ivCk:checked")).map(c => c.value).filter(id => state.agents.some(a => a.id === id));
+  if(!ids.length) return;
+  state.liveInterview = { queue: ids, current: null, log: [] };
+  ivPick.classList.remove("show");
+  ivNextAgent();
+});
+function ivNextAgent(){
+  const iv = state.liveInterview;
+  if(!iv) return;
+  if(iv.current){
+    const prev = state.agents.find(a => a.id === iv.current);
+    if(prev){
+      prev.memories = prev.memories || [];
+      prev.memories.unshift("Entretien avec le patron : " + iv.log.slice(-4).map(m => m.who + " : " + m.text).join(" | ").slice(0, 200));
+      if(prev.memories.length > 15) prev.memories.length = 15;
+      logAgent(prev, "Entretien terminé avec le patron.");
+    }
+  }
+  const nextId = iv.queue.shift();
+  iv.current = nextId || null;
+  iv.log = [];
+  if(!iv.current){ endInterview(); return; }
+  const a = state.agents.find(x => x.id === iv.current);
+  iv.log.push({ who: a.name, text: "Bonjour patron. Vous m'avez convoqué — je suis en route pour votre bureau." });
+  openIvOverlay();
+  logGlobal("Entretien : " + a.name + " rejoint votre bureau.", "Patron");
+  save();
+}
+async function ivReply(agent){
+  const iv = state.liveInterview;
+  if(!iv || !hasKey()){
+    iv.log.push({ who: agent.name, text: "(je ne peux pas répondre : clé API manquante sur cet appareil — PC → Réglages)" });
+    renderIvLog(); return;
+  }
+  try{
+    const out = await enqueueLLM(()=> callLLM([
+      { role: "system", content: "Tu es " + agent.name + ", " + (agent.role || "polyvalent") + ". " + (agent.persona || "") + (typeof agentExtras === "function" ? agentExtras(agent) : "") + "\nTu es en entretien individuel, assis en face de ton patron dans son bureau. Réponds en français, naturellement, en 2 à 4 phrases maximum. Reste dans ton rôle." },
+      { role: "user", content: "Mission de l'entreprise : " + (state.mission || "(non définie)") + "\n\nConversation :\n" + iv.log.map(t => t.who + " : " + t.text).join("\n") + "\n\nRéponds au patron." }
+    ], 400));
+    iv.log.push({ who: agent.name, text: String(out || "").trim().slice(0, 600) || "…" });
+  }catch(e){
+    iv.log.push({ who: agent.name, text: "(problème de connexion : " + e.message + ")" });
+  }
+  renderIvLog(); save();
+}
+function ivSendMsg(){
+  const iv = state.liveInterview;
+  if(!iv || !iv.current) return;
+  const inp = document.getElementById("ivInput");
+  const text = inp.value.trim();
+  if(!text) return;
+  inp.value = "";
+  const a = state.agents.find(x => x.id === iv.current);
+  if(!a) return;
+  iv.log.push({ who: "Vous", text });
+  renderIvLog(); save();
+  ivReply(a);
+}
+function endInterview(){
+  state.liveInterview = null;
+  ivOverlay.classList.remove("show");
+  logGlobal("Entretiens terminés — tout le monde retourne au travail.", "Patron");
+  save();
+}
+document.getElementById("ivSend").addEventListener("click", ivSendMsg);
+document.getElementById("ivInput").addEventListener("keydown", e=>{ if(e.key === "Enter") ivSendMsg(); });
+document.getElementById("ivNext").addEventListener("click", ()=> ivNextAgent());
+document.getElementById("ivEnd").addEventListener("click", endInterview);
+document.getElementById("ivClose").innerHTML = icon("cross");
+document.getElementById("ivClose").addEventListener("click", ()=> ivOverlay.classList.remove("show"));
+ivOverlay.addEventListener("click", e=>{ if(e.target === ivOverlay) ivOverlay.classList.remove("show"); });
 setTimeout(processSchedule, 3000);
 document.getElementById("bossRole").innerHTML = icon("crown") + " direction";
 document.getElementById("pcDesk").addEventListener("click", ()=> openPc("files"));
@@ -3583,6 +3731,7 @@ async function pcAssistantSendMsg(){
 /* ================= bureau 3D ================= */
 let three = null;
 let camMode = "orbit";
+let overviewMode = false;
 const agent3d = new Map();
 const zoneLabels = new Map();
 const fpsState = { x: 0, z: 5.6, yaw: 0, pitch: 0, y: 0, vy: 0 };
@@ -3619,6 +3768,8 @@ function interactNear(){
     if(state.liveMeeting) openMeetOverlay(); else openPc("reunion");
   } else if(nt.type === "tni"){
     openPc("dash");
+  } else if(nt.type === "convoquer"){
+    if(state.liveInterview) openIvOverlay(); else openIvPick();
   } else if(nt.type === "laptop"){
     if(laptopOn === nt.spot && !laptopPocket){
       setLaptopPocket(true);
@@ -3649,7 +3800,7 @@ function checkNear(){
   consider(-10, -7, 3.2, { type: "reunion", label: state.liveMeeting ? "Reprendre la réunion en cours (E)" : "Salle de réunion — convoquer une réunion" });
   consider(0, -20.4, 2.8, { type: "pc", label: "Votre PC fixe — tout votre centre de contrôle" });
   consider(-12.6, -17, 2.8, { type: "tni", label: "Tableau numérique interactif — tableau de bord" });
-  consider(3.4, -18.8, 2.2, { type: "reunion", label: state.liveMeeting ? "Reprendre la réunion en cours (E)" : "Convoquer des agents — lancer une réunion" });
+  consider(3.4, -18.8, 2.2, { type: "convoquer", label: state.liveInterview ? "Reprendre les entretiens en cours (E)" : "Convoquer des agents — ils viennent un par un" });
   LAPTOP_SPOTS.forEach((sp, i) => {
     const here = laptopOn === i && !laptopPocket;
     consider(sp.x, sp.z, 2.2, { type: "laptop", spot: i, label: here ? "Mettre le PC portable dans la poche — touche P partout" : "Poser le PC portable sur cette table (bouton vert)" });
@@ -3836,12 +3987,12 @@ function init3D(){
   floor.position.y = -.1;
   scene.add(floor);
   const wallMat = new THREE.MeshStandardMaterial({ color: 0xf2f0ea, roughness: 1 });
-  const wallB1 = new THREE.Mesh(new THREE.BoxGeometry(13.1, 4.4, .2), wallMat);
-  wallB1.position.set(-7.45, 2.2, -10); scene.add(wallB1);
-  const wallB2 = new THREE.Mesh(new THREE.BoxGeometry(13.1, 4.4, .2), wallMat);
-  wallB2.position.set(7.45, 2.2, -10); scene.add(wallB2);
+  const wallB1 = new THREE.Mesh(new THREE.BoxGeometry(17.1, 4.4, .2), wallMat);
+  wallB1.position.set(-5.45, 2.2, -10); scene.add(wallB1);
+  const wallB2 = new THREE.Mesh(new THREE.BoxGeometry(9.1, 4.4, .2), wallMat);
+  wallB2.position.set(9.45, 2.2, -10); scene.add(wallB2);
   const wallBL = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.6, .2), wallMat);
-  wallBL.position.set(0, 3.6, -10); scene.add(wallBL);
+  wallBL.position.set(4, 3.6, -10); scene.add(wallBL);
   const wallL = new THREE.Mesh(new THREE.BoxGeometry(.2, 4.4, 20), wallMat);
   wallL.position.set(-14, 2.2, 0); scene.add(wallL);
   const wallR1 = new THREE.Mesh(new THREE.BoxGeometry(.2, 4.4, 8.5), wallMat);
@@ -4189,12 +4340,12 @@ function init3D(){
   const doorMat = new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .7 });
   RX.forEach(rx => {
     const d = new THREE.Mesh(new THREE.BoxGeometry(1.72, 2.8, .1), doorMat);
-    d.position.set(rx, 1.4, -1.59);
+    d.position.set(rx, 1.4, -1.47);
     d.userData.door = { axis: "x", base: rx, slide: 1.85, cx: rx, cz: -1.59, t: 0 };
     scene.add(d); officeDoors.push(d);
   });
   const entDoor = new THREE.Mesh(new THREE.BoxGeometry(.1, 2.8, 2.9), doorMat);
-  entDoor.position.set(13.75, 1.4, 0);
+  entDoor.position.set(13.27, 1.4, 0);
   entDoor.userData.door = { axis: "z", base: 0, slide: 3, cx: 13.75, cz: 0, t: 0 };
   scene.add(entDoor); officeDoors.push(entDoor);
 
@@ -4220,35 +4371,41 @@ function init3D(){
   const tower = new THREE.Mesh(new THREE.BoxGeometry(.45, .95, .9), new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: .5, metalness: .4 }));
   tower.position.set(-1.5, .48, -20.5); tower.traverse(o => o.userData.pc = true); scene.add(tower);
   const mon = new THREE.Mesh(new THREE.BoxGeometry(1.5, .92, .06), screenMat(0xc6f542, .8));
-  mon.position.set(.5, 1.55, -20.45); mon.rotation.x = -.06; mon.userData.pc = true; scene.add(mon);
+  mon.position.set(.5, 1.55, -20.45); mon.rotation.set(-.06, Math.PI, 0); mon.userData.pc = true; scene.add(mon);
   const monFoot = new THREE.Mesh(new THREE.CylinderGeometry(.05, .09, .35, 8), new THREE.MeshStandardMaterial({ color: 0x22252a }));
   monFoot.position.set(.5, 1, -20.45); scene.add(monFoot);
   const kbd = new THREE.Mesh(new THREE.BoxGeometry(1.15, .03, .4), new THREE.MeshStandardMaterial({ color: 0x22252a, roughness: .6 }));
-  kbd.position.set(.5, .84, -19.75); kbd.userData.pc = true; scene.add(kbd);
+  kbd.position.set(.5, .84, -20.75); kbd.userData.pc = true; scene.add(kbd);
   const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(.62, .08, .6), new THREE.MeshStandardMaterial({ color: 0x191d15, roughness: .7 }));
   chairSeat.position.set(0, .5, -21.4); scene.add(chairSeat);
   const chairBack = new THREE.Mesh(new THREE.BoxGeometry(.62, .85, .08), chairSeat.material);
   chairBack.position.set(0, .97, -21.72); scene.add(chairBack);
   const chairPil = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, .5, 8), new THREE.MeshStandardMaterial({ color: 0x22252a }));
   chairPil.position.set(0, .25, -21.4); scene.add(chairPil);
-  const tni = new THREE.Mesh(new THREE.BoxGeometry(.14, 2.3, 3.6), screenMat(0xc6f542, .85));
+  const gSeat = new THREE.Mesh(new THREE.BoxGeometry(.58, .08, .58), chairSeat.material);
+  gSeat.position.set(1.4, .5, -18.6); scene.add(gSeat);
+  const gBack = new THREE.Mesh(new THREE.BoxGeometry(.58, .8, .08), chairSeat.material);
+  gBack.position.set(1.4, .95, -18.28); scene.add(gBack);
+  const gPil = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, .5, 8), chairPil.material);
+  gPil.position.set(1.4, .25, -18.6); scene.add(gPil);
+  const tni = new THREE.Mesh(new THREE.BoxGeometry(.14, 2.3, 3.6), new THREE.MeshBasicMaterial({ map: boardTex }));
   tni.position.set(-12.75, 1.8, -17); tni.userData.tni = true; scene.add(tni);
   const tniFoot = new THREE.Mesh(new THREE.BoxGeometry(.5, .68, .3), new THREE.MeshStandardMaterial({ color: 0x22252a, roughness: .6 }));
   tniFoot.position.set(-12.75, .34, -17); scene.add(tniFoot);
   const tniLabel = makeLabel("TABLEAU NUMÉRIQUE", "tableau de bord en direct — E ou clic");
   tniLabel.position.set(-12.6, 3.5, -17); scene.add(tniLabel);
   const conv = new THREE.Mesh(new THREE.CylinderGeometry(.3, .38, 1.05, 12), new THREE.MeshStandardMaterial({ color: 0x191d15, roughness: .6 }));
-  conv.position.set(3.4, .52, -18.8); conv.userData.reunion = true; scene.add(conv);
+  conv.position.set(3.4, .52, -18.8); conv.userData.convoquer = true; scene.add(conv);
   const convBtn = new THREE.Mesh(new THREE.CylinderGeometry(.17, .17, .07, 12), new THREE.MeshStandardMaterial({ color: 0xc6f542, emissive: 0xc6f542, emissiveIntensity: .6, roughness: .4 }));
-  convBtn.position.set(3.4, 1.08, -18.8); convBtn.userData.reunion = true; scene.add(convBtn);
-  const convLabel = makeLabel("CONVOQUER", "réunir les agents — E ou clic");
+  convBtn.position.set(3.4, 1.08, -18.8); convBtn.userData.convoquer = true; scene.add(convBtn);
+  const convLabel = makeLabel("CONVOQUER", "ils viennent un par un — E ou clic");
   convLabel.position.set(3.4, 2.2, -18.8); scene.add(convLabel);
   const bossDoor = new THREE.Mesh(new THREE.BoxGeometry(1.72, 2.8, .12), doorMat);
-  bossDoor.position.set(0, 1.4, -10);
-  bossDoor.userData.door = { axis: "x", base: 0, slide: 1.85, cx: 0, cz: -10, t: 0 };
+  bossDoor.position.set(4, 1.4, -9.87);
+  bossDoor.userData.door = { axis: "x", base: 4, slide: 1.85, cx: 4, cz: -10, t: 0 };
   scene.add(bossDoor); officeDoors.push(bossDoor);
   const officeSign = makeLabel("VOTRE BUREAU", "salle privée du patron");
-  officeSign.position.set(0, 3.4, -10.5); scene.add(officeSign);
+  officeSign.position.set(4, 3.4, -9.4); scene.add(officeSign);
   const roomSprites = [], roomPanels = [], roomPanelTex = [];
   RX.forEach((rx, i) => {
     const rf = new THREE.Mesh(new THREE.BoxGeometry(8, .2, 7), new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .85 }));
@@ -4318,6 +4475,7 @@ function init3D(){
   const fpsKeys = { forward: false, back: false, left: false, right: false, sprint: false };
   function setCamMode(m){
     camMode = m;
+    overviewMode = false;
     document.getElementById("camBtn").textContent = m === "fps" ? "Vue libre" : "1ère personne";
     ceil.visible = panelGroup.visible = (m === "fps");
     corCeils.forEach(c => c.visible = (m === "fps"));
@@ -4384,6 +4542,7 @@ function init3D(){
     if(e.buttons !== 1) return;
     if(Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 6) dragged = true;
     az -= dx * .005;
+    overviewMode = false;
     pol = Math.min(1.52, Math.max(.25, pol - dy * .005));
     updateCam();
   });
@@ -4413,6 +4572,7 @@ function init3D(){
       }
       if(u.pc){ openPc("files"); return; }
       if(u.servers){ openPc("servers"); return; }
+      if(u.convoquer){ if(state.liveInterview) openIvOverlay(); else openIvPick(); return; }
       if(u.reunion){ openPc("reunion"); return; }
       if(u.tni){ openPc("dash"); return; }
       if(u.laptopBtn !== undefined){ setLaptopSpot(u.laptopBtn); return; }
@@ -4480,7 +4640,7 @@ function init3D(){
           const rec = agent3d.get(a.id);
           if(rec) circles.push([rec.group.position.x, rec.group.position.z, 1.05]);
         }
-        circles.push([0, -6.5, 2.1], [-12.4, 8.9, 1.2], [12.9, 5.3, 1.1], [12.9, 7.9, 1.1], [9.2, 6, .95], [9.2, 8.2, .95], [-13.3, 1.6, 1.5], [-10, -7, 2.6], [10, -8, 1.7], [10, -7.3, .55], [0, 9.1, .95], [-6, 8.6, .95], [6, 8.6, .95], [0, -20.4, 2.6], [-12.6, -17, 1.3], [3.4, -18.8, .7], [4.5, -20.3, .95]);
+        circles.push([0, -6.5, 2.1], [-12.4, 8.9, 1.2], [12.9, 5.3, 1.1], [12.9, 7.9, 1.1], [9.2, 6, .95], [9.2, 8.2, .95], [-13.3, 1.6, 1.5], [-10, -7, 2.6], [10, -8, 1.7], [10, -7.3, .55], [0, 9.1, .95], [-6, 8.6, .95], [6, 8.6, .95], [0, -20.4, 2.6], [-12.6, -17, 1.3], [3.4, -18.8, .7], [4.5, -20.3, .95], [1.4, -18.6, .6]);
         for(const [cx, cz, cr] of circles){
           const dx = fpsState.x - cx, dz = fpsState.z - cz;
           const d = Math.hypot(dx, dz);
@@ -4518,7 +4678,7 @@ function init3D(){
       }
     } else {
       lastT = performance.now();
-      if(fpsState.x !== lastFollowX || fpsState.z !== lastFollowZ){
+      if(!overviewMode && (fpsState.x !== lastFollowX || fpsState.z !== lastFollowZ)){
         lastFollowX = fpsState.x; lastFollowZ = fpsState.z;
         target.x += (fpsState.x - target.x) * .08;
         target.z += (fpsState.z - target.z) * .08;
@@ -4550,9 +4710,11 @@ function init3D(){
       const lm = state.liveMeeting;
       const pi = lm ? lm.participants.indexOf(a.id) : -1;
       const meetSeat = pi >= 0 ? MEET_SEATS[pi % MEET_SEATS.length] : null;
+      const ivv = state.liveInterview;
+      const ivSeat = (ivv && ivv.current === a.id) ? IV_SEAT : null;
       const slot = coffeeSlots[(state.agents.filter(x => x.status === "paused").indexOf(a) + coffeeSlots.length) % coffeeSlots.length];
-      const tx = meetSeat ? meetSeat[0] : (paused ? slot.x : rec.home.x);
-      const tz = meetSeat ? meetSeat[1] : (paused ? slot.z : rec.home.z);
+      const tx = ivSeat ? ivSeat[0] : (meetSeat ? meetSeat[0] : (paused ? slot.x : rec.home.x));
+      const tz = ivSeat ? ivSeat[1] : (meetSeat ? meetSeat[1] : (paused ? slot.z : rec.home.z));
       const dw = Math.hypot(tx - rec.char.position.x, tz - rec.char.position.z);
       if(dw > .05){
         const wp = navNextWaypoint(rec, tx, tz);
@@ -4566,12 +4728,14 @@ function init3D(){
         if(rec.legL){ rec.legL.rotation.x = Math.sin(rec.walkPhase) * .75; rec.legR.rotation.x = -Math.sin(rec.walkPhase) * .75; }
         rec.char.position.y = Math.abs(Math.sin(rec.walkPhase)) * .045;
       } else {
-        const sitting = paused || !!meetSeat;
+        const sitting = paused || !!meetSeat || !!ivSeat;
         rec.char.position.y += ((sitting ? -.22 : 0) - rec.char.position.y) * .1;
         if(rec.legL){ rec.legL.rotation.x *= .8; rec.legR.rotation.x *= .8; }
-        rec.char.rotation.y = meetSeat
+        rec.char.rotation.y = ivSeat
+          ? Math.atan2(0 - rec.char.position.x, -21.2 - rec.char.position.z)
+          : (meetSeat
           ? Math.atan2(-10 - rec.char.position.x, -7 - rec.char.position.z)
-          : (paused ? Math.atan2(coffeeTable.position.x - rec.char.position.x, coffeeTable.position.z - rec.char.position.z) : 0);
+          : (paused ? Math.atan2(coffeeTable.position.x - rec.char.position.x, coffeeTable.position.z - rec.char.position.z) : 0));
       }
     }
     bossChar.rotation.y = Math.sin(t * .8) * .25;
@@ -4598,9 +4762,9 @@ const NAV_WALLS = [
   [39.7, 40.3, -8.6, -1.4], [47.7, 48.3, -8.6, -1.4],
   [49.7, 50.3, -8.6, -1.4], [57.7, 58.3, -8.6, -1.4],
   [59.7, 60.3, -8.6, -1.4], [67.7, 68.3, -8.6, -1.4],
-  [-14, -0.9, -10.15, -9.85], [0.9, 14, -10.15, -9.85],
+  [-14, 3.1, -10.15, -9.85], [4.9, 14, -10.15, -9.85],
   [-13.2, -12.8, -24, -10], [12.8, 13.2, -24, -10], [-13, 13, -24.15, -23.85],
-  [-2.3, 2.3, -21.9, -19.3], [-13.1, -12.4, -18.9, -15.1], [3.1, 3.7, -19.1, -18.5]
+  [-2.3, 2.3, -21.9, -19.3], [-13.1, -12.4, -18.9, -15.1], [3.1, 3.7, -19.1, -18.5], [1.1, 1.7, -18.9, -18.3]
 ];
 const NAV = { G: .2, X0: -13.6, Z0: -24.6, nx: 416, nz: 172, R: .28, blocked: null, version: 0, bootT: performance.now(), entry: { x: 3.7, z: 9.0 } };
 function navBuild(){
