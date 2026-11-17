@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261118-0200">
+<meta name="build" content="b-20261118-0300">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -1999,7 +1999,7 @@ function openAuthModal(){
       showAuthMsg("Vérification de la clé en cours...", false);
       try{
         const res = await fetch(url + "/auth/v1/health", { headers: { apikey: key } });
-        if(res.status === 401){ showAuthMsg("Clé refusée par Supabase (401). Recopiez la « anon public key » dans Project Settings → API.", true); return; }
+        if(res.status === 401){ showAuthMsg("Clé refusée par Supabase (401). Les clés sb_publishable_… SONT acceptées ici : si la vôtre est refusée, c'est qu'elle a été ROTATÉE/supprimée dans Project Settings → API Keys (recopiez la clé actuelle), ou le projet est en pause (supabase.com/dashboard → Restore), ou vous avez copié la clé secrète sb_secret_ (jamais → Rotate).", true); return; }
         if(!res.ok){ showAuthMsg("Supabase a répondu avec une erreur " + res.status + ". Vérifiez l'URL du projet.", true); return; }
       }catch(e){
         showAuthMsg("Impossible de joindre " + esc(url) + " — vérifiez l'URL, ou le projet est en pause (cliquez Restore dans le dashboard).", true); return;
