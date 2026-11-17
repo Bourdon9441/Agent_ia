@@ -2028,6 +2028,7 @@ function switchPcTab(name){
   if(name === "settings") renderPcSettings();
 }
 function openPc(tab){
+  if(document.pointerLockElement) document.exitPointerLock();
   switchPcTab(tab || "files");
   pcOverlay.classList.add("show");
 }
@@ -3561,29 +3562,29 @@ function init3D(){
   const corCeils = [];
   const RX = [24, 34, 44, 54, 64];
   const corFloorTex = makePlanks(); corFloorTex.repeat.set(10, .6);
-  const corFloor = new THREE.Mesh(new THREE.BoxGeometry(53.4, .2, 3.2), new THREE.MeshStandardMaterial({ map: corFloorTex, roughness: .8 }));
-  corFloor.position.set(40.6, -.1, 0); scene.add(corFloor);
+  const corFloor = new THREE.Mesh(new THREE.BoxGeometry(55, .2, 3.2), new THREE.MeshStandardMaterial({ map: corFloorTex, roughness: .8 }));
+  corFloor.position.set(41.5, -.1, 0); scene.add(corFloor);
   const corWallMat = new THREE.MeshStandardMaterial({ color: 0xe6e1d3, roughness: 1 });
   function corWall(w, d, x, z){
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, 3.2, d), corWallMat);
     m.position.set(x, 1.6, z); scene.add(m); return m;
   }
-  corWall(53.2, .18, 40.6, 1.59);
-  for(const [x1, x2] of [[14.1, 23.1], [24.9, 33.1], [34.9, 43.1], [44.9, 53.1], [54.9, 63.1], [64.9, 67.2]]){
+  corWall(55, .18, 41.5, 1.59);
+  for(const [x1, x2] of [[14.1, 23.1], [24.9, 33.1], [34.9, 43.1], [44.9, 53.1], [54.9, 63.1], [64.9, 69]]){
     corWall(x2 - x1, .18, (x1 + x2) / 2, -1.59);
   }
-  corWall(.18, 3.2, 67.1, 0);
+  corWall(.18, 3.2, 68.9, 0);
   const roomSprites = [], roomPanels = [], roomPanelTex = [];
   RX.forEach((rx, i) => {
-    const rf = new THREE.Mesh(new THREE.BoxGeometry(6, .2, 5.6), new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .85 }));
-    rf.position.set(rx, -.09, -4.3); scene.add(rf);
-    corWall(.18, 5.6, rx - 3, -4.3);
-    corWall(.18, 5.6, rx + 3, -4.3);
-    corWall(6, .18, rx, -7.1);
-    const rc = new THREE.Mesh(new THREE.BoxGeometry(6, .2, 5.6), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 1 }));
-    rc.position.set(rx, 3.3, -4.3); scene.add(rc); corCeils.push(rc);
+    const rf = new THREE.Mesh(new THREE.BoxGeometry(8, .2, 7), new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .85 }));
+    rf.position.set(rx, -.09, -5.05); scene.add(rf);
+    corWall(.18, 7, rx - 4, -5.05);
+    corWall(.18, 7, rx + 4, -5.05);
+    corWall(8, .18, rx, -8.6);
+    const rc = new THREE.Mesh(new THREE.BoxGeometry(8, .2, 7), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 1 }));
+    rc.position.set(rx, 3.3, -5.05); scene.add(rc); corCeils.push(rc);
     const lbl = makeLabel(roomName(i), "placez vos employés ici");
-    lbl.position.set(rx, 2.75, -4.3); scene.add(lbl);
+    lbl.position.set(rx, 2.75, -5.05); scene.add(lbl);
     roomSprites[i] = lbl;
     const pc = document.createElement("canvas"); pc.width = 512; pc.height = 128;
     const ptex = new THREE.CanvasTexture(pc);
@@ -3591,10 +3592,10 @@ function init3D(){
     panel.position.set(rx, 2.5, -1.4); scene.add(panel);
     roomPanels[i] = pc; roomPanelTex[i] = ptex;
     const pl = new THREE.PointLight(0xfff4d6, .35, 14);
-    pl.position.set(rx, 2.9, -4); scene.add(pl);
+    pl.position.set(rx, 2.9, -5); scene.add(pl);
   });
-  const corC = new THREE.Mesh(new THREE.BoxGeometry(53.2, .2, 3.2), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 1 }));
-  corC.position.set(40.6, 3.3, 0); scene.add(corC); corCeils.push(corC);
+  const corC = new THREE.Mesh(new THREE.BoxGeometry(55, .2, 3.2), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 1 }));
+  corC.position.set(41.5, 3.3, 0); scene.add(corC); corCeils.push(corC);
   for(const lx of [24, 44, 64]){
     const pl = new THREE.PointLight(0xfff4d6, .35, 14);
     pl.position.set(lx, 2.9, 0); scene.add(pl);
@@ -3630,8 +3631,8 @@ function init3D(){
   }
   for(const wx of [-9, 0, 9]) addWindow(3.4, 1.7, wx, 1.9, -9.86, 0);
   for(const wz of [-5, 0, 5]) addWindow(3.4, 1.7, -13.86, 2.1, wz, Math.PI / 2);
-  for(const wx of [18, 28, 38, 48, 58]) addWindow(3, 1.5, wx, 2, 1.46, Math.PI);
-  RX.forEach(rx => addWindow(3, 1.5, rx, 1.9, -7.15, Math.PI));
+  for(const wx of [18, 28, 38, 48, 58, 66]) addWindow(3, 1.5, wx, 2, 1.46, Math.PI);
+  RX.forEach(rx => addWindow(3, 1.5, rx, 1.9, -8.65, Math.PI));
 
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
@@ -3649,7 +3650,7 @@ function init3D(){
       try{
         const sp = JSON.parse(localStorage.getItem("ac_pos") || "null");
         if(sp && isFinite(sp.x) && isFinite(sp.z)){
-          px = Math.min(66.4, Math.max(-13.4, sp.x));
+          px = Math.min(68.4, Math.max(-13.4, sp.x));
           pz = Math.min(9.4, Math.max(-9.4, sp.z));
           pyaw = sp.yaw || 0; ppitch = sp.pitch || 0;
         }
@@ -3697,7 +3698,7 @@ function init3D(){
       const s2 = dist * .0011, c = Math.cos(az), sn = Math.sin(az);
       target.x += (-dx * c - dy * sn) * s2;
       target.z += (dx * sn - dy * c) * s2;
-      target.x = Math.min(67, Math.max(-14, target.x));
+      target.x = Math.min(69, Math.max(-14, target.x));
       target.z = Math.min(11, Math.max(-11, target.z));
       lastFollowX = fpsState.x; lastFollowZ = fpsState.z;
       updateCam();
@@ -3793,7 +3794,7 @@ function init3D(){
         const rx = Math.cos(fpsState.yaw), rz = -Math.sin(fpsState.yaw);
         fpsState.x += (fx * f + rx * r) * sp;
         fpsState.z += (fz * f + rz * r) * sp;
-        fpsState.x = Math.min(66.4, Math.max(-13.4, fpsState.x));
+        fpsState.x = Math.min(68.4, Math.max(-13.4, fpsState.x));
         fpsState.z = Math.min(9.4, Math.max(-9.4, fpsState.z));
         const circles = [];
         for(const a of state.agents){
@@ -3890,17 +3891,17 @@ const NAV_WALLS = [
   [5.9, 6.1, -10, -4], [6, 6.6, -4.1, -3.9], [7.4, 14, -4.1, -3.9],
   [7.3, 7.5, 3.3, 5.7], [7.3, 7.5, 6.7, 10.1], [7.4, 14.1, 3.3, 3.5],
   [13.3, 14.2, -9.4, -1.5], [13.3, 14.2, 1.5, 9.4],
-  [14.1, 67.2, 1.5, 10.2], [14.1, 67.2, -10.2, -7],
+  [14.1, 69, 1.5, 10.2], [14.1, 69, -10.2, -8.6],
   [14.1, 23.1, -1.7, -1.4], [24.9, 33.1, -1.7, -1.4], [34.9, 43.1, -1.7, -1.4],
-  [44.9, 53.1, -1.7, -1.4], [54.9, 63.1, -1.7, -1.4], [64.9, 67.3, -1.7, -1.4],
-  [66.9, 67.3, -1.5, 1.5],
-  [20.7, 21.3, -7.1, -1.4], [26.7, 27.3, -7.1, -1.4],
-  [30.7, 31.3, -7.1, -1.4], [36.7, 37.3, -7.1, -1.4],
-  [40.7, 41.3, -7.1, -1.4], [46.7, 47.3, -7.1, -1.4],
-  [50.7, 51.3, -7.1, -1.4], [56.7, 57.3, -7.1, -1.4],
-  [60.7, 61.3, -7.1, -1.4], [66.7, 67.3, -7.1, -1.4]
+  [44.9, 53.1, -1.7, -1.4], [54.9, 63.1, -1.7, -1.4], [64.9, 69, -1.7, -1.4],
+  [68.7, 69.1, -1.5, 1.5],
+  [19.7, 20.3, -8.6, -1.4], [27.7, 28.3, -8.6, -1.4],
+  [29.7, 30.3, -8.6, -1.4], [37.7, 38.3, -8.6, -1.4],
+  [39.7, 40.3, -8.6, -1.4], [47.7, 48.3, -8.6, -1.4],
+  [49.7, 50.3, -8.6, -1.4], [57.7, 58.3, -8.6, -1.4],
+  [59.7, 60.3, -8.6, -1.4], [67.7, 68.3, -8.6, -1.4]
 ];
-const NAV = { G: .2, X0: -13.6, Z0: -9.6, nx: 406, nz: 97, R: .28, blocked: null, version: 0, bootT: performance.now(), entry: { x: 3.7, z: 9.0 } };
+const NAV = { G: .2, X0: -13.6, Z0: -9.6, nx: 416, nz: 97, R: .28, blocked: null, version: 0, bootT: performance.now(), entry: { x: 3.7, z: 9.0 } };
 function navBuild(){
   const { G, X0, Z0, nx, nz, R } = NAV;
   const b = new Uint8Array(nx * nz);
@@ -3913,7 +3914,7 @@ function navBuild(){
     const z = Z0 + k * G;
     for(let i = 0; i < nx; i++){
       const x = X0 + i * G;
-      let bl = x < -13.4 || x > 66.4 || z < -9.4 || z > 9.4;
+      let bl = x < -13.4 || x > 68.4 || z < -9.4 || z > 9.4;
       for(let r = 0; !bl && r < rects.length; r++){
         const q = rects[r];
         if(x > q[0] - R && x < q[1] + R && z > q[2] - R && z < q[3] + R) bl = true;
@@ -4028,8 +4029,7 @@ function sync3D(){
   CZ.forEach(z => CX.forEach(x => SLOTS.push([x, z])));
   const roomSlots = [[], [], [], [], []];
   [24, 34, 44, 54, 64].forEach((rx, ri) => {
-    [-1.6, 1.6].forEach(dx => { [-2.6, -5.2].forEach(z => roomSlots[ri].push([rx + dx, z])); });
-    [-2.2, 2.2].forEach(dx => roomSlots[ri].push([rx + dx, -3.9]));
+    [-3, -1.5, 1.5, 3].forEach(dx => { [-2.4, -5.4].forEach(z => roomSlots[ri].push([rx + dx, z])); });
   });
   /* au-delà de 12 agents : grande zone libre à gauche (rien devant la porte du self) */
   [-0.8, -3, -5.2, -7.4, -9.6].forEach(x => [-1, 1.4, 3.8].forEach(z => SLOTS.push([x, z])));
