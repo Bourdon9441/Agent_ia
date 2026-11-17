@@ -484,6 +484,7 @@
     <h2 id="pcTitle">Votre PC — gestion de l'entreprise</h2>
     <p class="sub">Tout se gère depuis ce terminal : livrables, conversations, embauches, réglages.</p>
     <div class="tabs" id="pcTabs">
+      <button class="tab" data-tab="dash"></button>
       <button class="tab on" data-tab="files"></button>
       <button class="tab" data-tab="tasks"></button>
       <button class="tab" data-tab="reunion"></button>
@@ -496,6 +497,10 @@
       <button class="tab" data-tab="assistant"></button>
       <button class="tab" data-tab="conn"></button>
       <button class="tab" data-tab="settings"></button>
+    </div>
+    <div class="pcpane" id="pane-dash" style="display:none;">
+      <div class="kpis" id="dashTotals" style="margin-bottom:14px;"></div>
+      <div id="dashBox"></div>
     </div>
     <div class="pcpane" id="pane-files">
       <div class="row" style="align-items:center;">
@@ -518,6 +523,11 @@
       <button class="btn line wide" id="pcAuto"></button>
       <label style="margin-top:16px;">Liste des tâches du mode autonome <span style="text-transform:none;letter-spacing:0">(une par ligne, exécutées dans l'ordre, sans improvisation)</span></label>
       <textarea id="pcBacklog" placeholder="Surveiller les tendances du secteur&#10;Préparer le rapport hebdomadaire"></textarea>
+      <div class="row" style="margin-top:8px;">
+        <input type="text" id="tplName" placeholder="Nom du modèle (ex : rapport hebdomadaire)" style="flex:1;">
+        <button class="btn line" id="tplSave" style="flex:0 0 auto;">Sauvegarder comme modèle</button>
+      </div>
+      <div id="tplList" style="margin-top:8px;"></div>
       <label style="margin-top:16px;">Mission de l'entreprise</label>
       <input type="text" id="pcMission" placeholder="La mission de vos agents...">
       <label style="margin-top:16px;">Tâches programmées <span style="text-transform:none;letter-spacing:0">(exécutées à l'heure choisie, page ouverte)</span></label>
@@ -647,6 +657,13 @@
       <input type="password" id="ghToken" placeholder="Token GitHub (ghp_...)">
       <input type="text" id="ghRepo" placeholder="Nom du dépôt (ex : mes-sites)">
       <div class="row"><button class="btn line" id="ghSave" style="flex:0 0 auto;">Enregistrer GitHub</button></div>
+      <div class="hint" style="margin-top:14px;">Sauvegarde complète — téléchargez toute votre entreprise (agents, skills, notes, fichiers, historique) dans un fichier, ou restaurez une sauvegarde.</div>
+      <div class="row">
+        <button class="btn line" id="pcExport" style="flex:0 0 auto;">Tout exporter</button>
+        <input type="file" id="pcImportFile" accept=".json" style="display:none;">
+        <button class="btn line" id="pcImport" style="flex:0 0 auto;">Importer une sauvegarde</button>
+        <button class="btn line" id="pcNotif" style="flex:0 0 auto;">Notifications</button>
+      </div>
       <div class="hint" id="pcSyncInfo" style="margin-top:14px;"></div>
     </div>
   </div>
@@ -743,7 +760,7 @@ function scopeKey(){
 }
 function freshState(){
   return { agents: [], mission: "", backlog: [], autonomous: false, speed: 1, doneCount: 0,
-           activity: [], results: [], chat: [], sites: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], files: [], roomNames: {}, drhAuto: false, coffeeClosed: false, meta: { syncedAt: null } };
+           activity: [], results: [], chat: [], sites: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], files: [], templates: [], roomNames: {}, drhAuto: false, coffeeClosed: false, meta: { syncedAt: null } };
 }
 let state = freshState();
 const PERSONAS = ["efficace et direct, va droit au but", "créatif et imaginatif, propose toujours une idée en plus", "rigoureux et méthodique, ne laisse rien au hasard", "enthousiaste et positif, motive l\u2019équipe", "pédagogue et clair, explique simplement", "analytique et critique, questionne chaque choix", "chaleureux et diplomate, apaise les tensions", "pragmatique et orienté résultats, livre vite", "perfectionniste du détail, soigne la finition", "curieux et explorateur, teste de nouvelles approches", "calme et fiable, garde son sang-froid sous pression", "proactif et autonome, anticipe les besoins", "minutieux et organisé, structure tout en listes", "audacieux et ambitieux, vise toujours plus haut", "patient et à l\u2019écoute, reformule avant d\u2019agir", "énergique et rapide, préfère itérer vite"];
@@ -758,9 +775,10 @@ function ensurePersonas(){
   if(!state.connectors) state.connectors = [];
   if(!state.roomNames) state.roomNames = {};
   if(!state.files) state.files = [];
+  if(!state.templates) state.templates = [];
   if(!state.assistantChat) state.assistantChat = [];
   if(state.drhAuto === undefined) state.drhAuto = false;
-  state.agents.forEach(a => { if(a.group === undefined) a.group = ""; if(!a.skills) a.skills = []; });
+  state.agents.forEach(a => { if(a.group === undefined) a.group = ""; if(!a.skills) a.skills = []; if(!a.memories) a.memories = []; });
   if(state.siteProject){
     state.sites.push(Object.assign({ id: uid(), name: (state.siteProject.desc || "site").slice(0, 40), createdAt: new Date().toLocaleString("fr-FR") }, state.siteProject));
     delete state.siteProject;
@@ -793,7 +811,7 @@ const pendingCount = () => state.agents.reduce((n,a)=> n + a.queue.length + (a.c
 
 function logGlobal(msg, who){
   state.activity.unshift({ t: nowT(), who: who || "Système", msg });
-  if(state.activity.length > 120) state.activity.length = 120;
+  if(state.activity.length > 60) state.activity.length = 60;
   renderActivity(); save();
 }
 function logAgent(agent, msg){
@@ -1020,6 +1038,8 @@ function agentExtras(agent){
   if(g && g.instructions) t += " Consignes permanentes de ton équipe « " + g.name + " » (à respecter) : " + g.instructions + ".";
   const sk = (agent.skills || []).map(id => (state.skills || []).find(x => x.id === id)).filter(Boolean);
   if(sk.length) t += " Tes compétences spécialisées (applique-les dès que la tâche s'y rapporte) : " + sk.map(k => "« " + k.name + " » : " + k.instructions).join(" | ") + ".";
+  const mem = (agent.memories || []).slice(0, 8);
+  if(mem.length) t += " Tes souvenirs permanents (respecte-les dans ton travail) : " + mem.map(m => m.text).join(" | ") + ".";
   return t;
 }
 const SKILL_LIBRARY = [
@@ -1144,8 +1164,11 @@ async function executeTask(agent){
         context = "\n\n(La recherche web en direct n'a rien renvoy\u00e9 : r\u00e9ponds avec tes connaissances et signale qu'aucune source en direct n'a pu \u00eatre consult\u00e9e.)";
       }
     }
+    const recent = (state.results || []).filter(x => x.status === "done" && x.task !== t.text).slice(0, 2)
+      .map(x => "— " + x.task + " : " + String(x.output || "").replace(/\s+/g, " ").slice(0, 280)).join("\n");
+    const recentContext = recent ? "\n\nTravaux récents de l'équipe (appuie-toi dessus pour rester cohérent, ne les répète pas mot pour mot) :\n" + recent : "";
     let out = await enqueueLLM(()=> callLLM([
-      {role:"system", content:"Tu es l'agent " + agent.name + " (sp\u00e9cialit\u00e9 : " + (agent.role || "polyvalent") + (agent.persona ? ", personnalit\u00e9 : " + agent.persona : "") + ") d'une \u00e9quipe de travail. Ex\u00e9cute la t\u00e2che suivante et produis directement le livrable concret, en fran\u00e7ais, pr\u00eat \u00e0 l'emploi (texte structur\u00e9, complet, actionnable). Ta personnalit\u00e9 doit se ressentir dans ton rendu (ton, choix, pr\u00e9sentation) sans nuire \u00e0 la qualit\u00e9 professionnelle. Pas d'introduction, pas de commentaire : uniquement le livrable." + agentExtras(agent) + context},
+      {role:"system", content:"Tu es l'agent " + agent.name + " (sp\u00e9cialit\u00e9 : " + (agent.role || "polyvalent") + (agent.persona ? ", personnalit\u00e9 : " + agent.persona : "") + ") d'une \u00e9quipe de travail. Ex\u00e9cute la t\u00e2che suivante et produis directement le livrable concret, en fran\u00e7ais, pr\u00eat \u00e0 l'emploi (texte structur\u00e9, complet, actionnable). Ta personnalit\u00e9 doit se ressentir dans ton rendu (ton, choix, pr\u00e9sentation) sans nuire \u00e0 la qualit\u00e9 professionnelle. Pas d'introduction, pas de commentaire : uniquement le livrable." + agentExtras(agent) + recentContext + context},
       {role:"user", content: t.text}
     ], 3000));
     const rev = state.agents.find(a => a.id !== agent.id && a.role === "vérificateur");
@@ -1169,6 +1192,10 @@ async function executeTask(agent){
       }
     }
     logAgent(agent, "Termin\u00e9 : " + t.text);
+    if(!agent.memories) agent.memories = [];
+    agent.memories.unshift({ id: uid(), text: "Réalisé le " + new Date().toLocaleDateString("fr-FR") + " : " + t.text.slice(0, 110), at: nowT() });
+    if(agent.memories.length > 15) agent.memories.length = 15;
+    notify("Agent_IA — " + agent.name, "Tâche terminée : " + t.text.slice(0, 80));
     logGlobal("<b>" + esc(agent.name) + "</b> rend compte au Patron : \u00ab " + esc(t.text) + " \u00bb termin\u00e9, livrable pr\u00eat.", agent.name);
   }catch(e){
     if(agent.currentTask !== t) return;
@@ -1178,6 +1205,7 @@ async function executeTask(agent){
     agent.status = "idle";
     logAgent(agent, "\u00c9chec : " + t.text + " (" + e.message + ")");
     logGlobal("\u00e9chec de la t\u00e2che (\u00ab " + esc(e.message) + " \u00bb)", agent.name);
+    notify("Agent_IA — " + agent.name, "Échec de tâche : " + t.text.slice(0, 80));
   }
   renderResults(); updateDynamicUI(); updateKPIs(); save();
   dispatch();
@@ -2049,6 +2077,7 @@ window.addEventListener("keydown", e=>{
 /* ================= terminal PC (mon PC) ================= */
 const pcOverlay = document.getElementById("pcOverlay");
 const PC_TABS = [
+  { id: "dash", label: "Tableau", icon: "pie" },
   { id: "files", label: "Fichiers", icon: "folder" },
   { id: "tasks", label: "Tâches", icon: "tasks" },
   { id: "reunion", label: "Réunion", icon: "clock" },
@@ -2072,9 +2101,10 @@ function initPcTabs(){
 initPcTabs();
 function switchPcTab(name){
   document.querySelectorAll("#pcTabs .tab").forEach(t => t.classList.toggle("on", t.dataset.tab === name));
-  for(const id of ["files", "tasks", "reunion", "teams", "salles", "chat", "hr", "servers", "notes", "assistant", "conn", "settings"]){
+  for(const id of ["dash", "files", "tasks", "reunion", "teams", "salles", "chat", "hr", "servers", "notes", "assistant", "conn", "settings"]){
     document.getElementById("pane-" + id).style.display = id === name ? "" : "none";
   }
+  if(name === "dash") renderDash();
   if(name === "files"){ renderResults(); renderUserFiles(); }
   if(name === "tasks") renderPcTasks();
   if(name === "reunion") renderPcMeetings();
@@ -2097,6 +2127,21 @@ document.getElementById("pcClose").innerHTML = icon("cross");
 document.getElementById("pcClose").addEventListener("click", ()=> pcOverlay.classList.remove("show"));
 pcOverlay.addEventListener("click", e=>{ if(e.target === pcOverlay) pcOverlay.classList.remove("show"); });
 
+function renderDash(){
+  const totals = document.getElementById("dashTotals");
+  const box = document.getElementById("dashBox");
+  if(!box) return;
+  const busy = state.agents.filter(a => a.status === "busy").length;
+  if(totals) totals.innerHTML = '<div class="kpi"><b>' + state.agents.length + '</b><span>Agents</span></div><div class="kpi"><b>' + busy + '</b><span>En cours</span></div><div class="kpi"><b>' + pendingCount() + '</b><span>En attente</span></div><div class="kpi"><b>' + (state.doneCount || 0) + '</b><span>Termin\u00e9es</span></div>';
+  box.innerHTML = state.agents.map(a => {
+    const ct = a.currentTask;
+    const dur = ct ? Math.max(1, Math.round((Date.now() - ct.startedAt) / 60000)) : 0;
+    const stTxt = a.status === "busy" ? "travaille depuis " + dur + " min" : a.status === "paused" ? "au self" : "disponible";
+    const last = (a.log || []).find(l => l.msg.indexOf("Termin") === 0);
+    return '<div class="hrrow"><div><div class="hrname">' + esc(a.name) + '</div><div class="hrole">' + esc(a.role || "polyvalent") + (ct ? " — " + esc(ct.text) : "") + (last ? " · dernier : " + esc(last.msg.replace(/^Termin\u00e9 : /, "")) : "") + '</div></div><span class="hstat ' + a.status + '">' + esc(stTxt) + ((a.queue || []).length ? " · " + a.queue.length + " en file" : "") + '</span></div>';
+  }).join("") || '<div class="hint">Aucun agent pour le moment.</div>';
+}
+setInterval(()=>{ const pd = document.getElementById("pane-dash"); if(pcOverlay.classList.contains("show") && pd && pd.style.display === "") renderDash(); }, 5000);
 function renderPcTasks(){
   document.getElementById("pcLaunch").innerHTML = icon("play") + " Lancer";
   document.getElementById("pcBacklog").value = (state.backlog || []).join("\n");
@@ -2104,7 +2149,37 @@ function renderPcTasks(){
   const auto = document.getElementById("pcAuto");
   auto.innerHTML = icon(state.autonomous ? "pause" : "play") + " Mode autonome : " + (state.autonomous ? "ACTIVÉ — cliquez pour arrêter" : "arrêté — cliquez pour activer");
   renderPcSched();
+  renderTpls();
 }
+function renderTpls(){
+  const box = document.getElementById("tplList");
+  if(!box) return;
+  box.innerHTML = (state.templates || []).map(tp =>
+    '<div class="hrrow"><div><div class="hrname">' + esc(tp.name) + '</div><div class="hrole">' + tp.tasks.length + ' tâche(s)</div></div>' +
+    '<button class="iconbtn tplUse" data-id="' + tp.id + '" title="Charger dans la liste des tâches">' + icon("play") + '</button>' +
+    '<button class="iconbtn tplDel" data-id="' + tp.id + '" title="Supprimer le modèle">' + icon("trash") + '</button></div>'
+  ).join("");
+  box.querySelectorAll(".tplUse").forEach(b => b.addEventListener("click", ()=>{
+    const tp = state.templates.find(x => x.id === b.dataset.id);
+    if(!tp) return;
+    document.getElementById("pcBacklog").value = tp.tasks.join("\n");
+    logGlobal("modèle « " + esc(tp.name) + " » chargé : vérifiez la liste puis activez le mode autonome.", "Patron");
+  }));
+  box.querySelectorAll(".tplDel").forEach(b => b.addEventListener("click", ()=>{
+    state.templates = state.templates.filter(x => x.id !== b.dataset.id);
+    renderTpls(); save();
+  }));
+}
+document.getElementById("tplSave").addEventListener("click", ()=>{
+  const tasks = document.getElementById("pcBacklog").value.split("\n").map(x => x.trim()).filter(Boolean);
+  const name = document.getElementById("tplName").value.trim().slice(0, 30);
+  if(!tasks.length || !name){ logGlobal("écrivez la liste des tâches et un nom de modèle.", "Patron"); return; }
+  if(!state.templates) state.templates = [];
+  state.templates.push({ id: uid(), name, tasks });
+  document.getElementById("tplName").value = "";
+  logGlobal("modèle « " + esc(name) + " » sauvegardé (" + tasks.length + " tâches).", "Patron");
+  renderTpls(); save();
+});
 function renderSitesList(){
   return state.sites.map(st => {
     const ok = st.built && st.html;
@@ -2440,6 +2515,8 @@ function renderHR(){
       '<select class="heRole">' + opts + '</select>' +
       '<input class="hePersona" value="' + esc(a.persona || "") + '" placeholder="Personnalité (ex : créatif et imaginatif)" maxlength="60">' +
       ((state.skills || []).length ? '<div style="flex-basis:100%;font-size:12px;color:var(--dim);">Skills : ' + state.skills.map(k => '<label style="display:inline-flex;gap:5px;margin:0 12px 4px 0;text-transform:none;"><input type="checkbox" class="heSk" value="' + k.id + '"' + ((a.skills || []).includes(k.id) ? " checked" : "") + '>' + esc(k.name) + '</label>').join("") + '</div>' : "") +
+      '<div style="flex-basis:100%;font-size:12px;color:var(--dim);">Souvenirs : ' + ((a.memories || []).length ? (a.memories || []).slice(0, 5).map(m => esc(m.text)).join(" · ") : "aucun") + '</div>' +
+      '<input class="heMem" placeholder="Ajouter un souvenir permanent (ex : le client préfère le bleu)" maxlength="120" style="flex-basis:100%;">' +
       '<button class="iconbtn heSave" title="Enregistrer">' + icon("check") + '</button>' +
       '<button class="iconbtn heCancel" title="Annuler">' + icon("cross") + '</button></div>';
     row.querySelector(".heSave").addEventListener("click", ()=>{
@@ -2447,6 +2524,12 @@ function renderHR(){
       const nr = row.querySelector(".heRole").value;
       const np = row.querySelector(".hePersona").value.trim();
       a.skills = Array.from(row.querySelectorAll(".heSk:checked")).map(c => c.value);
+      const nm = row.querySelector(".heMem").value.trim();
+      if(nm){
+        if(!a.memories) a.memories = [];
+        a.memories.unshift({ id: uid(), text: nm.slice(0, 120), at: nowT() });
+        if(a.memories.length > 15) a.memories.length = 15;
+      }
       if(nn) a.name = nn;
       if(nr) a.role = nr;
       a.persona = np || a.persona || "professionnel";
@@ -2468,11 +2551,51 @@ function renderPcSettings(){
   renderPcEmail();
   renderGh();
   renderDrhAuto();
+  const nb = document.getElementById("pcNotif");
+  if(nb) nb.textContent = ("Notification" in window && Notification.permission === "granted") ? "Notifications : activées" : "Notifications navigateur";
   const info = document.getElementById("pcSyncInfo");
   if(info){
     if(session && session.user) info.textContent = "Connecté : " + (session.user.email || session.user.id) + " — vos données suivent votre compte sur tous vos appareils.";
     else info.textContent = "Mode local : connectez-vous (page principale) pour synchroniser sur tous vos appareils.";
   }
+}
+document.getElementById("pcExport").addEventListener("click", ()=>{
+  const blob = new Blob([JSON.stringify(state, null, 1)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "sauvegarde-agent-ia-" + new Date().toISOString().slice(0, 10) + ".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+document.getElementById("pcImport").addEventListener("click", ()=> document.getElementById("pcImportFile").click());
+document.getElementById("pcImportFile").addEventListener("change", e=>{
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  const rd = new FileReader();
+  rd.onload = ()=>{
+    try{
+      const data = JSON.parse(String(rd.result));
+      if(!data || !Array.isArray(data.agents)) throw new Error("fichier de sauvegarde invalide");
+      state = Object.assign(freshState(), data);
+      ensurePersonas();
+      save();
+      logGlobal("sauvegarde importée : " + state.agents.length + " agent(s) restauré(s). Rechargement...", "Système");
+      setTimeout(()=> location.reload(), 1200);
+    }catch(err){ logGlobal("import impossible : " + esc(err.message), "Système"); }
+  };
+  rd.readAsText(f);
+  e.target.value = "";
+});
+document.getElementById("pcNotif").addEventListener("click", ()=>{
+  if(!("Notification" in window)){ logGlobal("votre navigateur ne gère pas les notifications.", "Système"); return; }
+  Notification.requestPermission().then(p => {
+    const nb = document.getElementById("pcNotif");
+    if(nb) nb.textContent = p === "granted" ? "Notifications : activées" : "Notifications : refusées";
+    if(p === "granted") notify("Agent_IA", "Notifications activées — vous serez prévenu à chaque tâche terminée.");
+  });
+});
+function notify(title, body){
+  try{ if("Notification" in window && Notification.permission === "granted") new Notification(title, { body }); }catch(e){}
 }
 document.getElementById("pcKeyInput").addEventListener("input", e=>{
   try{
