@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261118-0100">
+<meta name="build" content="b-20261118-0115">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -4691,6 +4691,8 @@ function init3D(){
   }catch(e){ console.warn("bâtiment clients indisponible", e); }
 
   /* étage : copie du bureau du patron + sous-sol : datacenter, disjoncteurs, météo */
+  const rackLeds = [];
+  let dcDraw = null, dcBrk = null, dcWx = null;
   try{
     const EY = 3.76, DY = -3.4;
     const etageGroup = new THREE.Group(); scene.add(etageGroup);
@@ -4721,7 +4723,6 @@ function init3D(){
     const dcWS = dcWN.clone(); dcWS.position.z = 26.9; sousGroup.add(dcWS);
     const dcWW = new THREE.Mesh(new THREE.BoxGeometry(.2, 3, 14), dcWM); dcWW.position.set(-10.9, DY + 1.5, 20); sousGroup.add(dcWW);
     const dcWE = dcWW.clone(); dcWE.position.x = 10.9; sousGroup.add(dcWE);
-    const rackLeds = [];
     const rackMat = new THREE.MeshStandardMaterial({ color: 0x14171c, roughness: .5, metalness: .3 });
     for(const rx2 of [-8.5, -6.5, 6.5, 8.5]){
       for(const rz2 of [16.5, 19.5, 22.5]){
@@ -4805,6 +4806,7 @@ function init3D(){
     };
     applyBreakers();
     applyWeather();
+    dcDraw = drawDc; dcBrk = applyBreakers; dcWx = applyWeather;
   }catch(e){ console.warn("étage / sous-sol indisponibles", e); }
 
   const raycaster = new THREE.Raycaster();
@@ -4952,7 +4954,7 @@ function init3D(){
       }
     }
   }
-  three = { scene, camera, renderer, bossChar, coffeeSlots, limeLight, redrawSign: drawSign, coffeeLabel: machineLabel, corridorStrip, redrawRooms, drawDc, applyBreakers, applyWeather };
+  three = { scene, camera, renderer, bossChar, coffeeSlots, limeLight, redrawSign: drawSign, coffeeLabel: machineLabel, corridorStrip, redrawRooms, drawDc: dcDraw, applyBreakers: dcBrk, applyWeather: dcWx };
   redrawRooms();
   syncCoffeeUI();
   corCeils.forEach(c => c.visible = false);
