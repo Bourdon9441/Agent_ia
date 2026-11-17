@@ -691,6 +691,7 @@
 <div class="overlay" id="meetOverlay">
   <div class="modal" style="width:min(680px,100%);">
     <button class="iconbtn close-x" id="meetClose"></button>
+    <button class="iconbtn close-x" id="meetFs" style="right:52px;" title="Plein écran (touche F)">⛶</button>
     <h2 id="meetTitle">Réunion</h2>
     <p class="sub" id="meetSub"></p>
     <div id="meetLog" class="chat" style="max-height:38vh; overflow-y:auto; border:1px solid var(--line); border-radius:12px; padding:12px;"></div>
@@ -2106,7 +2107,7 @@ function syncFsBtn(){
   const b = document.getElementById("fsBtn");
   if(b) b.textContent = isGameFullscreen() ? "Quitter plein écran" : "Plein écran";
 }
-const GAME_OVERLAYS = ["deskPopup", "resultsOverlay", "bossDlg", "drhDlg", "pcOverlay", "authOverlay"].map(id => document.getElementById(id)).filter(Boolean);
+const GAME_OVERLAYS = ["deskPopup", "resultsOverlay", "bossDlg", "drhDlg", "pcOverlay", "authOverlay", "meetOverlay"].map(id => document.getElementById(id)).filter(Boolean);
 function parkOverlays(host){ for(const el of GAME_OVERLAYS) host.appendChild(el); }
 parkOverlays(document.body);
 function enterGameFullscreen(){
@@ -2147,6 +2148,13 @@ window.addEventListener("keydown", e=>{
   if(!three || pcOverlay.classList.contains("show")) return;
   if(document.querySelector(".overlay.show")) return;
   openPc("notes");
+});
+window.addEventListener("keydown", e=>{
+  if(e.code !== "KeyF") return;
+  const tg = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : "";
+  if(tg === "input" || tg === "textarea" || (e.target && e.target.isContentEditable)) return;
+  const b = document.getElementById("fsBtn");
+  if(b) b.click();
 });
 
 /* ================= terminal PC (mon PC) ================= */
@@ -3114,6 +3122,11 @@ function endLiveMeeting(silent){
   if(!silent) logGlobal("tout le monde retourne à son poste.", "Patron");
   save(); renderAll();
 }
+document.getElementById("meetFs").addEventListener("click", e=>{
+  e.stopPropagation();
+  if(isGameFullscreen()) exitGameFullscreen();
+  else document.getElementById("fsBtn").click();
+});
 document.getElementById("meetClose").innerHTML = icon("cross");
 document.getElementById("meetClose").addEventListener("click", ()=>{ meetOverlay.classList.remove("show"); });
 meetOverlay.addEventListener("click", e=>{ if(e.target === meetOverlay) meetOverlay.classList.remove("show"); });
@@ -3552,7 +3565,10 @@ const agent3d = new Map();
 const zoneLabels = new Map();
 const fpsState = { x: 0, z: 5.6, yaw: 0, pitch: 0, y: 0, vy: 0 };
 let laptopPocket = false;
+let laptopOn = 0;
 let setLaptopPocket = () => {};
+let setLaptopSpot = () => {};
+const LAPTOP_SPOTS = [{ x: 0, z: 9.1 }, { x: -6, z: 8.6 }, { x: 6, z: 8.6 }];
 function roomName(i){ return (state.roomNames && state.roomNames[i]) || (i === 0 ? "Administration" : "Salle " + (i + 1)); }
 let nearTarget = null;
 const fpsPromptEl = document.getElementById("fpsPrompt");
@@ -3580,8 +3596,13 @@ function interactNear(){
   } else if(nt.type === "reunion"){
     if(state.liveMeeting) openMeetOverlay(); else openPc("reunion");
   } else if(nt.type === "laptop"){
-    setLaptopPocket(!laptopPocket);
-    logGlobal(laptopPocket ? "PC portable pris — touche P pour l’ouvrir partout." : "PC portable posé sur la table du lounge.", "Système");
+    if(laptopOn === nt.spot && !laptopPocket){
+      setLaptopPocket(true);
+      logGlobal("PC portable pris — touche P pour l’ouvrir partout.", "Système");
+    } else {
+      setLaptopSpot(nt.spot);
+      logGlobal("PC portable posé sur la table " + (nt.spot + 1) + ".", "Système");
+    }
     setPrompt(null);
     return;
   } else if(nt.type === "agent"){
@@ -3602,7 +3623,10 @@ function checkNear(){
   consider(-12.4, 8.9, 2.6, { type: "pc", label: "Ouvrir votre PC (fichiers, tâches, réunion)" });
   consider(-13.3, 1.6, 2.6, { type: "servers", label: "Salle serveurs — héberger un site à coder" });
   consider(-10, -7, 3.2, { type: "reunion", label: state.liveMeeting ? "Reprendre la réunion en cours (E)" : "Salle de réunion — convoquer une réunion" });
-  consider(0, 9.1, 2.2, { type: "laptop", label: laptopPocket ? "Poser le PC portable sur la table" : "Mettre le PC portable dans la poche — touche P partout" });
+  LAPTOP_SPOTS.forEach((sp, i) => {
+    const here = laptopOn === i && !laptopPocket;
+    consider(sp.x, sp.z, 2.2, { type: "laptop", spot: i, label: here ? "Mettre le PC portable dans la poche — touche P partout" : "Poser le PC portable sur cette table (bouton vert)" });
+  });
   for(const a of state.agents){
     const rec = agent3d.get(a.id);
     if(rec) consider(rec.group.position.x, rec.group.position.z, 2.3,
@@ -3858,26 +3882,50 @@ function init3D(){
   meetLabel.position.set(-10, 3.2, -7); scene.add(meetLabel);
 
   /* écran mural d'entreprise : tableau de bord en direct dans le hall */
-  const boardC = document.createElement("canvas"); boardC.width = 512; boardC.height = 256;
+  const boardC = document.createElement("canvas"); boardC.width = 1024; boardC.height = 512;
   const boardTex = new THREE.CanvasTexture(boardC);
   const board = new THREE.Mesh(new THREE.PlaneGeometry(7, 3.5), new THREE.MeshBasicMaterial({ map: boardTex }));
   board.position.set(0, 2.6, 9.83); board.rotation.y = Math.PI;
   scene.add(board);
   function drawBoard(){
     const c = boardC.getContext("2d");
-    c.fillStyle = "#0b0d0a"; c.fillRect(0, 0, 512, 256);
-    c.strokeStyle = "#333a2a"; c.lineWidth = 2; c.strokeRect(6, 6, 500, 244);
-    c.fillStyle = "#c6f542"; c.font = "bold 30px monospace";
-    c.fillText("AGENT_IA — TABLEAU DE L’ENTREPRISE", 24, 50);
+    const clip = (v, n) => { v = String(v || ""); return v.length > n ? v.slice(0, n - 1) + "…" : v; };
+    c.fillStyle = "#0b0d0a"; c.fillRect(0, 0, 1024, 512);
+    c.strokeStyle = "#333a2a"; c.lineWidth = 3; c.strokeRect(8, 8, 1008, 496);
+    c.textAlign = "left";
+    c.fillStyle = "#c6f542"; c.font = "bold 36px monospace";
+    c.fillText("AGENT_IA — TABLEAU DE L’ENTREPRISE", 36, 58);
+    const now = new Date();
+    c.fillStyle = "#9aa38c"; c.font = "22px monospace"; c.textAlign = "right";
+    c.fillText(now.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }) + "  " + now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), 988, 58);
+    c.textAlign = "left";
+    c.fillStyle = "#eef2e4"; c.font = "22px monospace";
+    c.fillText("Mission : " + clip(state.mission || "(non définie)", 66), 36, 100);
+    const busyA = state.agents.filter(a => a.status === "busy");
+    const pausedN = state.agents.filter(a => a.status === "paused").length;
+    const apN = (state.apiStats || {}).count || 0;
+    c.fillStyle = "#c6f542"; c.font = "bold 24px monospace";
+    c.fillText("EFFECTIF & CHIFFRES", 36, 150);
     c.fillStyle = "#eef2e4"; c.font = "21px monospace";
-    const busy = state.agents.filter(a => a.status === "busy").length;
-    const paused = state.agents.filter(a => a.status === "paused").length;
-    c.fillText("Agents : " + state.agents.length + "    au travail : " + busy + "    au self : " + paused, 24, 98);
-    c.fillText("Tâches en attente : " + (state.backlog || []).length + "    livrables terminés : " + (state.doneCount || 0), 24, 132);
-    c.fillStyle = "#9aa38c"; c.font = "16px monospace";
-    (state.activity || []).slice(0, 3).forEach((l, i) => {
+    c.fillText(state.agents.length + " agents · " + busyA.length + " au travail · " + pausedN + " au self · " + Math.max(0, state.agents.length - busyA.length - pausedN) + " disponibles", 36, 184);
+    c.fillText((state.backlog || []).length + " tâches en attente · " + (state.doneCount || 0) + " livrables · " + apN + " appels API", 36, 214);
+    c.fillStyle = "#c6f542"; c.font = "bold 24px monospace";
+    c.fillText("EN CE MOMENT", 36, 262);
+    c.fillStyle = "#eef2e4"; c.font = "20px monospace";
+    if(busyA.length){
+      busyA.slice(0, 3).forEach((a, i) => {
+        c.fillText("• " + clip(a.name + " (" + (a.role || "polyvalent") + ")", 30) + " — " + clip(a.currentTask ? a.currentTask.text : "", 40), 36, 296 + i * 30);
+      });
+    } else {
+      c.fillStyle = "#9aa38c";
+      c.fillText("• Personne ne travaille en ce moment.", 36, 296);
+    }
+    c.fillStyle = "#c6f542"; c.font = "bold 24px monospace";
+    c.fillText("DERNIÈRES ACTIVITÉS", 36, 404);
+    c.fillStyle = "#9aa38c"; c.font = "19px monospace";
+    (state.activity || []).slice(0, 2).forEach((l, i) => {
       const one = String(l.msg || "").replace(/<[^>]*>/g, "");
-      c.fillText("• " + one.slice(0, 56), 24, 168 + i * 26);
+      c.fillText("• " + clip(one, 76), 36, 438 + i * 28);
     });
     boardTex.needsUpdate = true;
   }
@@ -4025,11 +4073,45 @@ function init3D(){
   pocketLaptop.visible = false;
   camera.add(pocketLaptop);
   scene.add(camera);
-  setLaptopPocket = v => {
-    laptopPocket = v;
-    laptopBase.visible = laptopScr.visible = laptopLabel.visible = !v;
-    pocketLaptop.visible = v && camMode === "fps";
-  };
+  const spotLegGeo = new THREE.CylinderGeometry(.07, .1, .68, 10);
+  const spotTopGeo = new THREE.CylinderGeometry(.5, .5, .06, 16);
+  LAPTOP_SPOTS.forEach((sp, i) => {
+    if(i > 0){
+      const leg = new THREE.Mesh(spotLegGeo, new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: .8 }));
+      leg.position.set(sp.x, .34, sp.z); scene.add(leg);
+      const top = new THREE.Mesh(spotTopGeo, new THREE.MeshStandardMaterial({ color: 0xd6cfc0, roughness: .6 }));
+      top.position.set(sp.x, .71, sp.z); scene.add(top);
+      const base = new THREE.Mesh(new THREE.BoxGeometry(.5, .03, .34), new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: .4, metalness: .3 }));
+      base.position.set(sp.x, .77, sp.z - .02); scene.add(base);
+      base.traverse(o => o.userData.laptop = true);
+      const scr = new THREE.Mesh(new THREE.BoxGeometry(.5, .32, .02), screenMat(0xc6f542, .8));
+      scr.position.set(sp.x, .93, sp.z + .13); scr.rotation.x = -.3; scr.userData.laptop = true;
+      scene.add(scr);
+      sp.meshes = [base, scr];
+      sp.label = makeLabel("VOTRE PC PORTABLE", "touche P — notes & assistant");
+      sp.label.position.set(sp.x, 2.2, sp.z); scene.add(sp.label);
+    } else {
+      sp.meshes = [laptopBase, laptopScr];
+      sp.label = laptopLabel;
+    }
+    const btn = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .05, 12), new THREE.MeshStandardMaterial({ color: 0xc6f542, emissive: 0xc6f542, emissiveIntensity: .6, roughness: .4 }));
+    btn.position.set(sp.x + .36, .77, sp.z + .3); btn.userData.laptopBtn = i;
+    scene.add(btn);
+    sp.tag = makeLabel("PC PORTABLE", "bouton vert : l’amener ici");
+    sp.tag.position.set(sp.x, 1.45, sp.z); scene.add(sp.tag);
+  });
+  function syncLaptop(){
+    LAPTOP_SPOTS.forEach((sp, i) => {
+      const on = !laptopPocket && i === laptopOn;
+      (sp.meshes || []).forEach(m => m.visible = on);
+      if(sp.label) sp.label.visible = on;
+      if(sp.tag) sp.tag.visible = !on;
+    });
+    pocketLaptop.visible = laptopPocket && camMode === "fps";
+  }
+  setLaptopPocket = v => { laptopPocket = v; syncLaptop(); };
+  setLaptopSpot = i => { laptopOn = i; laptopPocket = false; syncLaptop(); };
+  syncLaptop();
   const corridorStrip = new THREE.Mesh(new THREE.BoxGeometry(2.2, .015, 13.3), new THREE.MeshStandardMaterial({ color: 0x8a7a62, roughness: .9 }));
   corridorStrip.position.set(3.7, .018, 2.85); scene.add(corridorStrip);
 
@@ -4049,6 +4131,18 @@ function init3D(){
     corWall(x2 - x1, .18, (x1 + x2) / 2, -1.59);
   }
   corWall(.18, 3.2, 68.9, 0);
+  const officeDoors = [];
+  const doorMat = new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .7 });
+  RX.forEach(rx => {
+    const d = new THREE.Mesh(new THREE.BoxGeometry(1.72, 2.8, .1), doorMat);
+    d.position.set(rx, 1.4, -1.59);
+    d.userData.door = { axis: "x", base: rx, slide: 1.85, cx: rx, cz: -1.59, t: 0 };
+    scene.add(d); officeDoors.push(d);
+  });
+  const entDoor = new THREE.Mesh(new THREE.BoxGeometry(.1, 2.8, 2.9), doorMat);
+  entDoor.position.set(13.75, 1.4, 0);
+  entDoor.userData.door = { axis: "z", base: 0, slide: 3, cx: 13.75, cz: 0, t: 0 };
+  scene.add(entDoor); officeDoors.push(entDoor);
   const roomSprites = [], roomPanels = [], roomPanelTex = [];
   RX.forEach((rx, i) => {
     const rf = new THREE.Mesh(new THREE.BoxGeometry(8, .2, 7), new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .85 }));
@@ -4212,6 +4306,7 @@ function init3D(){
       if(u.pc){ openPc("files"); return; }
       if(u.servers){ openPc("servers"); return; }
       if(u.reunion){ openPc("reunion"); return; }
+      if(u.laptopBtn !== undefined){ setLaptopSpot(u.laptopBtn); return; }
       if(u.laptop){ openPc("notes"); return; }
       if(u.boss){ openBossDlg(); return; }
       if(u.drh){ openDrhDlg(); return; }
@@ -4276,7 +4371,7 @@ function init3D(){
           const rec = agent3d.get(a.id);
           if(rec) circles.push([rec.group.position.x, rec.group.position.z, 1.05]);
         }
-        circles.push([0, -6.5, 2.1], [-12.4, 8.9, 1.2], [12.9, 5.3, 1.1], [12.9, 7.9, 1.1], [9.2, 6, .95], [9.2, 8.2, .95], [-13.3, 1.6, 1.5], [-10, -7, 2.6], [10, -8, 1.7], [10, -7.3, .55], [0, 9.1, .95]);
+        circles.push([0, -6.5, 2.1], [-12.4, 8.9, 1.2], [12.9, 5.3, 1.1], [12.9, 7.9, 1.1], [9.2, 6, .95], [9.2, 8.2, .95], [-13.3, 1.6, 1.5], [-10, -7, 2.6], [10, -8, 1.7], [10, -7.3, .55], [0, 9.1, .95], [-6, 8.6, .95], [6, 8.6, .95]);
         for(const [cx, cz, cr] of circles){
           const dx = fpsState.x - cx, dz = fpsState.z - cz;
           const d = Math.hypot(dx, dz);
@@ -4320,6 +4415,19 @@ function init3D(){
         target.z += (fpsState.z - target.z) * .08;
         updateCam();
       }
+    }
+    for(const d of officeDoors){
+      const du = d.userData.door;
+      let open = camMode === "fps" && Math.hypot(fpsState.x - du.cx, fpsState.z - du.cz) < 2;
+      if(!open){
+        for(const a of state.agents){
+          const rec = agent3d.get(a.id);
+          if(rec && Math.hypot(rec.char.position.x - du.cx, rec.char.position.z - du.cz) < 1.6){ open = true; break; }
+        }
+      }
+      du.t += ((open ? 1 : 0) - du.t) * .1;
+      if(du.axis === "x") d.position.x = du.base + du.t * du.slide;
+      else d.position.z = du.base + du.t * du.slide;
     }
     for(const a of state.agents){
       const rec = agent3d.get(a.id);
@@ -4390,7 +4498,7 @@ function navBuild(){
   agent3d.forEach(rec => { const p = rec.group.position; rects.push([p.x - .85, p.x + .85, p.z - .525, p.z + .525]); });
   rects.push([-1.7, 1.7, -7.3, -5.7], [8.7, 11.3, -8.8, -7.6], [-13.35, -11.45, 8.375, 9.425],
              [-12.25, -7.75, -7.9, -6.1], [12.4, 13.4, 4, 9.2], [-13.75, -12.85, 0, 3.2]);
-  const circles = [[9.2, 6, .85], [9.2, 8.2, .85], [0, 9.1, .7]];
+  const circles = [[9.2, 6, .85], [9.2, 8.2, .85], [0, 9.1, .7], [-6, 8.6, .75], [6, 8.6, .75]];
   for(let k = 0; k < nz; k++){
     const z = Z0 + k * G;
     for(let i = 0; i < nx; i++){
