@@ -1920,7 +1920,8 @@ function openAuthModal(){
       <div class="step"><div class="n">2</div><p>Ouvrez <b>SQL Editor</b> dans Supabase, collez et exécutez :<div class="sql" id="sqlBlock"></div><button class="btn line" id="copySql" style="padding:7px 12px;font-size:12px;">Copier le SQL</button></p></div>
       <div class="step"><div class="n">3</div><p>Dans <b>Project Settings → API</b>, copiez « Project URL » et « anon public key » ci-dessous :</p></div>
       <input type="text" id="cfgUrl" placeholder="https://xxxx.supabase.co" value="${DEFAULT_SUPABASE_URL}">
-      <input type="password" id="cfgKey" placeholder="anon key (eyJhbGci...)" style="margin-top:8px;">
+      <input type="password" id="cfgKey" placeholder="anon key (eyJhbGci... ou sb_publishable_...)" style="margin-top:8px;">
+      <p class="hint" style="margin-top:6px;">⚠️ Le champ clé attend la longue clé eyJ…, pas l'URL — l'URL est déjà pré-remplie ci-dessus.</p>
       <button class="btn wide" id="cfgSave" style="margin-top:12px;">Enregistrer et activer la connexion</button>
       <div class="msg" id="authMsg"></div>`;
     document.getElementById("sqlBlock").textContent = SETUP_SQL;
@@ -1931,7 +1932,8 @@ function openAuthModal(){
       const url = document.getElementById("cfgUrl").value.trim().replace(/\/+$/, "");
       const key = document.getElementById("cfgKey").value.trim();
       if(!url.startsWith("https://")){ showAuthMsg("L'URL doit commencer par https:// (ex : https://xxxx.supabase.co).", true); return; }
-      if(!key.startsWith("eyJ")){ showAuthMsg("Le champ clé doit contenir la « anon public key » (elle commence par eyJ…), PAS l'URL du projet. Copiez-la dans Project Settings → API.", true); return; }
+      if(key.startsWith("https://")){ showAuthMsg("Vous avez collé l'URL du projet dans le champ clé. L'URL est déjà remplie plus haut : dans le champ « anon key », collez la longue clé qui commence par eyJ… (ou sb_publishable_…). Dans Supabase : Project Settings → API Keys.", true); return; }
+      if(!key.startsWith("eyJ") && !key.startsWith("sb_publishable_")){ showAuthMsg("Le champ clé doit contenir la « anon public key » (elle commence par eyJ… ou sb_publishable_…), PAS l'URL du projet. Dans Supabase : Project Settings → API Keys → copiez « anon public ».", true); return; }
       showAuthMsg("Vérification de la clé en cours...", false);
       try{
         const res = await fetch(url + "/auth/v1/health", { headers: { apikey: key } });
