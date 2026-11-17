@@ -550,6 +550,15 @@
       </div>
       <p class="sub" style="margin-top:10px;">À l'heure prévue, le Patron anime la réunion : compte-rendu + une directive de travail réelle pour chaque agent concerné.</p>
       <div id="meetList" style="margin-top:6px;"></div>
+      <div style="border-top:1px solid var(--line); margin-top:14px; padding-top:12px;">
+        <label>Réunion interactive — c’est VOUS le patron</label>
+        <p class="sub">Choisissez les participants : ils marchent jusqu’à la salle de réunion et s’assoissent autour de la table. Vous discutez, puis à la fin : résumé + liste de tâches à envoyer au Patron.</p>
+        <div id="meetPick" class="coffeeList" style="margin-top:8px;"></div>
+        <div class="row" style="margin-top:10px;">
+          <input type="text" id="meetTopic" placeholder="Ordre du jour (ex : lancement du site client)">
+          <button class="btn" id="meetLiveBtn" style="flex:0 0 auto;">Convoquer maintenant</button>
+        </div>
+      </div>
     </div>
     <div class="pcpane" id="pane-chat" style="display:none;">
       <div class="chat" id="pcChatLog" style="max-height:44vh; border:1px solid var(--line); border-radius:12px; padding:12px;"></div>
@@ -679,6 +688,25 @@
   </div>
 </main>
 
+<div class="overlay" id="meetOverlay">
+  <div class="modal" style="width:min(680px,100%);">
+    <button class="iconbtn close-x" id="meetClose"></button>
+    <h2 id="meetTitle">Réunion</h2>
+    <p class="sub" id="meetSub"></p>
+    <div id="meetLog" class="chat" style="max-height:38vh; overflow-y:auto; border:1px solid var(--line); border-radius:12px; padding:12px;"></div>
+    <div id="meetEndBox" style="display:none;"></div>
+    <div class="row" id="meetTalkRow" style="margin-top:12px;">
+      <input type="text" id="meetInput" placeholder="Parlez à votre équipe (vous êtes le patron)...">
+      <button class="btn" id="meetSend" style="flex:0 0 auto;">Parler</button>
+    </div>
+    <div class="row" id="meetEndRow" style="margin-top:12px;">
+      <button class="btn" id="meetFinish" style="flex:1;">Clôturer : résumé + liste de tâches</button>
+    </div>
+    <div class="row" id="meetDispatchRow" style="margin-top:10px; display:none;">
+      <button class="btn" id="meetDispatch" style="flex:1;">Envoyer les tâches au Patron</button>
+    </div>
+  </div>
+</div>
 <div class="footer">Agent_IA · <a href="https://github.com/PapillonApp/Papicons" target="_blank" rel="noopener">Papicons</a> · design <a href="https://github.com/pbakaus/impeccable" target="_blank" rel="noopener">Impeccable</a></div>
 
 <div class="overlay" id="authOverlay">
@@ -760,7 +788,7 @@ function scopeKey(){
 }
 function freshState(){
   return { agents: [], mission: "", backlog: [], autonomous: false, speed: 1, doneCount: 0,
-           activity: [], results: [], chat: [], sites: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], files: [], templates: [], roomNames: {}, drhAuto: false, coffeeClosed: false, meta: { syncedAt: null } };
+           activity: [], results: [], chat: [], sites: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], files: [], templates: [], roomNames: {}, drhAuto: false, coffeeClosed: false, liveMeeting: null, meta: { syncedAt: null } };
 }
 let state = freshState();
 const PERSONAS = ["efficace et direct, va droit au but", "créatif et imaginatif, propose toujours une idée en plus", "rigoureux et méthodique, ne laisse rien au hasard", "enthousiaste et positif, motive l\u2019équipe", "pédagogue et clair, explique simplement", "analytique et critique, questionne chaque choix", "chaleureux et diplomate, apaise les tensions", "pragmatique et orienté résultats, livre vite", "perfectionniste du détail, soigne la finition", "curieux et explorateur, teste de nouvelles approches", "calme et fiable, garde son sang-froid sous pression", "proactif et autonome, anticipe les besoins", "minutieux et organisé, structure tout en listes", "audacieux et ambitieux, vise toujours plus haut", "patient et à l\u2019écoute, reformule avant d\u2019agir", "énergique et rapide, préfère itérer vite"];
@@ -957,7 +985,7 @@ function dispatch(){
       target = freeAgents().find(a => a.name.toLowerCase() === tLow);
       if(!target){
         const g = groupByName(item.target);
-        if(g) target = freeAgents().find(a => a.group === g.id);
+        if(g) target = freeAgents().find(a => a.id === g.boss) || freeAgents().find(a => a.group === g.id);
       }
     }
     const agent = target || bestMatchAgent(item.text) || freeAgents()[0];
@@ -976,7 +1004,7 @@ function hasKey(){ return !!mistralKey(); }
 function assignTask(agent, text, from){
   if(!hasKey()) return;
   agent.status = "busy";
-  agent.currentTask = { text, startedAt: Date.now(), duration: 0, real: true };
+  agent.currentTask = { text, startedAt: Date.now(), duration: 0, real: true, from: from || "" };
   executeTask(agent);
   logAgent(agent, "Tâche reçue de " + from + " : " + text);
   logGlobal("le Patron confie à <b>" + esc(agent.name) + "</b> (" + esc(agent.role || "polyvalent") + ") : " + esc(text), "Patron");
@@ -1152,6 +1180,32 @@ async function executeTask(agent){
   state.results.unshift({ id: rid, agent: agent.name, task: t.text, output: "", status: "pending", at: new Date().toLocaleString("fr-FR") });
   if(state.results.length > 50) state.results.length = 50;
   renderResults(); save();
+  const myGroup = (state.groups || []).find(g => g.boss === agent.id);
+  if(myGroup && t.from !== "sous-patron" && t.from !== "Réunion"){
+    const members = state.agents.filter(a => a.group === myGroup.id && a.id !== agent.id && a.status !== "busy");
+    if(members.length){
+      try{
+        logGlobal("<b>" + esc(agent.name) + "</b> (sous-patron de " + esc(myGroup.name) + ") répartit le travail entre son équipe...", agent.name);
+        const out = await enqueueLLM(()=> callLLM([
+          { role: "system", content: "Tu es sous-patron d’un groupe d’agents IA. Découpe la tâche confiée en sous-tâches concrètes pour tes membres. Réponds UNIQUEMENT avec un tableau JSON de chaînes au format exact \"Nom de l’agent : la sous-tâche\", en choisissant le membre le plus adapté (max 5 sous-tâches)." },
+          { role: "user", content: "Groupe : " + myGroup.name + (myGroup.instructions ? " (consignes : " + myGroup.instructions + ")" : "") + "\nMembres :\n" + members.map(m => "- " + m.name + " (" + (m.role || "polyvalent") + ")").join("\n") + "\n\nTâche à répartir : " + t.text }
+        ], 500));
+        let n = 0;
+        String(out || "").replace(/[\[\]"]/g, "").split(",").forEach(line => {
+          const m = line.match(/^([^:]{2,24}):\s*(.+)$/);
+          if(!m) return;
+          const mem = members.find(x => x.name.toLowerCase() === m[1].trim().toLowerCase());
+          if(mem){ assignTask(mem, m[2].trim().slice(0, 200), "sous-patron"); n++; }
+        });
+        if(n){
+          logAgent(agent, "Sous-patron : " + n + " sous-tâche(s) distribuée(s) au groupe " + myGroup.name + ".");
+          state.results = state.results.filter(r => r.id !== rid);
+          save(); renderResults();
+          return;
+        }
+      }catch(e){ logGlobal("le sous-patron traitera la tâche lui-même (" + esc(e.message) + ").", agent.name); }
+    }
+  }
   try{
     let context = "";
     if((agent.role || "") === "recherche web"){
@@ -1387,6 +1441,11 @@ async function callLLM(messages, maxTokens){
   });
   if(!res.ok) throw new Error("HTTP " + res.status);
   const data = await res.json();
+  try{
+    state.apiStats = state.apiStats || { count: 0, chars: 0 };
+    state.apiStats.count++;
+    state.apiStats.chars += String(data.choices[0].message.content || "").length;
+  }catch(e){}
   return data.choices[0].message.content;
 }
 
@@ -1426,10 +1485,10 @@ async function pushRemote(){
     const updated_at = new Date().toISOString();
     state.meta.syncedAt = updated_at;
     pendingLocal = false;
-    const { agents, mission, backlog, autonomous, speed, doneCount, activity, groups, skills, notes } = state;
+    const { agents, mission, backlog, autonomous, speed, doneCount, activity, groups, skills, notes, apiStats } = state;
     await sb.from("agent_workspaces").upsert({
       id: session.user.id,
-      data: { agents, mission, backlog, autonomous, speed, doneCount, activity, groups, skills, notes },
+      data: { agents, mission, backlog, autonomous, speed, doneCount, activity, groups, skills, notes, apiStats },
       updated_at
     });
     try{ localStorage.setItem(scopeKey(), JSON.stringify(state)); }catch(e){}
@@ -1445,7 +1504,7 @@ async function pullRemote(force){
     if(data && data.data){
       const remoteNewer = !state.meta.syncedAt || (data.updated_at > state.meta.syncedAt);
       if((remoteNewer && !pendingLocal) || force){
-        const keep = { results: state.results, chat: state.chat, sites: state.sites, scheduled: state.scheduled, meetings: state.meetings, groups: state.groups, skills: state.skills, notes: state.notes, connectors: state.connectors, assistantChat: state.assistantChat, drhAuto: state.drhAuto };
+        const keep = { results: state.results, chat: state.chat, sites: state.sites, scheduled: state.scheduled, meetings: state.meetings, groups: state.groups, skills: state.skills, notes: state.notes, connectors: state.connectors, assistantChat: state.assistantChat, drhAuto: state.drhAuto, liveMeeting: state.liveMeeting, apiStats: state.apiStats };
         state = Object.assign(freshState(), data.data, keep, { meta: { syncedAt: data.updated_at } });
         ["groups", "skills", "notes"].forEach(k => { if(Array.isArray(data.data[k])) state[k] = data.data[k]; });
         ensurePersonas();
@@ -2010,6 +2069,9 @@ const SPECIALTIES = [
   { value: "community manager", icon: "star" },
   { value: "vidéo", icon: "play" },
   { value: "vérificateur", icon: "eye" },
+  { value: "gestion administrative", icon: "list" },
+  { value: "comptabilité", icon: "pie" },
+  { value: "secrétariat de direction", icon: "pen" },
   { value: "autre", icon: "gears" }
 ];
 const roleSelect = document.getElementById("agentRoleSelect");
@@ -2136,7 +2198,7 @@ function renderDash(){
   const box = document.getElementById("dashBox");
   if(!box) return;
   const busy = state.agents.filter(a => a.status === "busy").length;
-  if(totals) totals.innerHTML = '<div class="kpi"><b>' + state.agents.length + '</b><span>Agents</span></div><div class="kpi"><b>' + busy + '</b><span>En cours</span></div><div class="kpi"><b>' + pendingCount() + '</b><span>En attente</span></div><div class="kpi"><b>' + (state.doneCount || 0) + '</b><span>Termin\u00e9es</span></div>';
+  if(totals) totals.innerHTML = '<div class="kpi"><b>' + state.agents.length + '</b><span>Agents</span></div><div class="kpi"><b>' + busy + '</b><span>En cours</span></div><div class="kpi"><b>' + pendingCount() + '</b><span>En attente</span></div><div class="kpi"><b>' + (state.doneCount || 0) + '</b><span>Termin\u00e9es</span></div><div class="kpi"><b>' + ((state.apiStats || {}).count || 0) + '</b><span>Appels API</span></div>';
   box.innerHTML = state.agents.map(a => {
     const ct = a.currentTask;
     const dur = ct ? Math.max(1, Math.round((Date.now() - ct.startedAt) / 60000)) : 0;
@@ -2840,6 +2902,7 @@ function addMeeting(subject, when){
   setTimeout(processMeetings, 1000);
 }
 function renderPcMeetings(){
+  renderMeetPick();
   const el = document.getElementById("meetList");
   if(!el) return;
   if(!state.meetings.length){
@@ -2901,6 +2964,147 @@ function processMeetings(){
 setInterval(processMeetings, 15000);
 setTimeout(processMeetings, 4000);
 document.getElementById("meetAdd").addEventListener("click", ()=> addMeeting(document.getElementById("meetSubject").value, document.getElementById("meetWhen").value));
+
+/* ================= réunion interactive (le patron préside) ================= */
+const meetOverlay = document.getElementById("meetOverlay");
+const MEET_SEATS = [[-11.1, -5.7], [-8.9, -5.7], [-11.1, -8.3], [-10, -8.3], [-8.9, -8.3], [-12.9, -7], [-7.1, -7]];
+function renderMeetPick(){
+  const box = document.getElementById("meetPick");
+  if(!box) return;
+  box.innerHTML = state.agents.length
+    ? state.agents.map(a => '<label class="cup" style="cursor:pointer;"><input type="checkbox" class="meetPickCb" value="' + a.id + '" checked> ' + esc(a.name) + '</label>').join("")
+    : '<span class="hint">Aucun agent : embauchez d’abord depuis le PC ou la DRH.</span>';
+}
+function openMeetOverlay(){
+  if(document.pointerLockElement) document.exitPointerLock();
+  meetOverlay.classList.add("show");
+  renderMeetLog();
+  renderMeetEnd();
+}
+function renderMeetLog(){
+  const lm = state.liveMeeting;
+  if(!lm) return;
+  document.getElementById("meetTitle").textContent = "Réunion : " + (lm.topic || "sujet libre");
+  document.getElementById("meetSub").textContent = "Participants : " + lm.participants.map(id => { const a = state.agents.find(x => x.id === id); return a ? a.name : null; }).filter(Boolean).join(", ");
+  const box = document.getElementById("meetLog");
+  box.innerHTML = lm.transcript.map(t => '<div style="margin-bottom:8px;"><b style="color:' + (t.who === "Vous" ? "var(--signal)" : "var(--amber)") + ';">' + esc(t.who) + ' :</b> <span style="color:var(--ink);">' + esc(t.text) + '</span></div>').join("");
+  box.scrollTop = box.scrollHeight;
+  const talk = lm.phase === "talk";
+  document.getElementById("meetTalkRow").style.display = talk ? "" : "none";
+  document.getElementById("meetEndRow").style.display = talk ? "" : "none";
+  document.getElementById("meetEndBox").style.display = lm.phase === "ended" ? "" : "none";
+  document.getElementById("meetDispatchRow").style.display = lm.phase === "ended" ? "" : "none";
+}
+async function startLiveMeeting(topic, ids){
+  if(!hasKey()){ logGlobal("réunion impossible : clé API manquante (Réglages).", "Patron"); return; }
+  if(!ids.length){ logGlobal("choisissez au moins un participant.", "Patron"); return; }
+  state.liveMeeting = { topic: String(topic || "").slice(0, 90), participants: ids, transcript: [], phase: "talk", summary: "", tasks: [] };
+  const mod = state.agents.find(a => a.id === ids[0]);
+  state.liveMeeting.transcript.push({ who: mod ? mod.name : "Animateur", text: "Bonjour patron. Vous nous avez convoqués" + (topic ? " sur « " + topic + " »" : "") + ". Que devons-nous faire ?" });
+  if(camMode === "fps"){ fpsState.x = -10; fpsState.z = -5.3; fpsState.yaw = 0; fpsState.pitch = 0; }
+  save();
+  openMeetOverlay();
+  logGlobal("réunion commencée : « " + esc(topic || "sujet libre") + " » — " + ids.length + " participant(s) autour de la table.", "Patron");
+}
+document.getElementById("meetLiveBtn").addEventListener("click", ()=>{
+  const topic = document.getElementById("meetTopic").value.trim();
+  const ids = Array.from(document.querySelectorAll(".meetPickCb:checked")).map(cb => cb.value);
+  startLiveMeeting(topic, ids);
+});
+async function meetSpeak(){
+  const lm = state.liveMeeting;
+  if(!lm || lm.phase !== "talk") return;
+  const inp = document.getElementById("meetInput");
+  const text = inp.value.trim();
+  if(!text) return;
+  inp.value = "";
+  lm.transcript.push({ who: "Vous", text });
+  renderMeetLog(); save();
+  const parts = lm.participants.map(id => state.agents.find(a => a.id === id)).filter(Boolean);
+  if(!parts.length) return;
+  try{
+    const out = await enqueueLLM(()=> callLLM([
+      { role: "system", content: "Vous animez une réunion autour d’une table. Chaque participant parle BRIÈVEMENT (1-2 phrases), dans sa personnalité et sa spécialité, et réagit au patron. Format de réponse STRICT : une ligne par participant qui s’exprime, au format « Prénom : message » (2 à 4 lignes maximum, aucun texte hors format). Ne parlez jamais à la place du patron." },
+      { role: "user", content: "Ordre du jour : " + (lm.topic || "libre") + "\nMission de l’entreprise : " + (state.mission || "(non définie)") + "\nParticipants :\n" + parts.map(a => "- " + a.name + " (" + (a.role || "polyvalent") + (a.persona ? ", " + a.persona.slice(0, 120) : "") + ")").join("\n") + "\n\nConversation jusqu’ici :\n" + lm.transcript.map(t => t.who + " : " + t.text).join("\n") + "\n\nLe patron vient de parler. Répondez." }
+    ], 500));
+    String(out || "").split("\n").forEach(l => {
+      const m = l.match(/^([^:]{2,24})\s*:\s*(.+)$/);
+      if(m) lm.transcript.push({ who: m[1].trim(), text: m[2].trim() });
+    });
+  }catch(e){
+    lm.transcript.push({ who: "Système", text: "les agents n’ont pas pu répondre (" + e.message + ")." });
+  }
+  renderMeetLog(); save();
+}
+document.getElementById("meetSend").addEventListener("click", meetSpeak);
+document.getElementById("meetInput").addEventListener("keydown", e=>{ if(e.key === "Enter") meetSpeak(); });
+async function meetFinish(){
+  const lm = state.liveMeeting;
+  if(!lm || lm.phase !== "talk") return;
+  const btn = document.getElementById("meetFinish");
+  btn.disabled = true; btn.textContent = "Rédaction du résumé...";
+  try{
+    const parts = lm.participants.map(id => state.agents.find(a => a.id === id)).filter(Boolean);
+    const out = await enqueueLLM(()=> callLLM([
+      { role: "system", content: "Tu clôtures une réunion d’équipe. Réponds EXACTEMENT dans ce format :\nRÉSUMÉ :\n2 à 4 phrases de ce qui a été dit et décidé.\nTÂCHES :\n- Prénom | tâche courte et actionnable (une ligne par tâche concrète qui ressort de la discussion ; aucune si rien)." },
+      { role: "user", content: "Ordre du jour : " + (lm.topic || "libre") + "\nParticipants :\n" + parts.map(a => "- " + a.name + " (" + (a.role || "polyvalent") + ")").join("\n") + "\n\nConversation :\n" + lm.transcript.map(t => t.who + " : " + t.text).join("\n") }
+    ], 700));
+    const txt = String(out || "");
+    const sumM = txt.match(/RÉSUMÉ\s*:([\s\S]*?)(TÂCHES\s*:|$)/i);
+    const taskM = txt.match(/TÂCHES\s*:([\s\S]*)/i);
+    lm.summary = sumM ? sumM[1].trim() : txt.slice(0, 400);
+    lm.tasks = [];
+    if(taskM) taskM[1].split("\n").forEach(l => {
+      const p2 = l.replace(/^\s*[-•*]\s*/, "").split("|");
+      if(p2.length >= 2 && p2[1].trim()) lm.tasks.push({ agent: p2[0].trim(), text: p2.slice(1).join("|").trim() });
+    });
+    lm.phase = "ended";
+    logGlobal("réunion clôturée : résumé + " + lm.tasks.length + " tâche(s) prête(s) à envoyer au Patron.", "Patron");
+  }catch(e){
+    lm.transcript.push({ who: "Système", text: "clôture impossible (" + e.message + ")." });
+  }
+  btn.disabled = false; btn.textContent = "Clôturer : résumé + liste de tâches";
+  renderMeetLog(); renderMeetEnd(); save();
+}
+document.getElementById("meetFinish").addEventListener("click", meetFinish);
+function renderMeetEnd(){
+  const lm = state.liveMeeting;
+  if(!lm || lm.phase !== "ended") return;
+  document.getElementById("meetEndBox").innerHTML =
+    '<div style="border:1px solid var(--line); border-radius:12px; padding:12px; margin-top:12px;">' +
+    '<b style="color:var(--signal);">RÉSUMÉ DE LA RÉUNION</b>' +
+    '<div style="white-space:pre-wrap; font-size:13px; color:var(--ink); margin-top:6px;">' + esc(lm.summary) + '</div>' +
+    (lm.tasks.length
+      ? '<b style="color:var(--amber); display:block; margin-top:10px;">TÂCHES À FAIRE</b>' +
+        lm.tasks.map((t, i) => '<div style="font-size:13px; color:var(--ink); margin-top:4px;">' + (i + 1) + '. <b>' + esc(t.agent) + '</b> — ' + esc(t.text) + '</div>').join("")
+      : '<div class="hint" style="margin-top:8px;">Aucune tâche ressortie de la discussion.</div>') +
+    '</div>';
+}
+document.getElementById("meetDispatch").addEventListener("click", ()=>{
+  const lm = state.liveMeeting;
+  if(!lm) return;
+  let n = 0;
+  lm.tasks.forEach(t => {
+    const a = state.agents.find(x => x.name.toLowerCase() === t.agent.toLowerCase());
+    if(a && a.status !== "busy"){ assignTask(a, t.text.slice(0, 200), "Réunion"); n++; }
+    else{
+      if(!state.backlog) state.backlog = [];
+      state.backlog.push(t.text.slice(0, 200)); n++;
+      if(a) logGlobal(esc(a.name) + " est occupé : la tâche part dans la file d’attente.", "Patron");
+    }
+  });
+  logGlobal("le Patron a reçu " + n + " tâche(s) issue(s) de la réunion.", "Patron");
+  endLiveMeeting(true);
+});
+function endLiveMeeting(silent){
+  state.liveMeeting = null;
+  meetOverlay.classList.remove("show");
+  if(!silent) logGlobal("tout le monde retourne à son poste.", "Patron");
+  save(); renderAll();
+}
+document.getElementById("meetClose").innerHTML = icon("cross");
+document.getElementById("meetClose").addEventListener("click", ()=>{ meetOverlay.classList.remove("show"); });
+meetOverlay.addEventListener("click", e=>{ if(e.target === meetOverlay) meetOverlay.classList.remove("show"); });
 setTimeout(processSchedule, 3000);
 document.getElementById("bossRole").innerHTML = icon("crown") + " direction";
 document.getElementById("pcDesk").addEventListener("click", ()=> openPc("files"));
@@ -3039,6 +3243,8 @@ function renderTeams(){
         '<div style="margin-top:6px;">' + (members.length ? members.map(m => '<span class="hstat idle" style="margin-right:6px;">' + esc(m.name) + '</span>').join("") : '<span class="hstat paused">aucun membre</span>') + '</div></div>' +
         '<select class="teamAdd" data-id="' + g.id + '" style="flex:0 0 auto;max-width:180px;"><option value="">+ ajouter un agent…</option>' +
         state.agents.filter(a => a.group !== g.id).map(a => '<option value="' + a.id + '">' + esc(a.name) + '</option>').join("") + '</select>' +
+        '<select class="teamBoss" data-id="' + g.id + '" style="flex:0 0 auto;max-width:190px;"><option value="">sous-patron : aucun</option>' +
+        members.map(m => '<option value="' + m.id + '"' + (g.boss === m.id ? " selected" : "") + '>★ ' + esc(m.name) + '</option>').join("") + '</select>' +
         '<button class="iconbtn teamDel" data-id="' + g.id + '" title="Supprimer le groupe">' + icon("trash") + '</button></div>';
     }).join("");
   } else {
@@ -3050,6 +3256,14 @@ function renderTeams(){
     const g = (state.groups || []).find(x => x.id === s.dataset.id);
     if(a && g){ a.group = g.id; logGlobal("<b>" + esc(a.name) + "</b> rejoint le groupe « " + esc(g.name) + " ».", "DRH"); renderTeams(); renderHR(); save(); }
     s.value = "";
+  }));
+  box.querySelectorAll(".teamBoss").forEach(sl => sl.addEventListener("change", ()=>{
+    const g = (state.groups || []).find(x => x.id === sl.dataset.id);
+    if(!g) return;
+    g.boss = sl.value || "";
+    const b = state.agents.find(x => x.id === g.boss);
+    logGlobal(b ? "<b>" + esc(b.name) + "</b> est nommé sous-patron du groupe « " + esc(g.name) + " » : le Patron lui confiera le travail du groupe et il le répartira." : "sous-patron retiré du groupe « " + esc(g.name) + " ».", "DRH");
+    sync3D(); save();
   }));
   box.querySelectorAll(".teamDel").forEach(b => b.addEventListener("click", ()=>{
     const g = state.groups.find(x => x.id === b.dataset.id);
@@ -3351,7 +3565,7 @@ function interactNear(){
   } else if(nt.type === "servers"){
     openPc("servers");
   } else if(nt.type === "reunion"){
-    openPc("reunion");
+    if(state.liveMeeting) openMeetOverlay(); else openPc("reunion");
   } else if(nt.type === "laptop"){
     setLaptopPocket(!laptopPocket);
     logGlobal(laptopPocket ? "PC portable pris — touche P pour l’ouvrir partout." : "PC portable posé sur la table du lounge.", "Système");
@@ -3374,7 +3588,7 @@ function checkNear(){
   consider(10, -7.3, 2.6, { type: "drh", label: "Administration — parler à la DRH" });
   consider(-12.4, 8.9, 2.6, { type: "pc", label: "Ouvrir votre PC (fichiers, tâches, réunion)" });
   consider(-13.3, 1.6, 2.6, { type: "servers", label: "Salle serveurs — héberger un site à coder" });
-  consider(-10, -7, 3.2, { type: "reunion", label: "Salle de réunion — convoquer une réunion" });
+  consider(-10, -7, 3.2, { type: "reunion", label: state.liveMeeting ? "Reprendre la réunion en cours (E)" : "Salle de réunion — convoquer une réunion" });
   consider(0, 9.1, 2.2, { type: "laptop", label: laptopPocket ? "Poser le PC portable sur la table" : "Mettre le PC portable dans la poche — touche P partout" });
   for(const a of state.agents){
     const rec = agent3d.get(a.id);
@@ -3490,9 +3704,18 @@ function init3D(){
     camera.lookAt(target);
   }
   updateCam();
-  scene.add(new THREE.AmbientLight(0xffffff, .75));
-  scene.add(new THREE.HemisphereLight(0xfff6e6, 0x3a2e20, .5));
+  const amb = new THREE.AmbientLight(0xffffff, .75); scene.add(amb);
+  const hemi = new THREE.HemisphereLight(0xfff6e6, 0x3a2e20, .5); scene.add(hemi);
   const dir = new THREE.DirectionalLight(0xffffff, .7);
+  (function(){
+    const hr = new Date().getHours();
+    const isDay = hr >= 8 && hr < 18, isEve = hr >= 18 && hr < 22;
+    amb.intensity = isDay ? .75 : isEve ? .6 : .5;
+    hemi.intensity = isDay ? .5 : isEve ? .38 : .28;
+    hemi.color.setHex(isDay ? 0xfff6e6 : isEve ? 0xffd9b0 : 0xaebcd8);
+    dir.intensity = isDay ? .7 : isEve ? .45 : .3;
+    dir.color.setHex(isDay ? 0xffffff : isEve ? 0xffc890 : 0xcdd8f0);
+  })();
   dir.position.set(6, 12, 5);
   scene.add(dir);
   const limeLight = new THREE.PointLight(0xc6f542, .22, 24);
@@ -3620,6 +3843,57 @@ function init3D(){
   meetScreen.userData.reunion = true;
   const meetLabel = makeLabel("SALLE DE RÉUNION", "convoquer : appuyez sur E");
   meetLabel.position.set(-10, 3.2, -7); scene.add(meetLabel);
+
+  /* écran mural d'entreprise : tableau de bord en direct dans le hall */
+  const boardC = document.createElement("canvas"); boardC.width = 512; boardC.height = 256;
+  const boardTex = new THREE.CanvasTexture(boardC);
+  const board = new THREE.Mesh(new THREE.PlaneGeometry(7, 3.5), new THREE.MeshBasicMaterial({ map: boardTex }));
+  board.position.set(0, 2.6, 9.83); board.rotation.y = Math.PI;
+  scene.add(board);
+  function drawBoard(){
+    const c = boardC.getContext("2d");
+    c.fillStyle = "#0b0d0a"; c.fillRect(0, 0, 512, 256);
+    c.strokeStyle = "#333a2a"; c.lineWidth = 2; c.strokeRect(6, 6, 500, 244);
+    c.fillStyle = "#c6f542"; c.font = "bold 30px monospace";
+    c.fillText("AGENT_IA — TABLEAU DE L’ENTREPRISE", 24, 50);
+    c.fillStyle = "#eef2e4"; c.font = "21px monospace";
+    const busy = state.agents.filter(a => a.status === "busy").length;
+    const paused = state.agents.filter(a => a.status === "paused").length;
+    c.fillText("Agents : " + state.agents.length + "    au travail : " + busy + "    au self : " + paused, 24, 98);
+    c.fillText("Tâches en attente : " + (state.backlog || []).length + "    livrables terminés : " + (state.doneCount || 0), 24, 132);
+    c.fillStyle = "#9aa38c"; c.font = "16px monospace";
+    (state.activity || []).slice(0, 3).forEach((l, i) => {
+      const one = String(l.msg || "").replace(/<[^>]*>/g, "");
+      c.fillText("• " + one.slice(0, 56), 24, 168 + i * 26);
+    });
+    boardTex.needsUpdate = true;
+  }
+  drawBoard();
+  setInterval(drawBoard, 5000);
+
+  /* déco : logo AGENT_IA au sol + cadres au mur */
+  const logoC = document.createElement("canvas"); logoC.width = 512; logoC.height = 128;
+  const lgc = logoC.getContext("2d");
+  lgc.fillStyle = "#c6f542"; lgc.font = "bold 72px monospace";
+  lgc.textAlign = "center"; lgc.textBaseline = "middle";
+  lgc.fillText("AGENT_IA", 256, 64);
+  const logoTex = new THREE.CanvasTexture(logoC);
+  const logoFloor = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 1.1), new THREE.MeshBasicMaterial({ map: logoTex, transparent: true }));
+  logoFloor.rotation.x = -Math.PI / 2; logoFloor.position.set(0, .022, 3.4);
+  scene.add(logoFloor);
+  const artC = document.createElement("canvas"); artC.width = 128; artC.height = 160;
+  const agc = artC.getContext("2d");
+  agc.fillStyle = "#191d15"; agc.fillRect(0, 0, 128, 160);
+  agc.fillStyle = "#c6f542"; agc.fillRect(18, 22, 40, 8); agc.fillRect(18, 40, 70, 8);
+  agc.fillStyle = "#ffb454"; agc.fillRect(18, 70, 92, 8); agc.fillRect(18, 88, 56, 8);
+  agc.fillStyle = "#333a2a"; agc.fillRect(18, 118, 92, 22);
+  const artTex = new THREE.CanvasTexture(artC);
+  for(const ax of [4.5, 5.9]){
+    const fr = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.4, .05), new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: .7 }));
+    fr.position.set(ax, 2, 9.9); scene.add(fr);
+    const art = new THREE.Mesh(new THREE.PlaneGeometry(.96, 1.26), new THREE.MeshBasicMaterial({ map: artTex }));
+    art.position.set(ax, 2, 9.86); art.rotation.y = Math.PI; scene.add(art);
+  }
 
   /* bureau administration / DRH (fond droite) */
   roomWall(.18, 6, 6, -7);
@@ -3817,10 +4091,10 @@ function init3D(){
     g.position.set(x, y, z); g.rotation.y = ry;
     scene.add(g);
   }
-  for(const wx of [-9, 0, 9]) addWindow(3.4, 1.7, wx, 1.9, -9.86, 0);
-  for(const wz of [-5, 0, 5]) addWindow(3.4, 1.7, -13.86, 2.1, wz, Math.PI / 2);
-  for(const wx of [18, 28, 38, 48, 58, 66]) addWindow(3, 1.5, wx, 2, 1.46, Math.PI);
-  RX.forEach(rx => addWindow(3, 1.5, rx, 1.9, -8.65, Math.PI));
+  for(const wx of [-9, 0, 9]) addWindow(5.4, 2.5, wx, 1.85, -9.86, 0);
+  for(const wz of [-5.5, 0, 5.5]) addWindow(5.4, 2.5, -13.86, 1.85, wz, Math.PI / 2);
+  for(const wx of [18, 26.5, 35, 43.5, 52, 60.5, 66.5]) addWindow(4.6, 2.2, wx, 1.95, 1.46, Math.PI);
+  RX.forEach(rx => addWindow(5.6, 2.4, rx, 1.85, -8.65, Math.PI));
 
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
@@ -4043,9 +4317,12 @@ function init3D(){
       else if(a.status === "paused") rec.mat.emissiveIntensity = .12;
       else rec.mat.emissiveIntensity = .3;
       const paused = a.status === "paused";
+      const lm = state.liveMeeting;
+      const pi = lm ? lm.participants.indexOf(a.id) : -1;
+      const meetSeat = pi >= 0 ? MEET_SEATS[pi % MEET_SEATS.length] : null;
       const slot = coffeeSlots[(state.agents.filter(x => x.status === "paused").indexOf(a) + coffeeSlots.length) % coffeeSlots.length];
-      const tx = paused ? slot.x : rec.home.x;
-      const tz = paused ? slot.z : rec.home.z;
+      const tx = meetSeat ? meetSeat[0] : (paused ? slot.x : rec.home.x);
+      const tz = meetSeat ? meetSeat[1] : (paused ? slot.z : rec.home.z);
       const dw = Math.hypot(tx - rec.char.position.x, tz - rec.char.position.z);
       if(dw > .05){
         const wp = navNextWaypoint(rec, tx, tz);
@@ -4059,9 +4336,12 @@ function init3D(){
         if(rec.legL){ rec.legL.rotation.x = Math.sin(rec.walkPhase) * .75; rec.legR.rotation.x = -Math.sin(rec.walkPhase) * .75; }
         rec.char.position.y = Math.abs(Math.sin(rec.walkPhase)) * .045;
       } else {
-        rec.char.position.y += ((paused ? -.22 : 0) - rec.char.position.y) * .1;
+        const sitting = paused || !!meetSeat;
+        rec.char.position.y += ((sitting ? -.22 : 0) - rec.char.position.y) * .1;
         if(rec.legL){ rec.legL.rotation.x *= .8; rec.legR.rotation.x *= .8; }
-        rec.char.rotation.y = paused ? Math.atan2(coffeeTable.position.x - rec.char.position.x, coffeeTable.position.z - rec.char.position.z) : 0;
+        rec.char.rotation.y = meetSeat
+          ? Math.atan2(-10 - rec.char.position.x, -7 - rec.char.position.z)
+          : (paused ? Math.atan2(coffeeTable.position.x - rec.char.position.x, coffeeTable.position.z - rec.char.position.z) : 0);
       }
     }
     bossChar.rotation.y = Math.sin(t * .8) * .25;
@@ -4264,12 +4544,21 @@ function sync3D(){
       rec.home = { x, z: z + .95 };
       rec.group.position.set(x, 0, z);
       rec.label.position.set(x, 2.35, z);
+      const isBoss = (state.groups || []).some(g => g.boss === a.id);
+      if(rec.bossFlag !== isBoss){
+        rec.bossFlag = isBoss;
+        if(rec.label.material.map) rec.label.material.map.dispose();
+        const nl = makeLabel(a.name, (a.role || "polyvalent") + (isBoss ? " · sous-patron" : ""));
+        rec.label.material.map = nl.material.map;
+        rec.label.material.needsUpdate = true;
+      }
       return;
     }
     const group = makeDeskGroup({ w: 1.7, d: 1.05, sw: 1.05, sh: .62, screen: 0xc6f542, glow: .3 });
     group.position.set(x, 0, z);
     group.traverse(o => o.userData.agentId = a.id);
-    const label = makeLabel(a.name, a.role || "polyvalent");
+    const isBossNew = (state.groups || []).some(g => g.boss === a.id);
+    const label = makeLabel(a.name, (a.role || "polyvalent") + (isBossNew ? " · sous-patron" : ""));
     label.position.set(x, 2.35, z);
     const char = makeCharacter(0x333a2a);
     /* recrue arrivée après le chargement : elle entre par le couloir et marche jusqu'à son bureau */
@@ -4277,7 +4566,7 @@ function sync3D(){
     if(arrivesOnFoot) char.position.set(NAV.entry.x, 0, NAV.entry.z);
     else char.position.set(x, 0, z + .95);
     three.scene.add(group, label, char);
-    agent3d.set(a.id, { group, label, char, mat: group.userData.screenMat, legL: char.userData.legL, legR: char.userData.legR, home: { x, z: z + .95 } });
+    agent3d.set(a.id, { group, label, char, mat: group.userData.screenMat, legL: char.userData.legL, legR: char.userData.legR, home: { x, z: z + .95 }, bossFlag: isBossNew });
   });
   for(const [role, lbl] of Array.from(zoneLabels)){
     if(!clusters.find(c => c.role === role)){
