@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261118-0600">
+<meta name="build" content="b-20261118-0700">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -299,8 +299,30 @@
   .panel.collapsed .panel-head{ margin-bottom:0; }
 
 @media (max-width:700px){
-  .modal{ width:96% !important; max-width:96% !important; }
+  body{ font-size:13.5px; }
+  .topbar{ padding:8px 10px; gap:8px; }
+  .brand{ gap:7px; }
+  .brand .mark{ width:26px; height:26px; border-radius:7px; }
+  .brand .mark svg{ width:15px; height:15px; }
+  .brand h1{ font-size:14px; }
+  .chips{ gap:5px; margin-left:0; width:100%; }
+  .chip{ font-size:8.5px; padding:3px 8px; }
+  .account-btn{ font-size:10px; padding:6px 9px; gap:5px; }
+  .account-btn svg{ width:12px; height:12px; }
+  .viewtoggle{ margin-right:6px; }
+  .viewtoggle button{ padding:6px 8px; font-size:9px; }
+  main{ padding:10px; gap:10px; grid-template-columns:1fr !important; }
+  .panel{ padding:12px; border-radius:12px; }
+  .panel-head{ font-size:13px; margin-bottom:10px; }
+  .modal{ width:96% !important; max-width:96% !important; max-height:86vh; overflow:auto; }
+  .bossdlg{ width:min(480px,96%); max-height:56vh; }
   input, textarea, select{ font-size:16px; }
+  .cambtn{ font-size:10px !important; padding:7px 10px !important; }
+  .hud3d{ font-size:10px; }
+  .fpsprompt{ font-size:11px !important; padding:7px 10px !important; }
+  #peersChip{ top:auto !important; bottom:12px !important; right:10px !important; left:auto !important; max-width:52vw !important; font-size:10px !important; padding:5px 8px !important; }
+  #touchBtns{ right:10px !important; bottom:78px !important; gap:8px !important; }
+  #touchBtns button{ width:54px !important; height:54px !important; font-size:16px !important; }
 }
 </style>
 </head>
@@ -4579,10 +4601,6 @@ function init3D(){
     scene.add(s);
   });
 
-  const loungeLeg = new THREE.Mesh(new THREE.CylinderGeometry(.07, .1, .68, 10), new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: .8 }));
-  loungeLeg.position.set(0, .34, 9.1); scene.add(loungeLeg);
-  const loungeTable = new THREE.Mesh(new THREE.CylinderGeometry(.5, .5, .06, 16), new THREE.MeshStandardMaterial({ color: 0xd6cfc0, roughness: .6 }));
-  loungeTable.position.set(0, .71, 9.1); scene.add(loungeTable);
   const pocketLaptop = new THREE.Mesh(new THREE.BoxGeometry(.36, .05, .26), new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: .4, metalness: .3 }));
   pocketLaptop.position.set(.34, -.34, -.66);
   pocketLaptop.rotation.set(-.55, .1, .14);
