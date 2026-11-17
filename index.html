@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261117-1921">
+<meta name="build" content="b-20261117-1936">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -653,7 +653,8 @@
     <div class="pcpane" id="pane-settings" style="display:none;">
       <label>Clé API Groq ou Mistral — reste dans ce navigateur</label>
       <input type="password" id="pcKeyInput" placeholder="gsk_... (Groq) ou sk-... (Mistral)">
-      <div class="hint" id="pcKeyHint">Sans clé : rien ne fonctionne. Avec clé : chaque tâche est réellement exécutée par votre IA.</div>
+      <div class="row" style="margin-top:8px;"><button class="btn line" id="pcKeyTest" style="flex:0 0 auto;">Tester la clé</button><span class="hint" id="pcKeyTestMsg" style="align-self:center;"></span></div>
+      <div class="hint" id="pcKeyHint">Sans clé : rien ne fonctionne. Avec clé : chaque tâche est réellement exécutée par votre IA. Chaque appareil a sa propre clé : si l'application PC affiche une erreur 401, collez votre clé ici (et testez-la).</div>
       <div class="hint" style="margin-top:14px;">Couleur des écrans &amp; accents</div>
       <div class="dots" id="pcThemeDots"></div>
       <div class="hint" style="margin-top:14px;">Self de l'entreprise</div>
@@ -1450,7 +1451,12 @@ async function callLLM(messages, maxTokens){
     headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
     body: JSON.stringify({ model, messages, temperature: 0.4, max_tokens: maxTokens || 700 })
   });
-  if(!res.ok) throw new Error("HTTP " + res.status);
+  if(!res.ok){
+    if(res.status === 401 || res.status === 403) throw new Error("clé API refusée (" + res.status + ") — votre clé est invalide ou expirée : collez une clé valide dans Réglages (Groq : elle commence par gsk_) sur CET appareil");
+    if(res.status === 429) throw new Error("quota dépassé (429) — trop de requêtes d'un coup, réessayez dans un instant");
+    if(res.status === 402) throw new Error("crédits épuisés (402) — vérifiez votre compte chez le fournisseur");
+    throw new Error("HTTP " + res.status);
+  }
   const data = await res.json();
   try{
     state.apiStats = state.apiStats || { count: 0, chars: 0 };
@@ -2684,6 +2690,18 @@ document.getElementById("pcNotif").addEventListener("click", ()=>{
 function notify(title, body){
   try{ if("Notification" in window && Notification.permission === "granted") new Notification(title, { body }); }catch(e){}
 }
+document.getElementById("pcKeyTest").addEventListener("click", async ()=>{
+  const msg = document.getElementById("pcKeyTestMsg");
+  const k = mistralKey();
+  if(!k){ msg.textContent = "⚠️ Aucune clé enregistrée sur cet appareil."; return; }
+  msg.textContent = "Test en cours...";
+  try{
+    const out = await callLLM([{ role: "user", content: "Réponds uniquement : OK" }], 10);
+    msg.textContent = out && out.toUpperCase().indexOf("OK") >= 0 ? "✓ Clé valide — l'IA répond !" : "✓ La clé fonctionne (réponse : " + String(out || "").slice(0, 20) + ")";
+  }catch(e){
+    msg.textContent = "✗ " + e.message;
+  }
+});
 document.getElementById("pcKeyInput").addEventListener("input", e=>{
   try{
     if(e.target.value.trim()) localStorage.setItem(MISTRAL_KEY_STORE, e.target.value.trim());
