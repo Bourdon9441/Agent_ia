@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261117-2030">
+<meta name="build" content="b-20261117-2110">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -3915,12 +3915,24 @@ function makeDeskGroup(opts){
   g.userData.screenMat = sm;
   return g;
 }
+function showGameError(){
+  const w = document.getElementById("floor3d");
+  if(w && !w.querySelector(".webglfail")){
+    w.classList.add("show");
+    const d = document.createElement("div");
+    d.className = "webglfail";
+    d.style.cssText = "position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:#9aa38c;font-size:14px;z-index:5;";
+    d.innerHTML = "<div><b style=\"color:#eef2e4\">La vue 3D n\u2019a pas pu d\u00e9marrer sur cet appareil.</b><br>Faites Ctrl + F5 pour recharger, ou ouvrez le site dans un navigateur r\u00e9cent (Chrome, Edge, Firefox) avec l\u2019acc\u00e9l\u00e9ration mat\u00e9rielle activ\u00e9e.</div>";
+    w.appendChild(d);
+  }
+}
 function init3D(){
-  if(!window.THREE || three) return;
+  if(!window.THREE){ showGameError(); return; }
+  if(three) return;
   let renderer;
   try{
     renderer = new THREE.WebGLRenderer({ antialias: true });
-  }catch(e){ return; }
+  }catch(e){ showGameError(); return; }
   const wrap = document.getElementById("floor3d");
   const W = () => wrap.clientWidth || 800;
   const H = () => wrap.clientHeight || 460;
@@ -5101,7 +5113,7 @@ renderAll();
 logGlobal("centre de contrôle démarré" + (supabaseReady() ? " (synchro prête)." : " en mode local."), "Système");
 if(session) startEngine(); else openAuthModal();
 applyView();
-try{ init3D(); }catch(e){ console.warn("3D indisponible", e); }
+try{ init3D(); }catch(e){ console.warn("3D indisponible", e); showGameError(); }
 applyTheme((function(){ try{ return localStorage.getItem("ac_theme"); }catch(e){ return null; } })() || "vert");
 document.getElementById("themeSummary").insertAdjacentHTML("afterbegin", icon("palette"));
 renderPcSettings();
