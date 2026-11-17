@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261117-2230">
+<meta name="build" content="b-20261117-2315">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -4924,7 +4924,7 @@ function navBuild(){
     const z = Z0 + k * G;
     for(let i = 0; i < nx; i++){
       const x = X0 + i * G;
-      let bl = x < -13.4 || x > 68.4 || z < -9.4 || z > 27.4;
+      let bl = x < -13.4 || x > 68.4 || z < -23.4 || z > 27.4;
       for(let r = 0; !bl && r < rects.length; r++){
         const q = rects[r];
         if(x > q[0] - R && x < q[1] + R && z > q[2] - R && z < q[3] + R) bl = true;
