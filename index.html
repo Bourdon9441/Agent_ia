@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261117-2110">
+<meta name="build" content="b-20261117-2145">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -4065,6 +4065,7 @@ function init3D(){
   rug.position.set(0, .03, -6.5); scene.add(rug);
 
   /* extérieur : grande pelouse, cercle de vert sous le bâtiment principal et arbres */
+  try{
   const grass = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: 0x55743f, roughness: 1 }));
   grass.rotation.x = -Math.PI / 2; grass.position.set(28, -.06, 0); scene.add(grass);
   const lawn = new THREE.Mesh(new THREE.CylinderGeometry(34, 34, .04, 48), new THREE.MeshStandardMaterial({ color: 0x6d9450, roughness: 1 }));
@@ -4090,6 +4091,7 @@ function init3D(){
     const pth = new THREE.Mesh(new THREE.BoxGeometry(2.2, .05, 3.6), pathMat);
     pth.position.set(px, -.01, 11.6); scene.add(pth);
   }
+  }catch(e){ console.warn("extérieur indisponible", e); }
 
   /* salle de réunion (grande, fond gauche) */
   const inWallMat = new THREE.MeshStandardMaterial({ color: 0xeae7df, roughness: 1 });
@@ -4448,6 +4450,7 @@ function init3D(){
   const roomSprites = [], roomPanels = [], roomPanelTex = [];
 
   /* bâtiments séparés au sud : deux annexes avec porte coulissante, fenêtre et bureaux assignables (salles 6 et 7) */
+  try{
   const annWallMat = new THREE.MeshStandardMaterial({ color: 0xe8e2d2, roughness: 1 });
   function annexBuilding(cx, ri){
     const fl = new THREE.Mesh(new THREE.BoxGeometry(10, .2, 10), new THREE.MeshStandardMaterial({ map: makePlanks(), roughness: .8 }));
@@ -4480,8 +4483,6 @@ function init3D(){
     const fol2 = new THREE.Mesh(new THREE.ConeGeometry(.5, 1.1, 9), leafMat);
     fol2.position.set(cx - 4.2, 1.05, 22.2); scene.add(fol2);
   }
-  annexBuilding(-7, 5);
-  annexBuilding(7, 6);
   RX.forEach((rx, i) => {
     const rf = new THREE.Mesh(new THREE.BoxGeometry(8, .2, 7), new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .85 }));
     rf.position.set(rx, -.09, -5.05); scene.add(rf);
@@ -4542,6 +4543,9 @@ function init3D(){
   RX.forEach(rx => addWindow(5.6, 2.4, rx, 1.85, -8.65, Math.PI));
   addWindow(5.6, 2.4, -6, 1.85, -23.88, 0);
   addWindow(5.6, 2.4, 6, 1.85, -23.88, 0);
+  annexBuilding(-7, 5);
+  annexBuilding(7, 6);
+  }catch(e){ console.warn("bâtiments séparés indisponibles", e); }
 
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
