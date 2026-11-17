@@ -3178,7 +3178,7 @@ document.getElementById("connAdd").addEventListener("click", ()=>{
   renderConnectors(); save();
 });
 async function connectorSend(c, text){
-  const r = await fetch(c.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source: "Agent_IA", connector: c.name, text }) });
+  const r = await fetch(c.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source: "Agent_IA", connector: c.name, text, content: text }) });
   if(!r.ok) throw new Error("HTTP " + r.status);
   logGlobal("livrable envoyé au connecteur <b>" + esc(c.name) + "</b>.", "Système");
 }
