@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261118-0500">
+<meta name="build" content="b-20261118-0600">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -297,6 +297,11 @@
   .panel.collapsed .panel-head[data-fold]::after{ content:"▸"; }
   .panel.collapsed > :not(.panel-head){ display:none !important; }
   .panel.collapsed .panel-head{ margin-bottom:0; }
+
+@media (max-width:700px){
+  .modal{ width:96% !important; max-width:96% !important; }
+  input, textarea, select{ font-size:16px; }
+}
 </style>
 </head>
 <body>
@@ -1526,7 +1531,7 @@ function initSupabase(){
   sb.auth.getSession().then(({data})=>{ if(data.session) applySession(data.session); refreshAccountUI(); });
   sb.auth.onAuthStateChange((event, s)=>{
     if(event === "SIGNED_IN" && s) applySession(s);
-    if(event === "SIGNED_OUT"){ session = null; stopEngine(); loadLocal(); renderAll(); openAuthModal(); }
+    if(event === "SIGNED_OUT"){ session = null; stopEngine(); stopMultiplayer(); loadLocal(); renderAll(); openAuthModal(); }
     refreshAccountUI();
   });
 }
@@ -1539,6 +1544,82 @@ function applySession(s){
   startEngine();
   authOverlay.classList.remove("show");
   pullRemote(!sameUser);
+  startMultiplayer();
+}
+
+/* ================= multi-personnes : vos collègues dans le bureau (temps réel) ================= */
+const peers = new Map();
+let rtChannel = null, poseTimer = null, pruneTimer = null;
+function peerName(u){
+  const m = (u && u.user_metadata) || {};
+  return m.user_name || m.preferred_username || (m.email ? m.email.split("@")[0] : "collègue");
+}
+function myId(){ return session && session.user ? session.user.id : null; }
+function createPeer(id, name){
+  if(!three) return null;
+  const g = makeCharacter(0x7a8896);
+  g.position.set(0, 0, 5.6);
+  three.scene.add(g);
+  const lbl = makeLabel(name || "collègue", "votre collègue — en ligne");
+  lbl.position.y = 1.95; g.add(lbl);
+  const p = { id, name: name || "collègue", group: g, tx: 0, tz: 5.6, tb: 0, tyaw: 0, seen: performance.now() };
+  peers.set(id, p);
+  logGlobal("👤 <b>" + esc(p.name) + "</b> est en ligne dans le bureau.", "Bureau");
+  updatePeerListUI();
+  return p;
+}
+function removePeer(id, quiet){
+  const p = peers.get(id);
+  if(!p) return;
+  if(three) three.scene.remove(p.group);
+  peers.delete(id);
+  if(!quiet) logGlobal("👋 <b>" + esc(p.name) + "</b> a quitté le bureau.", "Bureau");
+  updatePeerListUI();
+}
+function updatePeerListUI(){
+  let el = document.getElementById("peersChip");
+  if(!el){
+    el = document.createElement("div");
+    el.id = "peersChip";
+    el.style.cssText = "position:fixed;top:64px;right:14px;z-index:40;background:rgba(11,13,10,.85);border:1px solid var(--line2);border-radius:10px;padding:6px 10px;font-size:11px;color:var(--ink);display:none;max-width:230px;";
+    document.body.appendChild(el);
+  }
+  const names = Array.from(peers.values()).map(p => p.name);
+  if(!names.length){ el.style.display = "none"; return; }
+  el.style.display = "";
+  el.innerHTML = '<b style="color:var(--signal);">' + names.length + ' en ligne</b> · ' + names.map(n => esc(n)).join(", ");
+}
+function startMultiplayer(){
+  stopMultiplayer();
+  if(!sb || !session) return;
+  rtChannel = sb.channel("bureau-live", { config: { broadcast: { self: false }, presence: { key: session.user.id } } });
+  rtChannel.on("broadcast", { event: "pose" }, ({ payload }) => {
+    if(!payload || payload.id === myId()) return;
+    let p = peers.get(payload.id);
+    if(!p){ p = createPeer(payload.id, payload.name); if(!p) return; }
+    p.name = payload.name || p.name;
+    p.tx = payload.x; p.tz = payload.z; p.tb = payload.b || 0; p.tyaw = payload.yaw || 0;
+    p.seen = performance.now();
+  });
+  rtChannel.subscribe(status => { if(status === "SUBSCRIBED") updatePeerListUI(); });
+  poseTimer = setInterval(() => {
+    if(!rtChannel || rtChannel.state !== "joined" || !session) return;
+    rtChannel.send({ type: "broadcast", event: "pose", payload: { id: session.user.id, name: peerName(session.user), b: bLevel, x: fpsState.x, z: fpsState.z, yaw: fpsState.yaw } });
+  }, 250);
+  pruneTimer = setInterval(() => {
+    const now = performance.now();
+    for(const id of Array.from(peers.keys())){ if(now - peers.get(id).seen > 7000) removePeer(id); }
+  }, 3000);
+}
+function stopMultiplayer(){
+  if(poseTimer){ clearInterval(poseTimer); poseTimer = null; }
+  if(pruneTimer){ clearInterval(pruneTimer); pruneTimer = null; }
+  if(rtChannel){
+    try{ rtChannel.unsubscribe(); sb.removeChannel(rtChannel); }catch(e){}
+    rtChannel = null;
+  }
+  for(const id of Array.from(peers.keys())) removePeer(id, true);
+  updatePeerListUI();
 }
 
 function schedulePush(){
@@ -3929,7 +4010,7 @@ let overviewMode = false;
 const agent3d = new Map();
 const zoneLabels = new Map();
 const fpsState = { x: 0, z: 5.6, yaw: 0, pitch: 0, y: 0, vy: 0 };
-let laptopPocket = false;
+let laptopPocket = true;
 let laptopOn = 0;
 let setLaptopPocket = () => {};
 let setLaptopSpot = () => {};
@@ -3972,23 +4053,13 @@ function interactNear(){
     openPc("clients");
   } else if(nt.type === "convoquer"){
     if(state.liveInterview) openIvOverlay(); else openIvPick();
-  } else if(nt.type === "laptop"){
-    if(laptopOn === nt.spot && !laptopPocket){
-      setLaptopPocket(true);
-      logGlobal("PC portable pris — touche P pour l’ouvrir partout.", "Système");
-    } else {
-      setLaptopSpot(nt.spot);
-      logGlobal("PC portable posé sur la table " + (nt.spot + 1) + ".", "Système");
-    }
-    setPrompt(null);
-    return;
   } else if(nt.type === "agent"){
     showAgentPopup(nt.agent, window.innerWidth / 2 - 100, window.innerHeight / 2 - 60);
   }
   setPrompt(null);
 }
 function checkNear(){
-  if(camMode !== "fps" || !document.pointerLockElement){ setPrompt(null); return; }
+  if(camMode !== "fps" || (!document.pointerLockElement && !window.matchMedia("(pointer: coarse)").matches)){ setPrompt(null); return; }
   const x = fpsState.x, z = fpsState.z;
   let best = null, bestD = 1e9;
   const consider = (tx, tz, maxD, data) => {
@@ -4015,10 +4086,6 @@ function checkNear(){
     consider(9.9, 24.5, 26, { type: "stairsUp", label: "Monter au rez-de-chaussée — remontée (E)" });
     consider(-10.6, 16, 2.4, { type: "breaker", label: "Disjoncteurs — électricité du bâtiment (E)" });
   }
-  LAPTOP_SPOTS.forEach((sp, i) => {
-    const here = laptopOn === i && !laptopPocket;
-    consider(sp.x, sp.z, 2.2, { type: "laptop", spot: i, label: here ? "Mettre le PC portable dans la poche — touche P partout" : "Poser le PC portable sur cette table (bouton vert)" });
-  });
   for(const a of state.agents){
     const rec = agent3d.get(a.id);
     if(rec) consider(rec.group.position.x, rec.group.position.z, 2.3,
@@ -4516,59 +4583,17 @@ function init3D(){
   loungeLeg.position.set(0, .34, 9.1); scene.add(loungeLeg);
   const loungeTable = new THREE.Mesh(new THREE.CylinderGeometry(.5, .5, .06, 16), new THREE.MeshStandardMaterial({ color: 0xd6cfc0, roughness: .6 }));
   loungeTable.position.set(0, .71, 9.1); scene.add(loungeTable);
-  const laptopBase = new THREE.Mesh(new THREE.BoxGeometry(.5, .03, .34), new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: .4, metalness: .3 }));
-  laptopBase.position.set(0, .77, 9.08); scene.add(laptopBase);
-  laptopBase.traverse(o => o.userData.laptop = true);
-  const laptopScr = new THREE.Mesh(new THREE.BoxGeometry(.5, .32, .02), screenMat(0xc6f542, .8));
-  laptopScr.position.set(0, .93, 9.23); laptopScr.rotation.x = -.3;
-  laptopScr.userData.laptop = true;
-  scene.add(laptopScr);
-  const laptopLabel = makeLabel("VOTRE PC PORTABLE", "touche P — notes & assistant");
-  laptopLabel.position.set(0, 2.2, 9.1); scene.add(laptopLabel);
   const pocketLaptop = new THREE.Mesh(new THREE.BoxGeometry(.36, .05, .26), new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: .4, metalness: .3 }));
   pocketLaptop.position.set(.34, -.34, -.66);
   pocketLaptop.rotation.set(-.55, .1, .14);
   pocketLaptop.visible = false;
   camera.add(pocketLaptop);
   scene.add(camera);
-  const spotLegGeo = new THREE.CylinderGeometry(.07, .1, .68, 10);
-  const spotTopGeo = new THREE.CylinderGeometry(.5, .5, .06, 16);
-  LAPTOP_SPOTS.forEach((sp, i) => {
-    if(i > 0){
-      const leg = new THREE.Mesh(spotLegGeo, new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: .8 }));
-      leg.position.set(sp.x, .34, sp.z); scene.add(leg);
-      const top = new THREE.Mesh(spotTopGeo, new THREE.MeshStandardMaterial({ color: 0xd6cfc0, roughness: .6 }));
-      top.position.set(sp.x, .71, sp.z); scene.add(top);
-      const base = new THREE.Mesh(new THREE.BoxGeometry(.5, .03, .34), new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: .4, metalness: .3 }));
-      base.position.set(sp.x, .77, sp.z - .02); scene.add(base);
-      base.traverse(o => o.userData.laptop = true);
-      const scr = new THREE.Mesh(new THREE.BoxGeometry(.5, .32, .02), screenMat(0xc6f542, .8));
-      scr.position.set(sp.x, .93, sp.z + .13); scr.rotation.x = -.3; scr.userData.laptop = true;
-      scene.add(scr);
-      sp.meshes = [base, scr];
-      sp.label = makeLabel("VOTRE PC PORTABLE", "touche P — notes & assistant");
-      sp.label.position.set(sp.x, 2.2, sp.z); scene.add(sp.label);
-    } else {
-      sp.meshes = [laptopBase, laptopScr];
-      sp.label = laptopLabel;
-    }
-    const btn = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .05, 12), new THREE.MeshStandardMaterial({ color: 0xc6f542, emissive: 0xc6f542, emissiveIntensity: .6, roughness: .4 }));
-    btn.position.set(sp.x + .36, .77, sp.z + .3); btn.userData.laptopBtn = i;
-    scene.add(btn);
-    sp.tag = makeLabel("PC PORTABLE", "bouton vert : l’amener ici");
-    sp.tag.position.set(sp.x, 1.45, sp.z); scene.add(sp.tag);
-  });
   function syncLaptop(){
-    LAPTOP_SPOTS.forEach((sp, i) => {
-      const on = !laptopPocket && i === laptopOn;
-      (sp.meshes || []).forEach(m => m.visible = on);
-      if(sp.label) sp.label.visible = on;
-      if(sp.tag) sp.tag.visible = !on;
-    });
     pocketLaptop.visible = laptopPocket && camMode === "fps";
   }
   setLaptopPocket = v => { laptopPocket = v; syncLaptop(); };
-  setLaptopSpot = i => { laptopOn = i; laptopPocket = false; syncLaptop(); };
+  setLaptopSpot = () => {};
   syncLaptop();
   const corridorStrip = new THREE.Mesh(new THREE.BoxGeometry(2.2, .015, 13.3), new THREE.MeshStandardMaterial({ color: 0x8a7a62, roughness: .9 }));
   corridorStrip.position.set(3.7, .018, 2.85); scene.add(corridorStrip);
@@ -4960,6 +4985,7 @@ function init3D(){
     ceil.visible = panelGroup.visible = (m === "fps");
     corCeils.forEach(c => c.visible = (m === "fps"));
     pocketLaptop.visible = laptopPocket && (m === "fps");
+    const tb = document.getElementById("touchBtns"); if(tb) tb.style.display = (m === "fps") ? "" : "none";
     if(m === "fps"){
       let px = 0, pz = 5.6, pyaw = 0, ppitch = 0;
       try{
@@ -4992,6 +5018,52 @@ function init3D(){
     if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code)) e.preventDefault();
   });
   document.addEventListener("pointerlockchange", ()=> setPrompt(nearTarget));
+  const isTouch = window.matchMedia && matchMedia("(pointer: coarse)").matches;
+  const touchMove = { x: 0, y: 0 };
+  let moveTouchId = null, moveStart = null, lookTouchId = null, lookLast = null;
+  dom.addEventListener("touchstart", e => {
+    if(camMode !== "fps") return;
+    for(const t of e.changedTouches){
+      if(t.clientX < window.innerWidth / 2 && moveTouchId === null){ moveTouchId = t.identifier; moveStart = [t.clientX, t.clientY]; }
+      else if(lookTouchId === null){ lookTouchId = t.identifier; lookLast = [t.clientX, t.clientY]; }
+    }
+  }, { passive: true });
+  dom.addEventListener("touchmove", e => {
+    if(camMode !== "fps") return;
+    for(const t of e.changedTouches){
+      if(t.identifier === moveTouchId && moveStart){
+        touchMove.x = Math.max(-1, Math.min(1, (t.clientX - moveStart[0]) / 55));
+        touchMove.y = Math.max(-1, Math.min(1, -(t.clientY - moveStart[1]) / 55));
+      } else if(t.identifier === lookTouchId && lookLast){
+        fpsState.yaw -= (t.clientX - lookLast[0]) * .005;
+        fpsState.pitch = Math.min(1.2, Math.max(-1.2, fpsState.pitch - (t.clientY - lookLast[1]) * .005));
+        lookLast = [t.clientX, t.clientY];
+      }
+    }
+  }, { passive: true });
+  const endTouch = e => {
+    for(const t of e.changedTouches){
+      if(t.identifier === moveTouchId){ moveTouchId = null; moveStart = null; touchMove.x = 0; touchMove.y = 0; }
+      if(t.identifier === lookTouchId){ lookTouchId = null; lookLast = null; }
+    }
+  };
+  dom.addEventListener("touchend", endTouch, { passive: true });
+  dom.addEventListener("touchcancel", endTouch, { passive: true });
+  if(isTouch){
+    const bWrap = document.createElement("div");
+    bWrap.id = "touchBtns";
+    bWrap.style.cssText = "position:fixed;right:14px;bottom:70px;z-index:40;display:flex;flex-direction:column;gap:10px;";
+    const mkBtn = (txt, fn) => {
+      const b = document.createElement("button");
+      b.textContent = txt;
+      b.style.cssText = "width:56px;height:56px;border-radius:50%;background:rgba(11,13,10,.85);border:1px solid var(--line2);color:var(--ink);font-size:18px;";
+      b.addEventListener("click", e => { e.stopPropagation(); fn(); });
+      bWrap.appendChild(b);
+    };
+    mkBtn("E", () => interactNear());
+    mkBtn("↑", () => { if(fpsState.y <= 0) fpsState.vy = 3.4; });
+    document.body.appendChild(bWrap);
+  }
   window.addEventListener("keyup", e => {
     if(["KeyW","KeyZ","ArrowUp"].includes(e.code)) fpsKeys.forward = false;
     if(["KeyS","ArrowDown"].includes(e.code)) fpsKeys.back = false;
@@ -5057,8 +5129,6 @@ function init3D(){
       if(u.tni){ openPc("dash"); return; }
       if(u.clients){ openPc("clients"); return; }
       if(u.breaker !== undefined){ openBreakers(); return; }
-      if(u.laptopBtn !== undefined){ setLaptopSpot(u.laptopBtn); return; }
-      if(u.laptop){ openPc("notes"); return; }
       if(u.boss){ openBossDlg(); return; }
       if(u.drh){ openDrhDlg(); return; }
     }
@@ -5108,8 +5178,8 @@ function init3D(){
       const now2 = performance.now();
       const dt = Math.min(.05, (now2 - lastT) / 1000);
       lastT = now2;
-      const f = (fpsKeys.forward ? 1 : 0) - (fpsKeys.back ? 1 : 0);
-      const r = (fpsKeys.right ? 1 : 0) - (fpsKeys.left ? 1 : 0);
+      const f = Math.max(-1, Math.min(1, (fpsKeys.forward ? 1 : 0) - (fpsKeys.back ? 1 : 0) + touchMove.y));
+      const r = Math.max(-1, Math.min(1, (fpsKeys.right ? 1 : 0) - (fpsKeys.left ? 1 : 0) + touchMove.x));
       if(f || r){
         const sp = (fpsKeys.sprint ? 5 : 2.8) * dt;
         const fx = -Math.sin(fpsState.yaw), fz = -Math.cos(fpsState.yaw);
@@ -5123,7 +5193,7 @@ function init3D(){
           const rec = agent3d.get(a.id);
           if(rec) circles.push([rec.group.position.x, rec.group.position.z, 1.05]);
         }
-        circles.push([0, -6.5, 2.1], [-12.4, 8.9, 1.2], [12.9, 5.3, 1.1], [12.9, 7.9, 1.1], [9.2, 6, .95], [9.2, 8.2, .95], [-13.3, 1.6, 1.5], [-10, -7, 2.6], [10, -8, 1.7], [10, -7.3, .55], [-12.3, 4.5, .95], [-6, 8.6, .95], [6, 8.6, .95], [0, -20.4, 2.6], [-12.6, -17, 1.3], [-9.5, -12.6, .7], [-10.5, -22.3, .95], [1.4, -18.6, .6], [6, 17, 1.1], [9.9, 24.5, 1], [-10.2, 25.8, .5]);
+        circles.push([0, -6.5, 2.1], [-12.4, 8.9, 1.2], [12.9, 5.3, 1.1], [12.9, 7.9, 1.1], [9.2, 6, .95], [9.2, 8.2, .95], [-13.3, 1.6, 1.5], [-10, -7, 2.6], [10, -8, 1.7], [10, -7.3, .55], [0, -20.4, 2.6], [-12.6, -17, 1.3], [-9.5, -12.6, .7], [1.4, -18.6, .6], [6, 17, 1.1], [9.9, 24.5, 1], [-10.2, 25.8, .5]);
         for(const [cx, cz, cr] of circles){
           const dx = fpsState.x - cx, dz = fpsState.z - cz;
           const d = Math.hypot(dx, dz);
@@ -5230,6 +5300,12 @@ function init3D(){
     bossChar.rotation.y = Math.sin(t * .8) * .25;
     for(let i = 0; i < srvLeds.length; i++) srvLeds[i].material.emissiveIntensity = Math.sin(t * 3 + i * 1.7) > 0 ? .95 : .12;
     for(let i = 0; i < rackLeds.length; i++) rackLeds[i].material.emissiveIntensity = dcPower ? (Math.sin(t * 4 + i * 1.3) > 0 ? .95 : .15) : 0;
+    peers.forEach(p => {
+      p.group.position.x += (p.tx - p.group.position.x) * .15;
+      p.group.position.z += (p.tz - p.group.position.z) * .15;
+      p.group.position.y = LVL_Y[p.tb] || 0;
+      p.group.rotation.y = p.tyaw || p.group.rotation.y;
+    });
     renderer.render(scene, camera);
   })();
   document.getElementById("officeView").classList.add("threed");
@@ -5269,7 +5345,7 @@ function navBuild(){
   agent3d.forEach(rec => { const p = rec.group.position; rects.push([p.x - .85, p.x + .85, p.z - .525, p.z + .525]); });
   rects.push([-1.7, 1.7, -7.3, -5.7], [8.7, 11.3, -8.8, -7.6], [-13.35, -11.45, 8.375, 9.425],
              [-12.25, -7.75, -7.9, -6.1], [12.4, 13.4, 4, 9.2], [-13.75, -12.85, 0, 3.2]);
-  const circles = [[9.2, 6, .85], [9.2, 8.2, .85], [-12.3, 4.5, .75], [-6, 8.6, .75], [6, 8.6, .75], [-10.5, -22.3, .7], [6, 17, .95], [9.9, 24.5, .9], [-10.2, 25.8, .45]];
+  const circles = [[9.2, 6, .85], [9.2, 8.2, .85], [6, 17, .95], [9.9, 24.5, .9], [-10.2, 25.8, .45]];
   for(let k = 0; k < nz; k++){
     const z = Z0 + k * G;
     for(let i = 0; i < nx; i++){
