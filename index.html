@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261117-1822">
+<meta name="build" content="b-20261117-1921">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -3572,7 +3572,7 @@ let laptopPocket = false;
 let laptopOn = 0;
 let setLaptopPocket = () => {};
 let setLaptopSpot = () => {};
-const LAPTOP_SPOTS = [{ x: 0, z: 9.1 }, { x: -6, z: 8.6 }, { x: 6, z: 8.6 }];
+const LAPTOP_SPOTS = [{ x: 0, z: 9.1 }, { x: -6, z: 8.6 }, { x: 6, z: 8.6 }, { x: 4.5, z: -20.3 }];
 function roomName(i){ return (state.roomNames && state.roomNames[i]) || (i === 0 ? "Administration" : "Salle " + (i + 1)); }
 let nearTarget = null;
 const fpsPromptEl = document.getElementById("fpsPrompt");
@@ -3599,6 +3599,8 @@ function interactNear(){
     openPc("servers");
   } else if(nt.type === "reunion"){
     if(state.liveMeeting) openMeetOverlay(); else openPc("reunion");
+  } else if(nt.type === "tni"){
+    openPc("dash");
   } else if(nt.type === "laptop"){
     if(laptopOn === nt.spot && !laptopPocket){
       setLaptopPocket(true);
@@ -3627,6 +3629,9 @@ function checkNear(){
   consider(-12.4, 8.9, 2.6, { type: "pc", label: "Ouvrir votre PC (fichiers, tâches, réunion)" });
   consider(-13.3, 1.6, 2.6, { type: "servers", label: "Salle serveurs — héberger un site à coder" });
   consider(-10, -7, 3.2, { type: "reunion", label: state.liveMeeting ? "Reprendre la réunion en cours (E)" : "Salle de réunion — convoquer une réunion" });
+  consider(0, -20.4, 2.8, { type: "pc", label: "Votre PC fixe — tout votre centre de contrôle" });
+  consider(-12.6, -17, 2.8, { type: "tni", label: "Tableau numérique interactif — tableau de bord" });
+  consider(3.4, -18.8, 2.2, { type: "reunion", label: state.liveMeeting ? "Reprendre la réunion en cours (E)" : "Convoquer des agents — lancer une réunion" });
   LAPTOP_SPOTS.forEach((sp, i) => {
     const here = laptopOn === i && !laptopPocket;
     consider(sp.x, sp.z, 2.2, { type: "laptop", spot: i, label: here ? "Mettre le PC portable dans la poche — touche P partout" : "Poser le PC portable sur cette table (bouton vert)" });
@@ -3668,6 +3673,29 @@ function makeLabel(text, sub){
   const tex = new THREE.CanvasTexture(c);
   const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
   spr.scale.set(2.6, 0.65, 1);
+  return spr;
+}
+function makeBadge(name, sub){
+  const c = document.createElement("canvas");
+  c.width = 512; c.height = 128;
+  const ctx = c.getContext("2d");
+  let nm = String(name || "");
+  if(nm.length > 13) nm = nm.slice(0, 12) + "…";
+  let sb = String(sub || "");
+  if(sb.length > 26) sb = sb.slice(0, 25) + "…";
+  ctx.fillStyle = "rgba(11,13,10,0.9)";
+  ctx.beginPath();
+  if(ctx.roundRect) ctx.roundRect(56, 14, 400, 100, 50); else ctx.rect(56, 14, 400, 100);
+  ctx.fill();
+  ctx.strokeStyle = "#c6f542"; ctx.lineWidth = 5; ctx.stroke();
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#eef2e4"; ctx.font = "bold 44px monospace";
+  ctx.fillText(nm, 256, 58);
+  ctx.fillStyle = "#9aa38c"; ctx.font = "24px monospace";
+  ctx.fillText(sb, 256, 96);
+  const tex = new THREE.CanvasTexture(c);
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  spr.scale.set(2.9, .72, 1);
   return spr;
 }
 function screenMat(hex, intensity){
@@ -3790,8 +3818,12 @@ function init3D(){
   floor.position.y = -.1;
   scene.add(floor);
   const wallMat = new THREE.MeshStandardMaterial({ color: 0xf2f0ea, roughness: 1 });
-  const wallB = new THREE.Mesh(new THREE.BoxGeometry(28, 4.4, .2), wallMat);
-  wallB.position.set(0, 2.2, -10); scene.add(wallB);
+  const wallB1 = new THREE.Mesh(new THREE.BoxGeometry(13.1, 4.4, .2), wallMat);
+  wallB1.position.set(-7.45, 2.2, -10); scene.add(wallB1);
+  const wallB2 = new THREE.Mesh(new THREE.BoxGeometry(13.1, 4.4, .2), wallMat);
+  wallB2.position.set(7.45, 2.2, -10); scene.add(wallB2);
+  const wallBL = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.6, .2), wallMat);
+  wallBL.position.set(0, 3.6, -10); scene.add(wallBL);
   const wallL = new THREE.Mesh(new THREE.BoxGeometry(.2, 4.4, 20), wallMat);
   wallL.position.set(-14, 2.2, 0); scene.add(wallL);
   const wallR1 = new THREE.Mesh(new THREE.BoxGeometry(.2, 4.4, 8.5), wallMat);
@@ -4147,6 +4179,58 @@ function init3D(){
   entDoor.position.set(13.75, 1.4, 0);
   entDoor.userData.door = { axis: "z", base: 0, slide: 3, cx: 13.75, cz: 0, t: 0 };
   scene.add(entDoor); officeDoors.push(entDoor);
+
+  /* bureau du patron : immense salle privée derrière le mur nord */
+  const offFloor = new THREE.Mesh(new THREE.BoxGeometry(26, .2, 14), new THREE.MeshStandardMaterial({ map: makePlanks(), roughness: .8 }));
+  offFloor.position.set(0, -.1, -17); scene.add(offFloor);
+  const offN = new THREE.Mesh(new THREE.BoxGeometry(26, 4.4, .2), wallMat);
+  offN.position.set(0, 2.2, -24); scene.add(offN);
+  const offW = new THREE.Mesh(new THREE.BoxGeometry(.2, 4.4, 14), wallMat);
+  offW.position.set(-13, 2.2, -17); scene.add(offW);
+  const offE = new THREE.Mesh(new THREE.BoxGeometry(.2, 4.4, 14), wallMat);
+  offE.position.set(13, 2.2, -17); scene.add(offE);
+  const bossRugB = new THREE.Mesh(new THREE.BoxGeometry(9.6, .028, 6.6), new THREE.MeshStandardMaterial({ color: 0x4e2b23, roughness: .95 }));
+  bossRugB.position.set(0, .012, -15.6); scene.add(bossRugB);
+  const bossRug = new THREE.Mesh(new THREE.BoxGeometry(9, .03, 6), new THREE.MeshStandardMaterial({ color: 0x7a4034, roughness: .95 }));
+  bossRug.position.set(0, .028, -15.6); scene.add(bossRug);
+  const deskMat2 = new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .55 });
+  const deskTop = new THREE.Mesh(new THREE.BoxGeometry(4.4, .09, 1.7), deskMat2);
+  deskTop.position.set(0, .78, -20.2); deskTop.userData.pc = true; scene.add(deskTop);
+  const dLegL = new THREE.Mesh(new THREE.BoxGeometry(.14, .74, 1.6), deskMat2);
+  dLegL.position.set(-2.05, .37, -20.2); scene.add(dLegL);
+  const dLegR = dLegL.clone(); dLegR.position.x = 2.05; scene.add(dLegR);
+  const tower = new THREE.Mesh(new THREE.BoxGeometry(.45, .95, .9), new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: .5, metalness: .4 }));
+  tower.position.set(-1.5, .48, -20.5); tower.traverse(o => o.userData.pc = true); scene.add(tower);
+  const mon = new THREE.Mesh(new THREE.BoxGeometry(1.5, .92, .06), screenMat(0xc6f542, .8));
+  mon.position.set(.5, 1.55, -20.45); mon.rotation.x = -.06; mon.userData.pc = true; scene.add(mon);
+  const monFoot = new THREE.Mesh(new THREE.CylinderGeometry(.05, .09, .35, 8), new THREE.MeshStandardMaterial({ color: 0x22252a }));
+  monFoot.position.set(.5, 1, -20.45); scene.add(monFoot);
+  const kbd = new THREE.Mesh(new THREE.BoxGeometry(1.15, .03, .4), new THREE.MeshStandardMaterial({ color: 0x22252a, roughness: .6 }));
+  kbd.position.set(.5, .84, -19.75); kbd.userData.pc = true; scene.add(kbd);
+  const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(.62, .08, .6), new THREE.MeshStandardMaterial({ color: 0x191d15, roughness: .7 }));
+  chairSeat.position.set(0, .5, -21.4); scene.add(chairSeat);
+  const chairBack = new THREE.Mesh(new THREE.BoxGeometry(.62, .85, .08), chairSeat.material);
+  chairBack.position.set(0, .97, -21.72); scene.add(chairBack);
+  const chairPil = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, .5, 8), new THREE.MeshStandardMaterial({ color: 0x22252a }));
+  chairPil.position.set(0, .25, -21.4); scene.add(chairPil);
+  const tni = new THREE.Mesh(new THREE.BoxGeometry(.14, 2.3, 3.6), screenMat(0xc6f542, .85));
+  tni.position.set(-12.75, 1.8, -17); tni.userData.tni = true; scene.add(tni);
+  const tniFoot = new THREE.Mesh(new THREE.BoxGeometry(.5, .68, .3), new THREE.MeshStandardMaterial({ color: 0x22252a, roughness: .6 }));
+  tniFoot.position.set(-12.75, .34, -17); scene.add(tniFoot);
+  const tniLabel = makeLabel("TABLEAU NUMÉRIQUE", "tableau de bord en direct — E ou clic");
+  tniLabel.position.set(-12.6, 3.5, -17); scene.add(tniLabel);
+  const conv = new THREE.Mesh(new THREE.CylinderGeometry(.3, .38, 1.05, 12), new THREE.MeshStandardMaterial({ color: 0x191d15, roughness: .6 }));
+  conv.position.set(3.4, .52, -18.8); conv.userData.reunion = true; scene.add(conv);
+  const convBtn = new THREE.Mesh(new THREE.CylinderGeometry(.17, .17, .07, 12), new THREE.MeshStandardMaterial({ color: 0xc6f542, emissive: 0xc6f542, emissiveIntensity: .6, roughness: .4 }));
+  convBtn.position.set(3.4, 1.08, -18.8); convBtn.userData.reunion = true; scene.add(convBtn);
+  const convLabel = makeLabel("CONVOQUER", "réunir les agents — E ou clic");
+  convLabel.position.set(3.4, 2.2, -18.8); scene.add(convLabel);
+  const bossDoor = new THREE.Mesh(new THREE.BoxGeometry(1.72, 2.8, .12), doorMat);
+  bossDoor.position.set(0, 1.4, -10);
+  bossDoor.userData.door = { axis: "x", base: 0, slide: 1.85, cx: 0, cz: -10, t: 0 };
+  scene.add(bossDoor); officeDoors.push(bossDoor);
+  const officeSign = makeLabel("VOTRE BUREAU", "salle privée du patron");
+  officeSign.position.set(0, 3.4, -10.5); scene.add(officeSign);
   const roomSprites = [], roomPanels = [], roomPanelTex = [];
   RX.forEach((rx, i) => {
     const rf = new THREE.Mesh(new THREE.BoxGeometry(8, .2, 7), new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .85 }));
@@ -4206,6 +4290,8 @@ function init3D(){
   for(const wz of [-5.5, 0, 5.5]) addWindow(5.4, 2.5, -13.86, 1.85, wz, Math.PI / 2);
   for(const wx of [18, 26.5, 35, 43.5, 52, 60.5, 66.5]) addWindow(4.6, 2.2, wx, 1.95, 1.46, Math.PI);
   RX.forEach(rx => addWindow(5.6, 2.4, rx, 1.85, -8.65, Math.PI));
+  addWindow(5.6, 2.4, -6, 1.85, -23.88, 0);
+  addWindow(5.6, 2.4, 6, 1.85, -23.88, 0);
 
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
@@ -4224,7 +4310,7 @@ function init3D(){
         const sp = JSON.parse(localStorage.getItem("ac_pos") || "null");
         if(sp && isFinite(sp.x) && isFinite(sp.z)){
           px = Math.min(68.4, Math.max(-13.4, sp.x));
-          pz = Math.min(9.4, Math.max(-9.4, sp.z));
+          pz = Math.min(9.4, Math.max(-23.4, sp.z));
           pyaw = sp.yaw || 0; ppitch = sp.pitch || 0;
         }
       }catch(err){}
@@ -4280,13 +4366,13 @@ function init3D(){
     if(e.buttons !== 1) return;
     if(Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 6) dragged = true;
     az -= dx * .005;
-    pol = Math.min(1.45, Math.max(.35, pol - dy * .005));
+    pol = Math.min(1.52, Math.max(.25, pol - dy * .005));
     updateCam();
   });
   dom.addEventListener("wheel", e => {
     if(camMode === "fps") return;
     e.preventDefault();
-    dist = Math.min(85, Math.max(9, dist + e.deltaY * .012));
+    dist = Math.min(170, Math.max(9, dist + e.deltaY * .012));
     updateCam();
   }, { passive: false });
   dom.addEventListener("click", e => {
@@ -4310,6 +4396,7 @@ function init3D(){
       if(u.pc){ openPc("files"); return; }
       if(u.servers){ openPc("servers"); return; }
       if(u.reunion){ openPc("reunion"); return; }
+      if(u.tni){ openPc("dash"); return; }
       if(u.laptopBtn !== undefined){ setLaptopSpot(u.laptopBtn); return; }
       if(u.laptop){ openPc("notes"); return; }
       if(u.boss){ openBossDlg(); return; }
@@ -4369,13 +4456,13 @@ function init3D(){
         fpsState.x += (fx * f + rx * r) * sp;
         fpsState.z += (fz * f + rz * r) * sp;
         fpsState.x = Math.min(68.4, Math.max(-13.4, fpsState.x));
-        fpsState.z = Math.min(9.4, Math.max(-9.4, fpsState.z));
+        fpsState.z = Math.min(9.4, Math.max(-23.4, fpsState.z));
         const circles = [];
         for(const a of state.agents){
           const rec = agent3d.get(a.id);
           if(rec) circles.push([rec.group.position.x, rec.group.position.z, 1.05]);
         }
-        circles.push([0, -6.5, 2.1], [-12.4, 8.9, 1.2], [12.9, 5.3, 1.1], [12.9, 7.9, 1.1], [9.2, 6, .95], [9.2, 8.2, .95], [-13.3, 1.6, 1.5], [-10, -7, 2.6], [10, -8, 1.7], [10, -7.3, .55], [0, 9.1, .95], [-6, 8.6, .95], [6, 8.6, .95]);
+        circles.push([0, -6.5, 2.1], [-12.4, 8.9, 1.2], [12.9, 5.3, 1.1], [12.9, 7.9, 1.1], [9.2, 6, .95], [9.2, 8.2, .95], [-13.3, 1.6, 1.5], [-10, -7, 2.6], [10, -8, 1.7], [10, -7.3, .55], [0, 9.1, .95], [-6, 8.6, .95], [6, 8.6, .95], [0, -20.4, 2.6], [-12.6, -17, 1.3], [3.4, -18.8, .7], [4.5, -20.3, .95]);
         for(const [cx, cz, cr] of circles){
           const dx = fpsState.x - cx, dz = fpsState.z - cz;
           const d = Math.hypot(dx, dz);
@@ -4492,9 +4579,12 @@ const NAV_WALLS = [
   [29.7, 30.3, -8.6, -1.4], [37.7, 38.3, -8.6, -1.4],
   [39.7, 40.3, -8.6, -1.4], [47.7, 48.3, -8.6, -1.4],
   [49.7, 50.3, -8.6, -1.4], [57.7, 58.3, -8.6, -1.4],
-  [59.7, 60.3, -8.6, -1.4], [67.7, 68.3, -8.6, -1.4]
+  [59.7, 60.3, -8.6, -1.4], [67.7, 68.3, -8.6, -1.4],
+  [-14, -0.9, -10.15, -9.85], [0.9, 14, -10.15, -9.85],
+  [-13.2, -12.8, -24, -10], [12.8, 13.2, -24, -10], [-13, 13, -24.15, -23.85],
+  [-2.3, 2.3, -21.9, -19.3], [-13.1, -12.4, -18.9, -15.1], [3.1, 3.7, -19.1, -18.5]
 ];
-const NAV = { G: .2, X0: -13.6, Z0: -9.6, nx: 416, nz: 97, R: .28, blocked: null, version: 0, bootT: performance.now(), entry: { x: 3.7, z: 9.0 } };
+const NAV = { G: .2, X0: -13.6, Z0: -24.6, nx: 416, nz: 172, R: .28, blocked: null, version: 0, bootT: performance.now(), entry: { x: 3.7, z: 9.0 } };
 function navBuild(){
   const { G, X0, Z0, nx, nz, R } = NAV;
   const b = new Uint8Array(nx * nz);
@@ -4502,7 +4592,7 @@ function navBuild(){
   agent3d.forEach(rec => { const p = rec.group.position; rects.push([p.x - .85, p.x + .85, p.z - .525, p.z + .525]); });
   rects.push([-1.7, 1.7, -7.3, -5.7], [8.7, 11.3, -8.8, -7.6], [-13.35, -11.45, 8.375, 9.425],
              [-12.25, -7.75, -7.9, -6.1], [12.4, 13.4, 4, 9.2], [-13.75, -12.85, 0, 3.2]);
-  const circles = [[9.2, 6, .85], [9.2, 8.2, .85], [0, 9.1, .7], [-6, 8.6, .75], [6, 8.6, .75]];
+  const circles = [[9.2, 6, .85], [9.2, 8.2, .85], [0, 9.1, .7], [-6, 8.6, .75], [6, 8.6, .75], [4.5, -20.3, .7]];
   for(let k = 0; k < nz; k++){
     const z = Z0 + k * G;
     for(let i = 0; i < nx; i++){
@@ -4673,7 +4763,7 @@ function sync3D(){
       if(rec.bossFlag !== isBoss){
         rec.bossFlag = isBoss;
         if(rec.label.material.map) rec.label.material.map.dispose();
-        const nl = makeLabel(a.name, (a.role || "polyvalent") + (isBoss ? " · sous-patron" : ""));
+        const nl = makeBadge(a.name, (a.role || "polyvalent") + (isBoss ? " · sous-patron" : ""));
         rec.label.material.map = nl.material.map;
         rec.label.material.needsUpdate = true;
       }
@@ -4683,7 +4773,7 @@ function sync3D(){
     group.position.set(x, 0, z);
     group.traverse(o => o.userData.agentId = a.id);
     const isBossNew = (state.groups || []).some(g => g.boss === a.id);
-    const label = makeLabel(a.name, (a.role || "polyvalent") + (isBossNew ? " · sous-patron" : ""));
+    const label = makeBadge(a.name, (a.role || "polyvalent") + (isBossNew ? " · sous-patron" : ""));
     label.position.set(x, 2.35, z);
     const char = makeCharacter(0x333a2a);
     /* recrue arrivée après le chargement : elle entre par le couloir et marche jusqu'à son bureau */
