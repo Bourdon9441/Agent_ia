@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261117-2145">
+<meta name="build" content="b-20261117-2230">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -620,8 +620,18 @@
       <div id="teamsBox" style="margin-top:14px;"></div>
     </div>
     <div class="pcpane" id="pane-salles" style="display:none;">
-      <div class="hint">Placez vos employés dans les 7 salles (5 dans le couloir + 2 bâtiments séparés au sud) et renommez-les : les panneaux au-dessus de chaque entrée se mettent à jour tout seuls.</div>
+      <div class="hint">Placez vos employés dans les 6 salles (5 dans le couloir + le bureau des clients dans le grand bâtiment au sud) et renommez-les : les panneaux au-dessus de chaque entrée se mettent à jour tout seuls.</div>
       <div id="sallesBox" style="margin-top:12px;"></div>
+    </div>
+    <div class="pcpane" id="pane-clients" style="display:none;">
+      <label>Bureau des clients — gérez vos clients</label>
+      <div class="row">
+        <input type="text" id="clientName" placeholder="Nom du client (ex : Boulangerie Dupont)">
+        <input type="text" id="clientNote" placeholder="Note (ex : site à refaire)">
+        <button class="btn" id="clientAdd" style="flex:0 0 auto;">Ajouter</button>
+      </div>
+      <div id="clientsBox" style="margin-top:14px;"></div>
+      <div class="hint" style="margin-top:10px;">Vos clients sont sauvegardés avec votre espace et synchronisés avec votre compte. Depuis le jeu : grand bâtiment à étage au sud → borne GESTION DES CLIENTS (E ou clic).</div>
     </div>
     <div class="pcpane" id="pane-notes" style="display:none;">
       <label>Notes pour moi — votre pense-bête personnel</label>
@@ -816,13 +826,14 @@ function scopeKey(){
 }
 function freshState(){
   return { agents: [], mission: "", backlog: [], autonomous: false, speed: 1, doneCount: 0,
-           activity: [], results: [], chat: [], sites: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], files: [], templates: [], roomNames: {}, drhAuto: false, coffeeClosed: false, liveMeeting: null, liveInterview: null, meta: { syncedAt: null } };
+           activity: [], results: [], chat: [], sites: [], clients: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], files: [], templates: [], roomNames: {}, drhAuto: false, coffeeClosed: false, liveMeeting: null, liveInterview: null, meta: { syncedAt: null } };
 }
 let state = freshState();
 const PERSONAS = ["efficace et direct, va droit au but", "créatif et imaginatif, propose toujours une idée en plus", "rigoureux et méthodique, ne laisse rien au hasard", "enthousiaste et positif, motive l\u2019équipe", "pédagogue et clair, explique simplement", "analytique et critique, questionne chaque choix", "chaleureux et diplomate, apaise les tensions", "pragmatique et orienté résultats, livre vite", "perfectionniste du détail, soigne la finition", "curieux et explorateur, teste de nouvelles approches", "calme et fiable, garde son sang-froid sous pression", "proactif et autonome, anticipe les besoins", "minutieux et organisé, structure tout en listes", "audacieux et ambitieux, vise toujours plus haut", "patient et à l\u2019écoute, reformule avant d\u2019agir", "énergique et rapide, préfère itérer vite"];
 function ensurePersonas(){
   state.agents.forEach((a, i) => { if(!a.persona) a.persona = PERSONAS[i % PERSONAS.length]; });
   if(!state.sites) state.sites = [];
+  if(!state.clients) state.clients = [];
   if(!state.scheduled) state.scheduled = [];
   if(!state.meetings) state.meetings = [];
   if(!state.groups) state.groups = [];
@@ -1548,7 +1559,7 @@ async function pullRemote(force){
     if(data && data.data){
       const remoteNewer = !state.meta.syncedAt || (data.updated_at > state.meta.syncedAt);
       if((remoteNewer && !pendingLocal) || force){
-        const keep = { results: state.results, chat: state.chat, sites: state.sites, scheduled: state.scheduled, meetings: state.meetings, groups: state.groups, skills: state.skills, notes: state.notes, connectors: state.connectors, assistantChat: state.assistantChat, drhAuto: state.drhAuto, liveMeeting: state.liveMeeting, liveInterview: state.liveInterview, apiStats: state.apiStats };
+        const keep = { results: state.results, chat: state.chat, sites: state.sites, clients: state.clients, scheduled: state.scheduled, meetings: state.meetings, groups: state.groups, skills: state.skills, notes: state.notes, connectors: state.connectors, assistantChat: state.assistantChat, drhAuto: state.drhAuto, liveMeeting: state.liveMeeting, liveInterview: state.liveInterview, apiStats: state.apiStats };
         state = Object.assign(freshState(), data.data, keep, { meta: { syncedAt: data.updated_at } });
         ["groups", "skills", "notes"].forEach(k => { if(Array.isArray(data.data[k])) state[k] = data.data[k]; });
         ensurePersonas();
@@ -2217,6 +2228,7 @@ const PC_TABS = [
   { id: "reunion", label: "Réunion", icon: "clock" },
   { id: "teams", label: "Équipes", icon: "user" },
   { id: "salles", label: "Salles", icon: "list" },
+  { id: "clients", label: "Clients", icon: "user" },
   { id: "chat", label: "Conversations", icon: "text-bubble" },
   { id: "hr", label: "DRH", icon: "user" },
   { id: "servers", label: "Serveurs", icon: "code" },
@@ -2235,7 +2247,7 @@ function initPcTabs(){
 initPcTabs();
 function switchPcTab(name){
   document.querySelectorAll("#pcTabs .tab").forEach(t => t.classList.toggle("on", t.dataset.tab === name));
-  for(const id of ["dash", "files", "tasks", "reunion", "teams", "salles", "chat", "hr", "servers", "notes", "assistant", "conn", "settings"]){
+  for(const id of ["dash", "files", "tasks", "reunion", "teams", "salles", "clients", "chat", "hr", "servers", "notes", "assistant", "conn", "settings"]){
     document.getElementById("pane-" + id).style.display = id === name ? "" : "none";
   }
   if(name === "dash") renderDash();
@@ -2247,6 +2259,7 @@ function switchPcTab(name){
   if(name === "servers") renderPcServers();
   if(name === "teams") renderTeams();
   if(name === "salles") renderSalles();
+  if(name === "clients") renderClients();
   if(name === "notes") renderNotes();
   if(name === "assistant") renderPcAssistant();
   if(name === "conn") renderConnectors();
@@ -3486,7 +3499,7 @@ function renderSalles(){
   if(!box) return;
   if(!state.roomNames) state.roomNames = {};
   let h = "";
-  for(let i = 0; i < 7; i++){
+  for(let i = 0; i < 6; i++){
     const members = state.agents.filter(a => a.room === i);
     h += '<div class="hrrow" style="flex-wrap:wrap;"><div style="min-width:200px;"><div class="hrname">' + icon("list") + " " + esc(roomName(i)) + '</div>' +
       '<input type="text" class="roomName" data-i="' + i + '" value="' + esc(roomName(i)) + '" maxlength="24" style="margin-top:6px;">' +
@@ -3519,6 +3532,34 @@ function renderSalles(){
     sync3D(); save(); renderSalles();
   }));
 }
+
+/* ================= clients ================= */
+function renderClients(){
+  const box = document.getElementById("clientsBox");
+  if(!box) return;
+  if(!(state.clients || []).length){
+    box.innerHTML = '<div class="hint">Aucun client. Ajoutez vos clients ici : ils sont sauvegardés avec votre espace (et synchronisés avec votre compte).</div>';
+    return;
+  }
+  box.innerHTML = state.clients.map((c, i) =>
+    '<div class="hrrow" style="flex-wrap:wrap;"><div style="min-width:200px;"><div class="hrname">' + icon("user") + " " + esc(c.name) + '</div><div class="hrole">' + esc(c.note || "") + (c.addedAt ? " · ajouté le " + esc(c.addedAt) : "") + '</div></div>' +
+    '<button class="iconbtn clientDel" data-i="' + i + '" title="Supprimer">' + icon("trash") + '</button></div>'
+  ).join("");
+  box.querySelectorAll(".clientDel").forEach(b => b.addEventListener("click", ()=>{
+    state.clients.splice(+b.dataset.i, 1);
+    save(); renderClients();
+  }));
+}
+document.getElementById("clientAdd").addEventListener("click", ()=>{
+  const n = document.getElementById("clientName");
+  const note = document.getElementById("clientNote");
+  const name = n.value.trim();
+  if(!name) return;
+  state.clients.push({ name: name.slice(0, 60), note: note.value.trim().slice(0, 200), addedAt: new Date().toLocaleDateString("fr-FR") });
+  n.value = ""; note.value = "";
+  logGlobal("Nouveau client enregistré : <b>" + esc(name) + "</b>.", "Système");
+  save(); renderClients();
+});
 
 /* ================= notes pour moi ================= */
 function renderNotes(){
@@ -3740,7 +3781,7 @@ let laptopOn = 0;
 let setLaptopPocket = () => {};
 let setLaptopSpot = () => {};
 const LAPTOP_SPOTS = [{ x: 0, z: 9.1 }, { x: -6, z: 8.6 }, { x: 6, z: 8.6 }, { x: -10.5, z: -22.3 }];
-function roomName(i){ return (state.roomNames && state.roomNames[i]) || (i === 0 ? "Administration" : "Salle " + (i + 1)); }
+function roomName(i){ return (state.roomNames && state.roomNames[i]) || (i === 0 ? "Administration" : i === 5 ? "Bureau des clients" : "Salle " + (i + 1)); }
 let nearTarget = null;
 const fpsPromptEl = document.getElementById("fpsPrompt");
 const fpsCrossEl = document.getElementById("fpsCross");
@@ -3768,6 +3809,8 @@ function interactNear(){
     if(state.liveMeeting) openMeetOverlay(); else openPc("reunion");
   } else if(nt.type === "tni"){
     openPc("dash");
+  } else if(nt.type === "clients"){
+    openPc("clients");
   } else if(nt.type === "convoquer"){
     if(state.liveInterview) openIvOverlay(); else openIvPick();
   } else if(nt.type === "laptop"){
@@ -3800,7 +3843,8 @@ function checkNear(){
   consider(-10, -7, 3.2, { type: "reunion", label: state.liveMeeting ? "Reprendre la réunion en cours (E)" : "Salle de réunion — convoquer une réunion" });
   consider(0, -20.4, 2.8, { type: "pc", label: "Votre PC fixe — tout votre centre de contrôle" });
   consider(-12.6, -17, 2.8, { type: "tni", label: "Tableau numérique interactif — tableau de bord" });
-  consider(3.4, -18.8, 2.2, { type: "convoquer", label: state.liveInterview ? "Reprendre les entretiens en cours (E)" : "Convoquer des agents — ils viennent un par un" });
+  consider(6, 17, 2.6, { type: "clients", label: "Gestion des clients — ajouter, suivre (E)" });
+  consider(-9.5, -12.6, 2.2, { type: "convoquer", label: state.liveInterview ? "Reprendre les entretiens en cours (E)" : "Convoquer des agents — ils viennent un par un" });
   LAPTOP_SPOTS.forEach((sp, i) => {
     const here = laptopOn === i && !laptopPocket;
     consider(sp.x, sp.z, 2.2, { type: "laptop", spot: i, label: here ? "Mettre le PC portable dans la poche — touche P partout" : "Poser le PC portable sur cette table (bouton vert)" });
@@ -4087,10 +4131,8 @@ function init3D(){
   }
   [[-19,-16,1.2,0],[-22,-4,1,1],[-18,7,1.35,2],[-24,16,1.1,3],[-14,26,1.25,1],[-4,29,1,2],[6,28,1.3,0],[16,24,1.05,3],[22,12,1.2,1],[24,7,1,2],[42,7,1.15,0],[60,7,1,3],[74,-4,1.2,1],[22,-16,1.3,2],[36,-14,1,0],[52,-16,1.2,3],[10,-30,1.35,1],[-6,-31,1.1,2],[-20,-28,1,0]].forEach(t => makeTree(t[0], t[1], t[2], t[3]));
   const pathMat = new THREE.MeshStandardMaterial({ color: 0xcfc6b4, roughness: .95 });
-  for(const px of [-7, 7]){
-    const pth = new THREE.Mesh(new THREE.BoxGeometry(2.2, .05, 3.6), pathMat);
-    pth.position.set(px, -.01, 11.6); scene.add(pth);
-  }
+  const pth = new THREE.Mesh(new THREE.BoxGeometry(3, .05, 3.6), pathMat);
+  pth.position.set(0, -.01, 11.6); scene.add(pth);
   }catch(e){ console.warn("extérieur indisponible", e); }
 
   /* salle de réunion (grande, fond gauche) */
@@ -4451,38 +4493,6 @@ function init3D(){
 
   /* bâtiments séparés au sud : deux annexes avec porte coulissante, fenêtre et bureaux assignables (salles 6 et 7) */
   try{
-  const annWallMat = new THREE.MeshStandardMaterial({ color: 0xe8e2d2, roughness: 1 });
-  function annexBuilding(cx, ri){
-    const fl = new THREE.Mesh(new THREE.BoxGeometry(10, .2, 10), new THREE.MeshStandardMaterial({ map: makePlanks(), roughness: .8 }));
-    fl.position.set(cx, -.1, 18); scene.add(fl);
-    const wN1 = new THREE.Mesh(new THREE.BoxGeometry(4.1, 3.4, .2), annWallMat); wN1.position.set(cx - 2.95, 1.7, 13); scene.add(wN1);
-    const wN2 = wN1.clone(); wN2.position.x = cx + 2.95; scene.add(wN2);
-    const wNL = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.2, .2), annWallMat); wNL.position.set(cx, 2.8, 13); scene.add(wNL);
-    const wS = new THREE.Mesh(new THREE.BoxGeometry(10, 3.4, .2), annWallMat); wS.position.set(cx, 1.7, 23); scene.add(wS);
-    const wW = new THREE.Mesh(new THREE.BoxGeometry(.2, 3.4, 10), annWallMat); wW.position.set(cx - 5, 1.7, 18); scene.add(wW);
-    const wE = wW.clone(); wE.position.x = cx + 5; scene.add(wE);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(10.4, .2, 10.4), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 1 }));
-    roof.position.set(cx, 3.5, 18); scene.add(roof); corCeils.push(roof);
-    const pl = new THREE.PointLight(0xfff4d6, .4, 16);
-    pl.position.set(cx, 2.9, 18); scene.add(pl);
-    for(const [wx, wz, wr] of [[cx, 22.86, Math.PI], [cx - 4.86, 18, -Math.PI / 2], [cx + 4.86, 18, Math.PI / 2]]) addWindow(3.2, 1.7, wx, 1.75, wz, wr);
-    const door = new THREE.Mesh(new THREE.BoxGeometry(1.72, 2.8, .1), doorMat);
-    door.position.set(cx, 1.4, 13.13);
-    door.userData.door = { axis: "x", base: cx, slide: 1.85, cx, cz: 13, t: 0 };
-    scene.add(door); officeDoors.push(door);
-    const pc = document.createElement("canvas"); pc.width = 512; pc.height = 128;
-    const ptex = new THREE.CanvasTexture(pc);
-    const panel = new THREE.Mesh(new THREE.PlaneGeometry(2.7, .67), new THREE.MeshBasicMaterial({ map: ptex, transparent: true, depthWrite: false }));
-    panel.position.set(cx, 2.5, 12.84); panel.rotation.y = Math.PI; scene.add(panel);
-    roomPanels[ri] = pc; roomPanelTex[ri] = ptex;
-    const lbl = makeLabel(roomName(ri), "bâtiment séparé — placez vos employés ici");
-    lbl.position.set(cx, 4.5, 15); scene.add(lbl);
-    roomSprites[ri] = lbl;
-    const pot2 = new THREE.Mesh(new THREE.CylinderGeometry(.3, .22, .5, 10), potMat);
-    pot2.position.set(cx - 4.2, .25, 22.2); scene.add(pot2);
-    const fol2 = new THREE.Mesh(new THREE.ConeGeometry(.5, 1.1, 9), leafMat);
-    fol2.position.set(cx - 4.2, 1.05, 22.2); scene.add(fol2);
-  }
   RX.forEach((rx, i) => {
     const rf = new THREE.Mesh(new THREE.BoxGeometry(8, .2, 7), new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .85 }));
     rf.position.set(rx, -.09, -5.05); scene.add(rf);
@@ -4543,9 +4553,59 @@ function init3D(){
   RX.forEach(rx => addWindow(5.6, 2.4, rx, 1.85, -8.65, Math.PI));
   addWindow(5.6, 2.4, -6, 1.85, -23.88, 0);
   addWindow(5.6, 2.4, 6, 1.85, -23.88, 0);
-  annexBuilding(-7, 5);
-  annexBuilding(7, 6);
-  }catch(e){ console.warn("bâtiments séparés indisponibles", e); }
+  /* grand bâtiment à étage au sud : bureau des clients (gestion des clients) */
+  const bMat = new THREE.MeshStandardMaterial({ color: 0xe8e2d2, roughness: 1 });
+  const bfl = new THREE.Mesh(new THREE.BoxGeometry(22, .2, 14), new THREE.MeshStandardMaterial({ map: makePlanks(), roughness: .8 }));
+  bfl.position.set(0, -.1, 20); scene.add(bfl);
+  const bwn1 = new THREE.Mesh(new THREE.BoxGeometry(10.1, 3.4, .2), bMat); bwn1.position.set(-5.95, 1.7, 13); scene.add(bwn1);
+  const bwn2 = bwn1.clone(); bwn2.position.x = 5.95; scene.add(bwn2);
+  const bwl = new THREE.Mesh(new THREE.BoxGeometry(1.8, .6, .2), bMat); bwl.position.set(0, 3.1, 13); scene.add(bwl);
+  const bws = new THREE.Mesh(new THREE.BoxGeometry(22, 3.4, .2), bMat); bws.position.set(0, 1.7, 27); scene.add(bws);
+  const bww = new THREE.Mesh(new THREE.BoxGeometry(.2, 3.4, 14), bMat); bww.position.set(-11, 1.7, 20); scene.add(bww);
+  const bwe = bww.clone(); bwe.position.x = 11; scene.add(bwe);
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(22.4, .22, 14.4), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 1 }));
+  slab.position.set(0, 3.65, 20); scene.add(slab); corCeils.push(slab);
+  const upN = new THREE.Mesh(new THREE.BoxGeometry(22.4, 3, .2), bMat); upN.position.set(0, 5.25, 13); scene.add(upN); corCeils.push(upN);
+  const upS = upN.clone(); upS.position.z = 27; scene.add(upS); corCeils.push(upS);
+  const upW = new THREE.Mesh(new THREE.BoxGeometry(.2, 3, 14.4), bMat); upW.position.set(-11.2, 5.25, 20); scene.add(upW); corCeils.push(upW);
+  const upE = upW.clone(); upE.position.x = 11.2; scene.add(upE); corCeils.push(upE);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(23, .24, 15), new THREE.MeshStandardMaterial({ color: 0xded8c8, roughness: 1 }));
+  roof.position.set(0, 6.9, 20); scene.add(roof); corCeils.push(roof);
+  for(const wx of [-5.5, 5.5]) addWindow(4.2, 2, wx, 5.3, 12.86, Math.PI);
+  for(const wx of [-5.5, 5.5]) addWindow(4.2, 2, wx, 5.3, 27.14, 0);
+  addWindow(4.6, 2, -11.06, 5.3, 20, -Math.PI / 2);
+  addWindow(4.6, 2, 11.06, 5.3, 20, Math.PI / 2);
+  for(let st = 0; st < 8; st++){
+    const step = new THREE.Mesh(new THREE.BoxGeometry(1.3, .16, .3), new THREE.MeshStandardMaterial({ color: 0xb8ad9c, roughness: .85 }));
+    step.position.set(9.9, .08 + st * .16, 25.4 - st * .3); scene.add(step);
+  }
+  const bpl = new THREE.PointLight(0xfff4d6, .45, 20);
+  bpl.position.set(0, 2.9, 20); scene.add(bpl);
+  const bpl2 = new THREE.PointLight(0xfff4d6, .35, 16);
+  bpl2.position.set(-5.5, 2.9, 18); scene.add(bpl2);
+  const bDoor = new THREE.Mesh(new THREE.BoxGeometry(1.72, 2.8, .1), doorMat);
+  bDoor.position.set(0, 1.4, 13.13);
+  bDoor.userData.door = { axis: "x", base: 0, slide: 1.85, cx: 0, cz: 13, t: 0 };
+  scene.add(bDoor); officeDoors.push(bDoor);
+  const bPanel = document.createElement("canvas"); bPanel.width = 512; bPanel.height = 128;
+  const bPanelTex = new THREE.CanvasTexture(bPanel);
+  const bPanelMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.7, .67), new THREE.MeshBasicMaterial({ map: bPanelTex, transparent: true, depthWrite: false }));
+  bPanelMesh.position.set(0, 2.5, 12.84); bPanelMesh.rotation.y = Math.PI; scene.add(bPanelMesh);
+  roomPanels[5] = bPanel; roomPanelTex[5] = bPanelTex;
+  const bLbl = makeLabel(roomName(5), "grand bâtiment à étage — gestion des clients");
+  bLbl.position.set(0, 4.6, 12.4); scene.add(bLbl);
+  roomSprites[5] = bLbl;
+  const cliDesk = makeDeskGroup({ w: 2.6, d: 1.2, sw: 1.6, sh: .8, screen: 0xc6f542, glow: .5, wood: 0xd6cfc0 });
+  cliDesk.position.set(6, 0, 17);
+  cliDesk.traverse(o => o.userData.clients = true);
+  scene.add(cliDesk);
+  const cliLbl = makeLabel("GESTION DES CLIENTS", "ajoutez et suivez vos clients — E ou clic");
+  cliLbl.position.set(6, 2.6, 17); scene.add(cliLbl);
+  const pot3 = new THREE.Mesh(new THREE.CylinderGeometry(.3, .22, .5, 10), potMat);
+  pot3.position.set(-10.2, .25, 25.8); scene.add(pot3);
+  const fol3 = new THREE.Mesh(new THREE.ConeGeometry(.5, 1.1, 9), leafMat);
+  fol3.position.set(-10.2, 1.05, 25.8); scene.add(fol3);
+  }catch(e){ console.warn("bâtiment clients indisponible", e); }
 
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
@@ -4654,6 +4714,7 @@ function init3D(){
       if(u.convoquer){ if(state.liveInterview) openIvOverlay(); else openIvPick(); return; }
       if(u.reunion){ openPc("reunion"); return; }
       if(u.tni){ openPc("dash"); return; }
+      if(u.clients){ openPc("clients"); return; }
       if(u.laptopBtn !== undefined){ setLaptopSpot(u.laptopBtn); return; }
       if(u.laptop){ openPc("notes"); return; }
       if(u.boss){ openBossDlg(); return; }
@@ -4668,7 +4729,7 @@ function init3D(){
   });
 
   function redrawRooms(){
-    for(let i = 0; i < 7; i++){
+    for(let i = 0; i < 6; i++){
       if(roomPanels[i]){
         const g = roomPanels[i].getContext("2d");
         g.clearRect(0, 0, 512, 128);
@@ -4693,6 +4754,7 @@ function init3D(){
   three = { scene, camera, renderer, bossChar, coffeeSlots, limeLight, redrawSign: drawSign, coffeeLabel: machineLabel, corridorStrip, redrawRooms };
   redrawRooms();
   syncCoffeeUI();
+  corCeils.forEach(c => c.visible = false);
   const clock = new THREE.Clock();
   let lastT = performance.now();
   let lastPosSave = 0;
@@ -4719,7 +4781,7 @@ function init3D(){
           const rec = agent3d.get(a.id);
           if(rec) circles.push([rec.group.position.x, rec.group.position.z, 1.05]);
         }
-        circles.push([0, -6.5, 2.1], [-12.4, 8.9, 1.2], [12.9, 5.3, 1.1], [12.9, 7.9, 1.1], [9.2, 6, .95], [9.2, 8.2, .95], [-13.3, 1.6, 1.5], [-10, -7, 2.6], [10, -8, 1.7], [10, -7.3, .55], [0, 9.1, .95], [-6, 8.6, .95], [6, 8.6, .95], [0, -20.4, 2.6], [-12.6, -17, 1.3], [-9.5, -12.6, .7], [-10.5, -22.3, .95], [1.4, -18.6, .6]);
+        circles.push([0, -6.5, 2.1], [-12.4, 8.9, 1.2], [12.9, 5.3, 1.1], [12.9, 7.9, 1.1], [9.2, 6, .95], [9.2, 8.2, .95], [-13.3, 1.6, 1.5], [-10, -7, 2.6], [10, -8, 1.7], [10, -7.3, .55], [0, 9.1, .95], [-6, 8.6, .95], [6, 8.6, .95], [0, -20.4, 2.6], [-12.6, -17, 1.3], [-9.5, -12.6, .7], [-10.5, -22.3, .95], [1.4, -18.6, .6], [6, 17, 1.1], [9.9, 24.5, 1], [-10.2, 25.8, .5]);
         for(const [cx, cz, cr] of circles){
           const dx = fpsState.x - cx, dz = fpsState.z - cz;
           const d = Math.hypot(dx, dz);
@@ -4766,7 +4828,8 @@ function init3D(){
     }
     for(const d of officeDoors){
       const du = d.userData.door;
-      let open = camMode === "fps" && Math.hypot(fpsState.x - du.cx, fpsState.z - du.cz) < 2;
+      let open = Math.hypot(fpsState.x - du.cx, fpsState.z - du.cz) < (camMode === "fps" ? 2 : 2.5);
+      if(!open && camMode !== "fps" && Math.hypot(target.x - du.cx, target.z - du.cz) < 2.5) open = true;
       if(!open){
         for(const a of state.agents){
           const rec = agent3d.get(a.id);
@@ -4844,10 +4907,9 @@ const NAV_WALLS = [
   [-14, 3.1, -10.15, -9.85], [4.9, 14, -10.15, -9.85],
   [-13.2, -12.8, -24, -10], [12.8, 13.2, -24, -10], [-13, 13, -24.15, -23.85],
   [-2.3, 2.3, -21.9, -19.3], [-13.1, -12.4, -18.9, -15.1], [-10.1, -8.9, -12.9, -12.3], [1.1, 1.7, -18.9, -18.3],
-  [-12.15, -11.85, 13, 23], [-2.15, -1.85, 13, 23], [-12, -2, 22.85, 23.15],
-  [-12, -7.9, 12.85, 13.15], [-6.1, -2, 12.85, 13.15],
-  [1.85, 2.15, 13, 23], [11.85, 12.15, 13, 23], [2, 12, 22.85, 23.15],
-  [2, 6.1, 12.85, 13.15], [7.9, 12, 12.85, 13.15]
+  [-11.15, -10.85, 13, 27], [10.85, 11.15, 13, 27], [-11, 11, 26.85, 27.15],
+  [-11, -0.9, 12.85, 13.15], [0.9, 11, 12.85, 13.15],
+  [9.1, 10.6, 22.8, 26.2]
 ];
 const NAV = { G: .2, X0: -13.6, Z0: -24.6, nx: 416, nz: 266, R: .28, blocked: null, version: 0, bootT: performance.now(), entry: { x: 3.7, z: 9.0 } };
 function navBuild(){
@@ -4857,7 +4919,7 @@ function navBuild(){
   agent3d.forEach(rec => { const p = rec.group.position; rects.push([p.x - .85, p.x + .85, p.z - .525, p.z + .525]); });
   rects.push([-1.7, 1.7, -7.3, -5.7], [8.7, 11.3, -8.8, -7.6], [-13.35, -11.45, 8.375, 9.425],
              [-12.25, -7.75, -7.9, -6.1], [12.4, 13.4, 4, 9.2], [-13.75, -12.85, 0, 3.2]);
-  const circles = [[9.2, 6, .85], [9.2, 8.2, .85], [0, 9.1, .7], [-6, 8.6, .75], [6, 8.6, .75], [-10.5, -22.3, .7], [-11.2, 22.2, .45], [2.8, 22.2, .45]];
+  const circles = [[9.2, 6, .85], [9.2, 8.2, .85], [0, 9.1, .7], [-6, 8.6, .75], [6, 8.6, .75], [-10.5, -22.3, .7], [6, 17, .95], [9.9, 24.5, .9], [-10.2, 25.8, .45]];
   for(let k = 0; k < nz; k++){
     const z = Z0 + k * G;
     for(let i = 0; i < nx; i++){
@@ -4975,13 +5037,11 @@ function sync3D(){
   const CX = [5.6, 7.8, 10, 12.2];
   const CZ = [-3.2, -0.8, 1.6];
   CZ.forEach(z => CX.forEach(x => SLOTS.push([x, z])));
-  const roomSlots = [[], [], [], [], [], [], []];
+  const roomSlots = [[], [], [], [], [], []];
   [24, 34, 44, 54, 64].forEach((rx, ri) => {
     [-3, -1.5, 1.5, 3].forEach(dx => { [-2.4, -5.4].forEach(z => roomSlots[ri].push([rx + dx, z])); });
   });
-  [[-7, 5], [7, 6]].forEach(an => {
-    [[-1.5, 16.6], [1.5, 16.6], [-1.5, 19.4], [1.5, 19.4]].forEach(p => roomSlots[an[1]].push([an[0] + p[0], p[1]]));
-  });
+  [[-7, 16.5], [-4, 16.5], [-7, 19.5], [-4, 19.5]].forEach(p => roomSlots[5].push(p));
   /* au-delà de 12 agents : grande zone libre à gauche (rien devant la porte du self) */
   [-0.8, -3, -5.2, -7.4, -9.6].forEach(x => [-1, 1.4, 3.8].forEach(z => SLOTS.push([x, z])));
   const clusters = [];
@@ -5002,11 +5062,11 @@ function sync3D(){
   }
   NAV.version++; NAV.blocked = null;
   const posOf = new Map();
-  const roomUsed = [0, 0, 0, 0, 0, 0, 0];
+  const roomUsed = [0, 0, 0, 0, 0, 0];
   const inRoom = new Set();
   state.agents.forEach(a => {
     const r = a.room;
-    if(Number.isInteger(r) && r >= 0 && r < 7){
+    if(Number.isInteger(r) && r >= 0 && r < 6){
       const s = roomSlots[r][roomUsed[r]];
       if(s){ posOf.set(a.id, s); roomUsed[r]++; inRoom.add(a.id); }
     }
