@@ -568,6 +568,12 @@
       <textarea id="skText" rows="3" placeholder="Instructions précises que l'agent doit suivre..." maxlength="1500"></textarea>
       <button class="btn line wide" id="skAdd" style="margin-top:8px;">Ajouter la skill</button>
       <div id="skList" style="margin-top:10px;"></div>
+      <div class="panel-head" style="margin-top:24px;">Bibliothèque de skills</div>
+      <div class="hint">Des skills prêtes à l’emploi, inspirées des meilleures pratiques (dont les skills officielles de Claude) : choisissez-en une, elle est ajoutée à vos skills personnelles — cochez-la ensuite sur un agent avec le crayon.</div>
+      <div class="row" style="margin-top:10px;">
+        <select id="skLibSelect"></select>
+        <button class="btn" id="skLibAdd" style="flex:0 0 auto;"></button>
+      </div>
     </div>
     <div class="pcpane" id="pane-servers" style="display:none;">
       <label>Salle serveurs — site internet à produire</label>
@@ -740,7 +746,7 @@ function freshState(){
            activity: [], results: [], chat: [], sites: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], files: [], roomNames: {}, drhAuto: false, coffeeClosed: false, meta: { syncedAt: null } };
 }
 let state = freshState();
-const PERSONAS = ["efficace et direct","créatif et imaginatif","rigoureux et méthodique","enthousiaste et positif","pédagogue et clair","analytique et critique","chaleureux et diplomate","pragmatique, orienté résultats"];
+const PERSONAS = ["efficace et direct, va droit au but", "créatif et imaginatif, propose toujours une idée en plus", "rigoureux et méthodique, ne laisse rien au hasard", "enthousiaste et positif, motive l\u2019équipe", "pédagogue et clair, explique simplement", "analytique et critique, questionne chaque choix", "chaleureux et diplomate, apaise les tensions", "pragmatique et orienté résultats, livre vite", "perfectionniste du détail, soigne la finition", "curieux et explorateur, teste de nouvelles approches", "calme et fiable, garde son sang-froid sous pression", "proactif et autonome, anticipe les besoins", "minutieux et organisé, structure tout en listes", "audacieux et ambitieux, vise toujours plus haut", "patient et à l\u2019écoute, reformule avant d\u2019agir", "énergique et rapide, préfère itérer vite"];
 function ensurePersonas(){
   state.agents.forEach((a, i) => { if(!a.persona) a.persona = PERSONAS[i % PERSONAS.length]; });
   if(!state.sites) state.sites = [];
@@ -1016,6 +1022,39 @@ function agentExtras(agent){
   if(sk.length) t += " Tes compétences spécialisées (applique-les dès que la tâche s'y rapporte) : " + sk.map(k => "« " + k.name + " » : " + k.instructions).join(" | ") + ".";
   return t;
 }
+const SKILL_LIBRARY = [
+  ["Documents", "Documents Word (docx)", "Pour créer ou modifier un document Word : structure le contenu en titres hiérarchisés (H1/H2), paragraphes courts, listes à puces et tableaux propres. Commence par un plan, valide-le, puis rédige. Termine par une relecture : orthographe, cohérence des termes, numérotation. Livre le contenu formaté, prêt à coller dans Word."],
+  ["Documents", "Documents PDF", "Pour produire un contenu destiné à un PDF : page de garde (titre, date, auteur), sommaire, sections numérotées, encadrés pour les points clés, et une conclusion actionnable. Reste sobre : une idée par paragraphe, pas de jargon inutile. Indique la mise en page conseillée (marges, police, tailles)."],
+  ["Documents", "Présentations PowerPoint (pptx)", "Pour créer une présentation : max 1 idée par diapositive, titre court et verbe d’action, 5 lignes maximum par diapo, une visualisation (schéma, chiffre, image décrite) par diapo clé. Structure : accroche, problème, solution, preuves, prochaines étapes. Fournis le texte de chaque diapo + les notes de l’orateur."],
+  ["Documents", "Tableurs Excel (xlsx)", "Pour créer un tableau Excel : définis les colonnes et leur format (texte, nombre, date, devise), une ligne d’en-têtes claire, des formules explicites (SOMME, MOYENNE, SI) plutôt que des valeurs en dur, et un exemple de ligne remplie. Propose un graphique adapté (barres pour comparer, courbe pour une évolution, camembert pour des parts)."],
+  ["Design", "Design frontend premium", "Pour toute interface : hiérarchie visuelle claire (une seule action principale par écran), espacements réguliers (échelle 4/8/16/24), max 2 polices et 3 couleurs, contraste suffisant (texte lisible sur fond), états visibles (survol, actif, désactivé). Évite les dégradés gratuits, les cartes inutiles et les animations envahissantes. Justifie chaque choix en une phrase."],
+  ["Design", "Charte graphique (marque)", "Pour appliquer une identité de marque : extrais les couleurs principales (fond, texte, action), la typographie (titres/texte), le ton (sobre, chaleureux, technique…) et les règles à ne jamais violer (logo, marges, interdits). Applique-les de façon cohérente sur TOUS les livrables et signale toute demande qui contredit la charte."],
+  ["Design", "Accessibilité (a11y)", "Pour rendre un site accessible : contrastes conformes (4,5:1 minimum), tailles de clic suffisantes (44px), textes alternatifs sur chaque image, navigation complète au clavier, labels sur chaque champ de formulaire, structure de titres logique (un seul H1). Liste les corrections appliquées une par une."],
+  ["Développement", "Code propre et commenté", "Pour tout code : noms explicites (pas de var1/tmp2), fonctions courtes qui font une seule chose, gestion des erreurs visible pour l’utilisateur (messages clairs, jamais de plantage muet), indentation et style constants. Ajoute un commentaire uniquement là où l’intention n’est pas évidente. Vérifie mentalement chaque chemin d’exécution avant de livrer."],
+  ["Développement", "Tests et QA web", "Pour vérifier un site : parcours l’utilisateur type (arrivée → action principale → résultat), teste sur mobile ET ordinateur, vérifie les formulaires (champs vides, emails invalides), les liens cassés, les images qui ne chargent pas, et la vitesse perçue. Rapporte chaque problème avec : où, quoi, comment reproduire, correction proposée."],
+  ["Développement", "API REST", "Pour concevoir ou intégrer une API : endpoints nommés en ressources (GET /clients, POST /clients), codes HTTP corrects (200 OK, 400 requête invalide, 401 non authentifié, 404 introuvable, 500 erreur serveur), authentification par clé dans l’en-tête (jamais dans l’URL), validation de toutes les entrées, et exemples de requête/réponse pour chaque endpoint."],
+  ["Développement", "Performance web", "Pour accélérer un site : images compressées et dimensionnées, CSS et JS minifiés et chargés en différé, polices limitées (2 max) avec display=swap, pas de bibliothèque lourde pour un besoin simple. Objectif : affichage utile en moins de 2 secondes. Chiffre chaque amélioration proposée."],
+  ["Développement", "Sécurité web", "Pour sécuriser : valider et échapper toutes les entrées utilisateur (anti-injection), ne jamais mettre de clé secrète dans le code côté navigateur, HTTPS obligatoire, mots de passe hashés, messages d’erreur qui ne révèlent rien de technique. Fais une liste des risques classés grave/moyen/faible avec la correction pour chacun."],
+  ["Développement", "Bases de données / SQL", "Pour structurer des données : tables au singulier, une clé primaire par table, relations explicites (un client a plusieurs commandes), pas de donnée répétée (normalisation), index sur les colonnes de recherche. Fournis le schéma + les requêtes principales en SQL lisible, avec un jeu d’exemples."],
+  ["Développement", "MCP et connecteurs", "Pour brancher un outil externe (Gmail, Notion, GitHub…) : identifie le service et l’action exacte, vérifie les permissions nécessaires, prévois l’échec (service indisponible, quota dépassé) avec un message clair, et journalise chaque action (qui, quoi, quand) sans jamais exposer de jeton."],
+  ["Développement", "Publication GitHub Pages", "Pour publier un site : un seul fichier index.html autonome à la racine, chemins relatifs (pas de / absolu), aucune clé API dans le code, teste en local avant d’envoyer. Commit clair en français, puis donne l’URL finale au format https://identifiant.github.io/depot/ et rappelle d’activer Pages si besoin."],
+  ["Recherche", "Recherche web efficace", "Pour toute recherche : décompose la question en sous-questions, croise au moins 2 sources par fait important, note la date de chaque info (privilégie le récent), et distingue clairement les faits vérifiés des estimations. Termine par une synthèse de 5 lignes maximum + les sources."],
+  ["Recherche", "Veille concurrentielle", "Pour analyser un marché : identifie 3 à 5 acteurs principaux, compare offre/prix/points forts/points faibles dans un tableau, repère ce que personne ne fait bien (l’opportunité), et conclus par 3 recommandations concrètes et priorisées."],
+  ["Recherche", "Synthèse de documents", "Pour résumer un texte long : une phrase de contexte, les 3 à 5 points clés (chacun avec son chiffre ou exemple à l’appui), les décisions ou actions demandées, et ce qui reste flou ou manquant. Ne dépasse jamais 10 % de la longueur d’origine. Cite les sections utilisées."],
+  ["Communication", "Écrits professionnels", "Pour tout écrit pro : objet précis en une ligne, une idée par paragraphe, voix active, phrases de moins de 20 mots, zéro jargon. Termine par une action claire (qui fait quoi, pour quand). Relis-toi : supprime chaque mot qui n’apporte rien."],
+  ["Communication", "Emails qui convertissent", "Pour un email important : objet court qui donne la raison d’ouvrir (max 8 mots), première ligne = le bénéfice pour le lecteur, corps en 3 blocs (contexte, proposition, preuve), un seul appel à l’action mis en évidence, signature sobre. Propose 2 variantes d’objet."],
+  ["Communication", "Réseaux sociaux", "Pour un post : accroche dans les 2 premiers mots, un message par post, format adapté à la plateforme (LinkedIn : retour d’expérience chiffré ; X : une idée tranchante ; Instagram : visuel + légende courte), 3 à 5 hashtags pertinents, et une question finale pour lancer les commentaires. Propose toujours 3 versions."],
+  ["Communication", "Comptes-rendus de réunion", "Pour un compte-rendu : participants et date, décisions prises (numérotées), actions avec responsable et échéance (tableau), points en désaccord ou en attente, prochaine étape. Neutre et factuel : jamais d’interprétation, uniquement ce qui a été dit et décidé."],
+  ["Communication", "Support client", "Pour répondre à un client : remercie et reprends sa demande en une phrase (il doit se sentir compris), réponds clairement (oui/non/voilà comment), donne une échéance réaliste, et termine par une ouverture (« puis-je faire autre chose ? »). Si la réponse est négative, propose toujours une alternative."],
+  ["Gestion", "Gestion de projet", "Pour piloter un projet : découpe en étapes livrables (pas en « tâches vagues »), une responsable et une date par étape, jalons de validation clairs, risques identifiés avec plan B. Présente le plan sous forme de tableau et signale immédiatement tout retard avec son impact."],
+  ["Gestion", "Priorisation (impact/effort)", "Pour trier des tâches : note chacune de 1 à 5 en impact (valeur pour l’objectif) et en effort (temps + difficulté). Fais d’abord fort impact/faible effort, planifie fort impact/fort effort, refuse ou délègue faible impact. Présente le résultat en matrice et défends chaque choix en une ligne."],
+  ["Gestion", "Rédaction de cahier des charges", "Pour cadrer un projet : contexte et objectif mesurable, périmètre (ce qui est inclus ET exclu), utilisateurs cibles et leurs besoins, fonctionnalités détaillées par priorité (indispensable / important / plus tard), contraintes techniques et délais, critères de réussite. Chaque exigence doit être vérifiable."],
+  ["Analyse", "Analyse de données", "Pour analyser des chiffres : commence par la question à laquelle on répond, vérifie la qualité des données (valeurs manquantes, incohérences), calcule les indicateurs clés avec leur évolution, distingue corrélation et causalité, et conclus par 3 enseignements actionnables. Présente les chiffres arrondis et lisibles."],
+  ["Analyse", "Audit de code (relecteur)", "Pour relire du code : vérifie d’abord la correction (ça fait ce qui est demandé ?), puis la robustesse (cas limites, erreurs, entrées invalides), puis la lisibilité (noms, structure, doublons), puis la sécurité. Classe chaque remarque : bloquant / important / suggestion. Donne un exemple corrigé pour chaque bloquant."],
+  ["Créatif", "Rédaction storytelling", "Pour raconter (page « à propos », pitch, pub) : structure héros → problème → guide → transformation. Le client est le héros, la marque est le guide. Phrases courtes, images concrètes plutôt qu’abstractions, une émotion par paragraphe. Propose 2 tons différents au choix."],
+  ["Créatif", "Idéation et brainstorming", "Pour générer des idées : produis d’abord 10 idées sans filtre (quantité avant qualité), regroupe-les par thème, sélectionne les 3 plus prometteuses avec pour chacune : ce qu’il faut, le premier pas concret, le principal risque. Interdis-toi de critiquer pendant la phase de production."],
+  ["Créatif", "Traduction et adaptation", "Pour traduire : traduis le sens, pas les mots (adapte les expressions, les unités, les exemples culturels), conserve le ton d’origine (formel, amical, commercial), garde les termes techniques usuels dans la langue cible. Signale les passages ambigus plutôt que d’inventer."]
+];
 function renderSkills(){
   const box = document.getElementById("skList");
   if(!box) return;
@@ -1037,6 +1076,28 @@ function renderSkills(){
     state.agents.forEach(a => { a.skills = (a.skills || []).filter(id => id !== b.dataset.id); });
     renderSkills(); renderHR(); save();
   }));
+  const sel = document.getElementById("skLibSelect");
+  const addBtn = document.getElementById("skLibAdd");
+  if(sel && addBtn && !sel.dataset.ok){
+    sel.dataset.ok = "1";
+    let cat = "", h = "";
+    SKILL_LIBRARY.forEach(k => {
+      if(k[0] !== cat){ cat = k[0]; h += '<optgroup label="' + esc(cat) + '">'; }
+      h += '<option value="' + esc(k[1]) + '">' + esc(k[1]) + '</option>';
+      if(SKILL_LIBRARY.filter(x => x[0] === cat).indexOf(k) === SKILL_LIBRARY.filter(x => x[0] === cat).length - 1) h += '</optgroup>';
+    });
+    sel.innerHTML = h;
+    addBtn.innerHTML = icon("sparkles") + " Ajouter";
+    addBtn.addEventListener("click", ()=>{
+      const name = sel.value;
+      const def = SKILL_LIBRARY.find(x => x[1] === name);
+      if(!def) return;
+      if((state.skills || []).some(x => x.name === def[1])){ logGlobal("La skill « " + esc(def[1]) + " » est déjà dans vos skills.", "Système"); return; }
+      state.skills.push({ id: uid(), name: def[1], instructions: def[2] });
+      logGlobal("Skill « " + esc(def[1]) + " » ajoutée depuis la bibliothèque : cochez-la sur un agent (crayon).", "DRH");
+      renderSkills(); renderHR(); save();
+    });
+  }
 }
 const CODER_RE = /d[ée]velop|codeur|programm|\bcode\b|web|front|back|devops|logiciel/i;
 function isCoder(a){ return CODER_RE.test(a.role || "") && !/v[ée]rificateur|testeur/i.test(a.role || ""); }
