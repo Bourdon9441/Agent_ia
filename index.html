@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261118-0130">
+<meta name="build" content="b-20261118-0200">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -608,6 +608,11 @@
         </div>
       </div>
       <div class="row" style="margin-top:14px;"><button class="btn line" id="srvGh" style="flex:0 0 auto;"></button></div>
+      <label style="margin-top:22px;">Maintenance — disjoncteurs &amp; pannes des PC</label>
+      <div class="row">
+        <button class="btn line" id="brkTest" style="flex:0 0 auto;">Tester les disjoncteurs (déclencher une panne)</button>
+      </div>
+      <div id="pannesBox" style="margin-top:12px;"></div>
       <div class="hint" style="margin-top:12px;">Vos agents construisent un vrai site : architecture, code complet, assistant service client intégré (il discute vraiment, avec votre clé Groq configurée dans le site). Ensuite, demandez des modifications : le Patron les fait appliquer par vos agents.</div>
     </div>
     <div class="pcpane" id="pane-teams" style="display:none;">
@@ -834,7 +839,7 @@ function scopeKey(){
 }
 function freshState(){
   return { agents: [], mission: "", backlog: [], autonomous: false, speed: 1, doneCount: 0,
-           activity: [], results: [], chat: [], sites: [], clients: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], files: [], templates: [], breakers: [true, true, true, true], roomNames: {}, drhAuto: false, coffeeClosed: false, liveMeeting: null, liveInterview: null, meta: { syncedAt: null } };
+           activity: [], results: [], chat: [], sites: [], clients: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], files: [], templates: [], breakers: [true, true, true, true], pcPannes: [], roomNames: {}, drhAuto: false, coffeeClosed: false, liveMeeting: null, liveInterview: null, meta: { syncedAt: null } };
 }
 let state = freshState();
 const PERSONAS = ["efficace et direct, va droit au but", "créatif et imaginatif, propose toujours une idée en plus", "rigoureux et méthodique, ne laisse rien au hasard", "enthousiaste et positif, motive l\u2019équipe", "pédagogue et clair, explique simplement", "analytique et critique, questionne chaque choix", "chaleureux et diplomate, apaise les tensions", "pragmatique et orienté résultats, livre vite", "perfectionniste du détail, soigne la finition", "curieux et explorateur, teste de nouvelles approches", "calme et fiable, garde son sang-froid sous pression", "proactif et autonome, anticipe les besoins", "minutieux et organisé, structure tout en listes", "audacieux et ambitieux, vise toujours plus haut", "patient et à l\u2019écoute, reformule avant d\u2019agir", "énergique et rapide, préfère itérer vite"];
@@ -843,6 +848,7 @@ function ensurePersonas(){
   if(!state.sites) state.sites = [];
   if(!state.clients) state.clients = [];
   if(!state.breakers) state.breakers = [true, true, true, true];
+  if(!state.pcPannes) state.pcPannes = [];
   if(!state.scheduled) state.scheduled = [];
   if(!state.meetings) state.meetings = [];
   if(!state.groups) state.groups = [];
@@ -1568,7 +1574,7 @@ async function pullRemote(force){
     if(data && data.data){
       const remoteNewer = !state.meta.syncedAt || (data.updated_at > state.meta.syncedAt);
       if((remoteNewer && !pendingLocal) || force){
-        const keep = { results: state.results, chat: state.chat, sites: state.sites, clients: state.clients, breakers: state.breakers, scheduled: state.scheduled, meetings: state.meetings, groups: state.groups, skills: state.skills, notes: state.notes, connectors: state.connectors, assistantChat: state.assistantChat, drhAuto: state.drhAuto, liveMeeting: state.liveMeeting, liveInterview: state.liveInterview, apiStats: state.apiStats };
+        const keep = { results: state.results, chat: state.chat, sites: state.sites, clients: state.clients, breakers: state.breakers, pcPannes: state.pcPannes, scheduled: state.scheduled, meetings: state.meetings, groups: state.groups, skills: state.skills, notes: state.notes, connectors: state.connectors, assistantChat: state.assistantChat, drhAuto: state.drhAuto, liveMeeting: state.liveMeeting, liveInterview: state.liveInterview, apiStats: state.apiStats };
         state = Object.assign(freshState(), data.data, keep, { meta: { syncedAt: data.updated_at } });
         ["groups", "skills", "notes"].forEach(k => { if(Array.isArray(data.data[k])) state[k] = data.data[k]; });
         ensurePersonas();
@@ -2269,6 +2275,7 @@ function switchPcTab(name){
   if(name === "teams") renderTeams();
   if(name === "salles") renderSalles();
   if(name === "clients") renderClients();
+  if(name === "servers") renderPannes();
   if(name === "notes") renderNotes();
   if(name === "assistant") renderPcAssistant();
   if(name === "conn") renderConnectors();
@@ -3597,6 +3604,27 @@ function openBreakers(){
 }
 document.getElementById("brkClose").innerHTML = icon("cross");
 document.getElementById("brkClose").addEventListener("click", ()=> document.getElementById("brkOverlay").classList.remove("show"));
+function renderPannes(){
+  const box = document.getElementById("pannesBox");
+  if(!box) return;
+  const list = state.pcPannes || [];
+  if(!list.length){
+    box.innerHTML = '<div class="hint">Aucune panne en cours. Le technicien surveille les disjoncteurs et les PC du bâtiment.</div>';
+    return;
+  }
+  box.innerHTML = list.slice(-8).reverse().map(p =>
+    '<div class="hrrow"><div><div class="hrname">' + icon("gears") + " PC de " + esc(p.agent) + '</div><div class="hrole">' +
+    esc(p.type) + " · " + esc(p.at) + " · " + (p.fixed ? "réparé par le technicien" : "en panne — le technicien intervient") + '</div></div></div>'
+  ).join("");
+}
+document.getElementById("brkTest").addEventListener("click", ()=>{
+  const i = Math.floor(Math.random() * 4);
+  state.breakers[i] = false;
+  trippedByEvent.add(i);
+  logGlobal("🧪 Test : le disjoncteur « " + BRK_NAMES[i] + " » a été déclenché — au travail, technicien.", "Système");
+  if(three && three.applyBreakers) three.applyBreakers();
+  save();
+});
 
 /* ================= notes pour moi ================= */
 function renderNotes(){
@@ -3842,8 +3870,7 @@ function setBLevel(l){
 const trippedByEvent = new Set();
 setInterval(() => {
   const br = state.breakers || [true, true, true, true];
-  if(!br[0]) return;
-  if(Math.random() < .04){
+  if(br[0] && Math.random() < .04){
     const i = Math.floor(Math.random() * 4);
     state.breakers[i] = false;
     trippedByEvent.add(i);
@@ -3851,21 +3878,51 @@ setInterval(() => {
     if(three && three.applyBreakers) three.applyBreakers();
     save();
   }
+  if(Math.random() < .06 && (state.agents || []).length){
+    const a = state.agents[Math.floor(Math.random() * state.agents.length)];
+    const cplx = Math.random() < .45;
+    state.pcPannes.push({ id: uid(), agent: a.name, at: new Date().toLocaleTimeString("fr-FR"), type: cplx ? "complexe" : "simple", detail: cplx ? "système corrompu, pilotes en échec" : "alimentation défaillante", fixed: false });
+    logGlobal("💻 Panne sur le PC de <b>" + esc(a.name) + "</b> — le technicien intervient.", "Système");
+    save(); renderPannes();
+  }
 }, 40000);
+let techBusy = false;
 setInterval(() => {
-  if(!trippedByEvent.size) return;
-  let fixed = false;
-  for(const i of Array.from(trippedByEvent)){
-    trippedByEvent.delete(i);
-    if(!state.breakers || state.breakers[i]) continue;
-    state.breakers[i] = true;
-    fixed = true;
-    logGlobal("🔧 Le technicien a réenclenché « " + BRK_NAMES[i] + " »" + (i === 0 ? " — courant rétabli, les PC redémarrent." : "."), "Technicien");
+  let acted = false;
+  if(trippedByEvent.size){
+    for(const i of Array.from(trippedByEvent)){
+      trippedByEvent.delete(i);
+      if(!state.breakers || state.breakers[i]) continue;
+      state.breakers[i] = true;
+      acted = true;
+      logGlobal("🔧 Le technicien a réenclenché « " + BRK_NAMES[i] + " »" + (i === 0 ? " — courant rétabli, les PC redémarrent." : "."), "Technicien");
+    }
+    if(acted && three && three.applyBreakers) three.applyBreakers();
   }
-  if(fixed){
-    if(three && three.applyBreakers) three.applyBreakers();
-    save();
+  const pannes = state.pcPannes || [];
+  for(const p of pannes.filter(x => !x.fixed && x.type === "simple")){
+    p.fixed = true;
+    logGlobal("🔧 Le technicien a réparé le PC de <b>" + esc(p.agent) + "</b> (panne simple).", "Technicien");
+    acted = true;
   }
+  const cplx = pannes.find(x => !x.fixed && x.type === "complexe");
+  if(cplx && !techBusy){
+    techBusy = true;
+    callLLM([
+      { role: "system", content: "Tu es un technicien informatique expert. Réponds en français, en deux phrases maximum : diagnostic probable puis correction appliquée." },
+      { role: "user", content: "Le PC du poste de " + cplx.agent + " est en panne logicielle complexe (" + cplx.detail + "). Diagnostique et corrige." }
+    ], 150).then(txt => {
+      cplx.fixed = true;
+      logGlobal("🤖 Le technicien a corrigé le PC de <b>" + esc(cplx.agent) + "</b> avec l'IA : " + esc(String(txt).slice(0, 180)), "Technicien");
+      save(); renderPannes();
+    }).catch(() => {
+      cplx.fixed = true;
+      logGlobal("🔧 Le technicien a réparé le PC de <b>" + esc(cplx.agent) + "</b> à la main (IA indisponible).", "Technicien");
+      save(); renderPannes();
+    }).finally(() => { techBusy = false; });
+    acted = true;
+  }
+  if(acted){ save(); renderPannes(); }
 }, 7000);
 let camMode = "orbit";
 let overviewMode = false;
