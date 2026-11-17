@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261117-1945">
+<meta name="build" content="b-20261117-2030">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -620,7 +620,7 @@
       <div id="teamsBox" style="margin-top:14px;"></div>
     </div>
     <div class="pcpane" id="pane-salles" style="display:none;">
-      <div class="hint">Placez vos employés dans les 5 salles du couloir et renommez-les : les panneaux au-dessus de chaque entrée se mettent à jour tout seuls.</div>
+      <div class="hint">Placez vos employés dans les 7 salles (5 dans le couloir + 2 bâtiments séparés au sud) et renommez-les : les panneaux au-dessus de chaque entrée se mettent à jour tout seuls.</div>
       <div id="sallesBox" style="margin-top:12px;"></div>
     </div>
     <div class="pcpane" id="pane-notes" style="display:none;">
@@ -3486,7 +3486,7 @@ function renderSalles(){
   if(!box) return;
   if(!state.roomNames) state.roomNames = {};
   let h = "";
-  for(let i = 0; i < 5; i++){
+  for(let i = 0; i < 7; i++){
     const members = state.agents.filter(a => a.room === i);
     h += '<div class="hrrow" style="flex-wrap:wrap;"><div style="min-width:200px;"><div class="hrname">' + icon("list") + " " + esc(roomName(i)) + '</div>' +
       '<input type="text" class="roomName" data-i="' + i + '" value="' + esc(roomName(i)) + '" maxlength="24" style="margin-top:6px;">' +
@@ -3739,7 +3739,7 @@ let laptopPocket = false;
 let laptopOn = 0;
 let setLaptopPocket = () => {};
 let setLaptopSpot = () => {};
-const LAPTOP_SPOTS = [{ x: 0, z: 9.1 }, { x: -6, z: 8.6 }, { x: 6, z: 8.6 }, { x: 4.5, z: -20.3 }];
+const LAPTOP_SPOTS = [{ x: 0, z: 9.1 }, { x: -6, z: 8.6 }, { x: 6, z: 8.6 }, { x: -10.5, z: -22.3 }];
 function roomName(i){ return (state.roomNames && state.roomNames[i]) || (i === 0 ? "Administration" : "Salle " + (i + 1)); }
 let nearTarget = null;
 const fpsPromptEl = document.getElementById("fpsPrompt");
@@ -3929,7 +3929,7 @@ function init3D(){
   wrap.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0d0e0d);
-  const camera = new THREE.PerspectiveCamera(50, W()/H(), .1, 220);
+  const camera = new THREE.PerspectiveCamera(50, W()/H(), .1, 420);
   let az = -.55, pol = 1.08, dist = 24;
   let lastFollowX = null, lastFollowZ = null;
   const target = new THREE.Vector3(0, .6, 0);
@@ -4051,6 +4051,33 @@ function init3D(){
   }
   const rug = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 2.7, .03, 26), new THREE.MeshStandardMaterial({ color: 0xaaa497, roughness: 1 }));
   rug.position.set(0, .03, -6.5); scene.add(rug);
+
+  /* extérieur : grande pelouse, cercle de vert sous le bâtiment principal et arbres */
+  const grass = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: 0x55743f, roughness: 1 }));
+  grass.rotation.x = -Math.PI / 2; grass.position.set(28, -.06, 0); scene.add(grass);
+  const lawn = new THREE.Mesh(new THREE.CylinderGeometry(34, 34, .04, 48), new THREE.MeshStandardMaterial({ color: 0x6d9450, roughness: 1 }));
+  lawn.position.set(0, -.03, -7); scene.add(lawn);
+  function makeTree(x, z, sc, ci){
+    const g = new THREE.Group();
+    const trunkH = 1.7 * sc;
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.13 * sc, .2 * sc, trunkH, 8), new THREE.MeshStandardMaterial({ color: 0x5c4630, roughness: .95 }));
+    trunk.position.y = trunkH / 2; g.add(trunk);
+    const greens = [0x4e7a3f, 0x5f8a55, 0x6f9a52, 0x44683a];
+    let fy = trunkH + .55 * sc;
+    for(let i = 0; i < 3; i++){
+      const cone = new THREE.Mesh(new THREE.ConeGeometry((1.2 - i * .3) * sc, 1.5 * sc, 9), new THREE.MeshStandardMaterial({ color: greens[(ci + i) % greens.length], roughness: .95 }));
+      cone.position.y = fy; g.add(cone);
+      fy += .8 * sc;
+    }
+    g.position.set(x, 0, z);
+    scene.add(g);
+  }
+  [[-19,-16,1.2,0],[-22,-4,1,1],[-18,7,1.35,2],[-24,16,1.1,3],[-14,26,1.25,1],[-4,29,1,2],[6,28,1.3,0],[16,24,1.05,3],[22,12,1.2,1],[24,7,1,2],[42,7,1.15,0],[60,7,1,3],[74,-4,1.2,1],[22,-16,1.3,2],[36,-14,1,0],[52,-16,1.2,3],[10,-30,1.35,1],[-6,-31,1.1,2],[-20,-28,1,0]].forEach(t => makeTree(t[0], t[1], t[2], t[3]));
+  const pathMat = new THREE.MeshStandardMaterial({ color: 0xcfc6b4, roughness: .95 });
+  for(const px of [-7, 7]){
+    const pth = new THREE.Mesh(new THREE.BoxGeometry(2.2, .05, 3.6), pathMat);
+    pth.position.set(px, -.01, 11.6); scene.add(pth);
+  }
 
   /* salle de réunion (grande, fond gauche) */
   const inWallMat = new THREE.MeshStandardMaterial({ color: 0xeae7df, roughness: 1 });
@@ -4395,11 +4422,11 @@ function init3D(){
   const tniLabel = makeLabel("TABLEAU NUMÉRIQUE", "tableau de bord en direct — E ou clic");
   tniLabel.position.set(-12.6, 3.5, -17); scene.add(tniLabel);
   const conv = new THREE.Mesh(new THREE.CylinderGeometry(.3, .38, 1.05, 12), new THREE.MeshStandardMaterial({ color: 0x191d15, roughness: .6 }));
-  conv.position.set(3.4, .52, -18.8); conv.userData.convoquer = true; scene.add(conv);
+  conv.position.set(-9.5, .52, -12.6); conv.userData.convoquer = true; scene.add(conv);
   const convBtn = new THREE.Mesh(new THREE.CylinderGeometry(.17, .17, .07, 12), new THREE.MeshStandardMaterial({ color: 0xc6f542, emissive: 0xc6f542, emissiveIntensity: .6, roughness: .4 }));
-  convBtn.position.set(3.4, 1.08, -18.8); convBtn.userData.convoquer = true; scene.add(convBtn);
+  convBtn.position.set(-9.5, 1.08, -12.6); convBtn.userData.convoquer = true; scene.add(convBtn);
   const convLabel = makeLabel("CONVOQUER", "ils viennent un par un — E ou clic");
-  convLabel.position.set(3.4, 2.2, -18.8); scene.add(convLabel);
+  convLabel.position.set(-9.5, 2.2, -12.6); scene.add(convLabel);
   const bossDoor = new THREE.Mesh(new THREE.BoxGeometry(1.72, 2.8, .12), doorMat);
   bossDoor.position.set(4, 1.4, -9.87);
   bossDoor.userData.door = { axis: "x", base: 4, slide: 1.85, cx: 4, cz: -10, t: 0 };
@@ -4407,6 +4434,42 @@ function init3D(){
   const officeSign = makeLabel("VOTRE BUREAU", "salle privée du patron");
   officeSign.position.set(4, 3.4, -9.4); scene.add(officeSign);
   const roomSprites = [], roomPanels = [], roomPanelTex = [];
+
+  /* bâtiments séparés au sud : deux annexes avec porte coulissante, fenêtre et bureaux assignables (salles 6 et 7) */
+  const annWallMat = new THREE.MeshStandardMaterial({ color: 0xe8e2d2, roughness: 1 });
+  function annexBuilding(cx, ri){
+    const fl = new THREE.Mesh(new THREE.BoxGeometry(10, .2, 10), new THREE.MeshStandardMaterial({ map: makePlanks(), roughness: .8 }));
+    fl.position.set(cx, -.1, 18); scene.add(fl);
+    const wN1 = new THREE.Mesh(new THREE.BoxGeometry(4.1, 3.4, .2), annWallMat); wN1.position.set(cx - 2.95, 1.7, 13); scene.add(wN1);
+    const wN2 = wN1.clone(); wN2.position.x = cx + 2.95; scene.add(wN2);
+    const wNL = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.2, .2), annWallMat); wNL.position.set(cx, 2.8, 13); scene.add(wNL);
+    const wS = new THREE.Mesh(new THREE.BoxGeometry(10, 3.4, .2), annWallMat); wS.position.set(cx, 1.7, 23); scene.add(wS);
+    const wW = new THREE.Mesh(new THREE.BoxGeometry(.2, 3.4, 10), annWallMat); wW.position.set(cx - 5, 1.7, 18); scene.add(wW);
+    const wE = wW.clone(); wE.position.x = cx + 5; scene.add(wE);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(10.4, .2, 10.4), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 1 }));
+    roof.position.set(cx, 3.5, 18); scene.add(roof); corCeils.push(roof);
+    const pl = new THREE.PointLight(0xfff4d6, .4, 16);
+    pl.position.set(cx, 2.9, 18); scene.add(pl);
+    for(const [wx, wz, wr] of [[cx, 22.86, Math.PI], [cx - 4.86, 18, -Math.PI / 2], [cx + 4.86, 18, Math.PI / 2]]) addWindow(3.2, 1.7, wx, 1.75, wz, wr);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.72, 2.8, .1), doorMat);
+    door.position.set(cx, 1.4, 13.13);
+    door.userData.door = { axis: "x", base: cx, slide: 1.85, cx, cz: 13, t: 0 };
+    scene.add(door); officeDoors.push(door);
+    const pc = document.createElement("canvas"); pc.width = 512; pc.height = 128;
+    const ptex = new THREE.CanvasTexture(pc);
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(2.7, .67), new THREE.MeshBasicMaterial({ map: ptex, transparent: true, depthWrite: false }));
+    panel.position.set(cx, 2.5, 12.84); panel.rotation.y = Math.PI; scene.add(panel);
+    roomPanels[ri] = pc; roomPanelTex[ri] = ptex;
+    const lbl = makeLabel(roomName(ri), "bâtiment séparé — placez vos employés ici");
+    lbl.position.set(cx, 4.5, 15); scene.add(lbl);
+    roomSprites[ri] = lbl;
+    const pot2 = new THREE.Mesh(new THREE.CylinderGeometry(.3, .22, .5, 10), potMat);
+    pot2.position.set(cx - 4.2, .25, 22.2); scene.add(pot2);
+    const fol2 = new THREE.Mesh(new THREE.ConeGeometry(.5, 1.1, 9), leafMat);
+    fol2.position.set(cx - 4.2, 1.05, 22.2); scene.add(fol2);
+  }
+  annexBuilding(-7, 5);
+  annexBuilding(7, 6);
   RX.forEach((rx, i) => {
     const rf = new THREE.Mesh(new THREE.BoxGeometry(8, .2, 7), new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .85 }));
     rf.position.set(rx, -.09, -5.05); scene.add(rf);
@@ -4486,7 +4549,7 @@ function init3D(){
         const sp = JSON.parse(localStorage.getItem("ac_pos") || "null");
         if(sp && isFinite(sp.x) && isFinite(sp.z)){
           px = Math.min(68.4, Math.max(-13.4, sp.x));
-          pz = Math.min(9.4, Math.max(-23.4, sp.z));
+          pz = Math.min(27.4, Math.max(-23.4, sp.z));
           pyaw = sp.yaw || 0; ppitch = sp.pitch || 0;
         }
       }catch(err){}
@@ -4534,7 +4597,7 @@ function init3D(){
       target.x += (-dx * c - dy * sn) * s2;
       target.z += (dx * sn - dy * c) * s2;
       target.x = Math.min(69, Math.max(-14, target.x));
-      target.z = Math.min(11, Math.max(-11, target.z));
+      target.z = Math.min(28, Math.max(-24, target.z));
       lastFollowX = fpsState.x; lastFollowZ = fpsState.z;
       updateCam();
       return;
@@ -4589,7 +4652,7 @@ function init3D(){
   });
 
   function redrawRooms(){
-    for(let i = 0; i < 5; i++){
+    for(let i = 0; i < 7; i++){
       if(roomPanels[i]){
         const g = roomPanels[i].getContext("2d");
         g.clearRect(0, 0, 512, 128);
@@ -4634,13 +4697,13 @@ function init3D(){
         fpsState.x += (fx * f + rx * r) * sp;
         fpsState.z += (fz * f + rz * r) * sp;
         fpsState.x = Math.min(68.4, Math.max(-13.4, fpsState.x));
-        fpsState.z = Math.min(9.4, Math.max(-23.4, fpsState.z));
+        fpsState.z = Math.min(27.4, Math.max(-23.4, fpsState.z));
         const circles = [];
         for(const a of state.agents){
           const rec = agent3d.get(a.id);
           if(rec) circles.push([rec.group.position.x, rec.group.position.z, 1.05]);
         }
-        circles.push([0, -6.5, 2.1], [-12.4, 8.9, 1.2], [12.9, 5.3, 1.1], [12.9, 7.9, 1.1], [9.2, 6, .95], [9.2, 8.2, .95], [-13.3, 1.6, 1.5], [-10, -7, 2.6], [10, -8, 1.7], [10, -7.3, .55], [0, 9.1, .95], [-6, 8.6, .95], [6, 8.6, .95], [0, -20.4, 2.6], [-12.6, -17, 1.3], [3.4, -18.8, .7], [4.5, -20.3, .95], [1.4, -18.6, .6]);
+        circles.push([0, -6.5, 2.1], [-12.4, 8.9, 1.2], [12.9, 5.3, 1.1], [12.9, 7.9, 1.1], [9.2, 6, .95], [9.2, 8.2, .95], [-13.3, 1.6, 1.5], [-10, -7, 2.6], [10, -8, 1.7], [10, -7.3, .55], [0, 9.1, .95], [-6, 8.6, .95], [6, 8.6, .95], [0, -20.4, 2.6], [-12.6, -17, 1.3], [-9.5, -12.6, .7], [-10.5, -22.3, .95], [1.4, -18.6, .6]);
         for(const [cx, cz, cr] of circles){
           const dx = fpsState.x - cx, dz = fpsState.z - cz;
           const d = Math.hypot(dx, dz);
@@ -4764,9 +4827,13 @@ const NAV_WALLS = [
   [59.7, 60.3, -8.6, -1.4], [67.7, 68.3, -8.6, -1.4],
   [-14, 3.1, -10.15, -9.85], [4.9, 14, -10.15, -9.85],
   [-13.2, -12.8, -24, -10], [12.8, 13.2, -24, -10], [-13, 13, -24.15, -23.85],
-  [-2.3, 2.3, -21.9, -19.3], [-13.1, -12.4, -18.9, -15.1], [3.1, 3.7, -19.1, -18.5], [1.1, 1.7, -18.9, -18.3]
+  [-2.3, 2.3, -21.9, -19.3], [-13.1, -12.4, -18.9, -15.1], [-10.1, -8.9, -12.9, -12.3], [1.1, 1.7, -18.9, -18.3],
+  [-12.15, -11.85, 13, 23], [-2.15, -1.85, 13, 23], [-12, -2, 22.85, 23.15],
+  [-12, -7.9, 12.85, 13.15], [-6.1, -2, 12.85, 13.15],
+  [1.85, 2.15, 13, 23], [11.85, 12.15, 13, 23], [2, 12, 22.85, 23.15],
+  [2, 6.1, 12.85, 13.15], [7.9, 12, 12.85, 13.15]
 ];
-const NAV = { G: .2, X0: -13.6, Z0: -24.6, nx: 416, nz: 172, R: .28, blocked: null, version: 0, bootT: performance.now(), entry: { x: 3.7, z: 9.0 } };
+const NAV = { G: .2, X0: -13.6, Z0: -24.6, nx: 416, nz: 266, R: .28, blocked: null, version: 0, bootT: performance.now(), entry: { x: 3.7, z: 9.0 } };
 function navBuild(){
   const { G, X0, Z0, nx, nz, R } = NAV;
   const b = new Uint8Array(nx * nz);
@@ -4774,12 +4841,12 @@ function navBuild(){
   agent3d.forEach(rec => { const p = rec.group.position; rects.push([p.x - .85, p.x + .85, p.z - .525, p.z + .525]); });
   rects.push([-1.7, 1.7, -7.3, -5.7], [8.7, 11.3, -8.8, -7.6], [-13.35, -11.45, 8.375, 9.425],
              [-12.25, -7.75, -7.9, -6.1], [12.4, 13.4, 4, 9.2], [-13.75, -12.85, 0, 3.2]);
-  const circles = [[9.2, 6, .85], [9.2, 8.2, .85], [0, 9.1, .7], [-6, 8.6, .75], [6, 8.6, .75], [4.5, -20.3, .7]];
+  const circles = [[9.2, 6, .85], [9.2, 8.2, .85], [0, 9.1, .7], [-6, 8.6, .75], [6, 8.6, .75], [-10.5, -22.3, .7], [-11.2, 22.2, .45], [2.8, 22.2, .45]];
   for(let k = 0; k < nz; k++){
     const z = Z0 + k * G;
     for(let i = 0; i < nx; i++){
       const x = X0 + i * G;
-      let bl = x < -13.4 || x > 68.4 || z < -9.4 || z > 9.4;
+      let bl = x < -13.4 || x > 68.4 || z < -9.4 || z > 27.4;
       for(let r = 0; !bl && r < rects.length; r++){
         const q = rects[r];
         if(x > q[0] - R && x < q[1] + R && z > q[2] - R && z < q[3] + R) bl = true;
@@ -4892,9 +4959,12 @@ function sync3D(){
   const CX = [5.6, 7.8, 10, 12.2];
   const CZ = [-3.2, -0.8, 1.6];
   CZ.forEach(z => CX.forEach(x => SLOTS.push([x, z])));
-  const roomSlots = [[], [], [], [], []];
+  const roomSlots = [[], [], [], [], [], [], []];
   [24, 34, 44, 54, 64].forEach((rx, ri) => {
     [-3, -1.5, 1.5, 3].forEach(dx => { [-2.4, -5.4].forEach(z => roomSlots[ri].push([rx + dx, z])); });
+  });
+  [[-7, 5], [7, 6]].forEach(an => {
+    [[-1.5, 16.6], [1.5, 16.6], [-1.5, 19.4], [1.5, 19.4]].forEach(p => roomSlots[an[1]].push([an[0] + p[0], p[1]]));
   });
   /* au-delà de 12 agents : grande zone libre à gauche (rien devant la porte du self) */
   [-0.8, -3, -5.2, -7.4, -9.6].forEach(x => [-1, 1.4, 3.8].forEach(z => SLOTS.push([x, z])));
@@ -4916,11 +4986,11 @@ function sync3D(){
   }
   NAV.version++; NAV.blocked = null;
   const posOf = new Map();
-  const roomUsed = [0, 0, 0, 0, 0];
+  const roomUsed = [0, 0, 0, 0, 0, 0, 0];
   const inRoom = new Set();
   state.agents.forEach(a => {
     const r = a.room;
-    if(Number.isInteger(r) && r >= 0 && r < 5){
+    if(Number.isInteger(r) && r >= 0 && r < 7){
       const s = roomSlots[r][roomUsed[r]];
       if(s){ posOf.set(a.id, s); roomUsed[r]++; inRoom.add(a.id); }
     }
