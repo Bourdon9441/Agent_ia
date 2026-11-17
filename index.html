@@ -1933,6 +1933,7 @@ function openAuthModal(){
       const key = document.getElementById("cfgKey").value.trim();
       if(!url.startsWith("https://")){ showAuthMsg("L'URL doit commencer par https:// (ex : https://xxxx.supabase.co).", true); return; }
       if(key.startsWith("https://")){ showAuthMsg("Vous avez collé l'URL du projet dans le champ clé. L'URL est déjà remplie plus haut : dans le champ « anon key », collez la longue clé qui commence par eyJ… (ou sb_publishable_…). Dans Supabase : Project Settings → API Keys.", true); return; }
+      if(key.startsWith("sb_secret_") || key.startsWith("sbp_")){ showAuthMsg("⚠️ STOP : c'est la clé SECRÈTE (sb_secret_…), celle qui donne le contrôle total de votre base. Ne la mettez JAMAIS ici ni nulle part sur un site. Prenez la clé « Publishable » / « anon public » (eyJ… ou sb_publishable_…). Si vous l'avez montrée quelque part, allez dans Project Settings → API Keys et faites « Rotate » dessus.", true); return; }
       if(!key.startsWith("eyJ") && !key.startsWith("sb_publishable_")){ showAuthMsg("Le champ clé doit contenir la « anon public key » (elle commence par eyJ… ou sb_publishable_…), PAS l'URL du projet. Dans Supabase : Project Settings → API Keys → copiez « anon public ».", true); return; }
       showAuthMsg("Vérification de la clé en cours...", false);
       try{
