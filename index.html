@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261118-0400">
+<meta name="build" content="b-20261118-0500">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -3933,7 +3933,7 @@ let laptopPocket = false;
 let laptopOn = 0;
 let setLaptopPocket = () => {};
 let setLaptopSpot = () => {};
-const LAPTOP_SPOTS = [{ x: 0, z: 9.1 }, { x: -6, z: 8.6 }, { x: 6, z: 8.6 }, { x: -10.5, z: -22.3 }];
+const LAPTOP_SPOTS = [{ x: -12.3, z: 4.5 }, { x: -6, z: 8.6 }, { x: 6, z: 8.6 }, { x: -10.5, z: -22.3 }];
 function roomName(i){ return (state.roomNames && state.roomNames[i]) || (i === 0 ? "Administration" : i === 5 ? "Bureau des clients" : "Salle " + (i + 1)); }
 let nearTarget = null;
 const fpsPromptEl = document.getElementById("fpsPrompt");
@@ -5123,7 +5123,7 @@ function init3D(){
           const rec = agent3d.get(a.id);
           if(rec) circles.push([rec.group.position.x, rec.group.position.z, 1.05]);
         }
-        circles.push([0, -6.5, 2.1], [-12.4, 8.9, 1.2], [12.9, 5.3, 1.1], [12.9, 7.9, 1.1], [9.2, 6, .95], [9.2, 8.2, .95], [-13.3, 1.6, 1.5], [-10, -7, 2.6], [10, -8, 1.7], [10, -7.3, .55], [0, 9.1, .95], [-6, 8.6, .95], [6, 8.6, .95], [0, -20.4, 2.6], [-12.6, -17, 1.3], [-9.5, -12.6, .7], [-10.5, -22.3, .95], [1.4, -18.6, .6], [6, 17, 1.1], [9.9, 24.5, 1], [-10.2, 25.8, .5]);
+        circles.push([0, -6.5, 2.1], [-12.4, 8.9, 1.2], [12.9, 5.3, 1.1], [12.9, 7.9, 1.1], [9.2, 6, .95], [9.2, 8.2, .95], [-13.3, 1.6, 1.5], [-10, -7, 2.6], [10, -8, 1.7], [10, -7.3, .55], [-12.3, 4.5, .95], [-6, 8.6, .95], [6, 8.6, .95], [0, -20.4, 2.6], [-12.6, -17, 1.3], [-9.5, -12.6, .7], [-10.5, -22.3, .95], [1.4, -18.6, .6], [6, 17, 1.1], [9.9, 24.5, 1], [-10.2, 25.8, .5]);
         for(const [cx, cz, cr] of circles){
           const dx = fpsState.x - cx, dz = fpsState.z - cz;
           const d = Math.hypot(dx, dz);
@@ -5269,7 +5269,7 @@ function navBuild(){
   agent3d.forEach(rec => { const p = rec.group.position; rects.push([p.x - .85, p.x + .85, p.z - .525, p.z + .525]); });
   rects.push([-1.7, 1.7, -7.3, -5.7], [8.7, 11.3, -8.8, -7.6], [-13.35, -11.45, 8.375, 9.425],
              [-12.25, -7.75, -7.9, -6.1], [12.4, 13.4, 4, 9.2], [-13.75, -12.85, 0, 3.2]);
-  const circles = [[9.2, 6, .85], [9.2, 8.2, .85], [0, 9.1, .7], [-6, 8.6, .75], [6, 8.6, .75], [-10.5, -22.3, .7], [6, 17, .95], [9.9, 24.5, .9], [-10.2, 25.8, .45]];
+  const circles = [[9.2, 6, .85], [9.2, 8.2, .85], [-12.3, 4.5, .75], [-6, 8.6, .75], [6, 8.6, .75], [-10.5, -22.3, .7], [6, 17, .95], [9.9, 24.5, .9], [-10.2, 25.8, .45]];
   for(let k = 0; k < nz; k++){
     const z = Z0 + k * G;
     for(let i = 0; i < nx; i++){
