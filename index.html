@@ -259,6 +259,43 @@
   .hrrow .hstat.busy{color:var(--amber);} .hrrow .hstat.idle{color:var(--signal);} .hrrow .hstat.paused{color:var(--faint);}
   .footer{font-family:var(--mono); font-size:10px; color:var(--faint); text-align:center; padding:18px; letter-spacing:.08em;}
   .footer a{color:var(--dim);}
+
+  /* ===== Habillage minimaliste : sobre, aéré, peu de bordures (tokens uniquement) ===== */
+  :root{ --bg:#0d0e0d; --surface:#121412; --raise:#171917; --line:#1e211d; --line2:#2b2f29; --dim:#8d9586; --faint:#5d655a; }
+  body{ background-image:none; line-height:1.5; letter-spacing:0; }
+  .topbar{ background:var(--bg); backdrop-filter:none; border-bottom:1px solid var(--line); padding:12px 24px; gap:14px; }
+  .brand small{ display:none; }
+  .chip{ background:transparent; border-color:var(--line); color:var(--dim); box-shadow:none; }
+  .chip .led, .led{ box-shadow:none !important; }
+  main{ gap:20px; }
+  .panel{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:20px; box-shadow:none; }
+  .panel-head{ text-transform:none; letter-spacing:0; font-size:15px; font-weight:500; color:var(--ink); margin-bottom:14px; }
+  .panel-head svg{ opacity:.55; }
+  label{ text-transform:none; letter-spacing:0; font-size:12px; color:var(--dim); margin-bottom:6px; }
+  input[type=text],input[type=password],input[type=email],select,textarea{ background:var(--bg); border:1px solid var(--line2); border-radius:10px; padding:10px 12px; }
+  input:focus,select:focus,textarea:focus{ border-color:var(--signal); box-shadow:none; outline:none; }
+  .btn{ border-radius:10px; font-weight:500; box-shadow:none; transform:none !important; }
+  .btn.line{ background:transparent; border:1px solid var(--line2); color:var(--ink); }
+  .btn.line:hover{ border-color:var(--signal); color:var(--signal); }
+  .hint{ font-size:12px; color:var(--faint); line-height:1.55; }
+  .agent{ background:var(--raise); border:1px solid var(--line); border-radius:12px; box-shadow:none; }
+  .agent.busy{ border-color:var(--line2); box-shadow:inset 2px 0 0 var(--signal); }
+  .kpi{ background:transparent; border:0; }
+  .tabs{ border-bottom:1px solid var(--line); gap:4px; }
+  .tab{ background:transparent; border:0; border-bottom:2px solid transparent; border-radius:0; color:var(--dim); padding:10px 12px; }
+  .tab.on{ color:var(--ink); border-bottom-color:var(--signal); background:transparent; }
+  .modal, .bossdlg{ border:1px solid var(--line2); border-radius:16px; box-shadow:0 24px 60px rgba(0,0,0,.45); }
+  .hrrow, .res{ border-color:var(--line); }
+  .footer{ color:var(--faint); }
+  :focus-visible{ outline:2px solid var(--signal); outline-offset:2px; }
+  button, .tab, .chip, .iconbtn, summary{ cursor:pointer; }
+  @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; } }
+
+  .panel-head[data-fold]{ cursor:pointer; user-select:none; display:flex; align-items:center; gap:8px; }
+  .panel-head[data-fold]::after{ content:"▾"; margin-left:auto; color:var(--faint); font-size:12px; }
+  .panel.collapsed .panel-head[data-fold]::after{ content:"▸"; }
+  .panel.collapsed > :not(.panel-head){ display:none !important; }
+  .panel.collapsed .panel-head{ margin-bottom:0; }
 </style>
 </head>
 <body>
@@ -517,6 +554,12 @@
       <button class="btn line wide" id="hrAskDrh" style="margin-top:8px;"></button>
       <button class="btn line wide" id="drhAutoBtn" style="margin-top:8px;"></button>
       <div style="margin-top:16px;" id="hrList"></div>
+      <div class="panel-head" style="margin-top:24px;">Skills des agents</div>
+      <div class="hint">Une skill = des instructions spécialisées (ex : « publier un site sur GitHub Pages »). Créez-la ici, puis cochez-la sur un agent avec le crayon : elle est ajoutée à ses instructions à chaque tâche.</div>
+      <input type="text" id="skName" placeholder="Nom de la skill" maxlength="40" style="margin:10px 0 8px;">
+      <textarea id="skText" rows="3" placeholder="Instructions précises que l'agent doit suivre..." maxlength="1500"></textarea>
+      <button class="btn line wide" id="skAdd" style="margin-top:8px;">Ajouter la skill</button>
+      <div id="skList" style="margin-top:10px;"></div>
     </div>
     <div class="pcpane" id="pane-servers" style="display:none;">
       <label>Salle serveurs — site internet à produire</label>
@@ -682,7 +725,7 @@ function scopeKey(){
 }
 function freshState(){
   return { agents: [], mission: "", backlog: [], autonomous: false, speed: 1, doneCount: 0,
-           activity: [], results: [], chat: [], sites: [], scheduled: [], meetings: [], groups: [], notes: [], connectors: [], assistantChat: [], drhAuto: false, coffeeClosed: false, meta: { syncedAt: null } };
+           activity: [], results: [], chat: [], sites: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], drhAuto: false, coffeeClosed: false, meta: { syncedAt: null } };
 }
 let state = freshState();
 const PERSONAS = ["efficace et direct","créatif et imaginatif","rigoureux et méthodique","enthousiaste et positif","pédagogue et clair","analytique et critique","chaleureux et diplomate","pragmatique, orienté résultats"];
@@ -692,11 +735,12 @@ function ensurePersonas(){
   if(!state.scheduled) state.scheduled = [];
   if(!state.meetings) state.meetings = [];
   if(!state.groups) state.groups = [];
+  if(!state.skills) state.skills = [];
   if(!state.notes) state.notes = [];
   if(!state.connectors) state.connectors = [];
   if(!state.assistantChat) state.assistantChat = [];
   if(state.drhAuto === undefined) state.drhAuto = false;
-  state.agents.forEach(a => { if(a.group === undefined) a.group = ""; });
+  state.agents.forEach(a => { if(a.group === undefined) a.group = ""; if(!a.skills) a.skills = []; });
   if(state.siteProject){
     state.sites.push(Object.assign({ id: uid(), name: (state.siteProject.desc || "site").slice(0, 40), createdAt: new Date().toLocaleString("fr-FR") }, state.siteProject));
     delete state.siteProject;
@@ -739,7 +783,17 @@ function logAgent(agent, msg){
 
 /* ================= moteur (Web Worker : continue en arrière-plan) ================= */
 const workerSrc = "let id=null;onmessage=e=>{if(e.data==='start'&&!id){id=setInterval(()=>postMessage('tick'),1000)};if(e.data==='stop'){clearInterval(id);id=null}};";
-const worker = new Worker(URL.createObjectURL(new Blob([workerSrc], {type:"application/javascript"})));
+let worker;
+try{
+  worker = new Worker(URL.createObjectURL(new Blob([workerSrc], {type:"application/javascript"})));
+}catch(e){
+  /* aperçu isolé (ex. claude.ai) : les Workers par blob sont interdits, on bascule sur un minuteur classique */
+  let tid = null;
+  worker = { onmessage: null, postMessage(m){
+    if(m === "start" && !tid) tid = setInterval(() => { if(worker.onmessage) worker.onmessage({ data: "tick" }); }, 1000);
+    if(m === "stop"){ clearInterval(tid); tid = null; }
+  } };
+}
 worker.onmessage = () => engineTick();
 function startEngine(){ worker.postMessage("start"); }
 function stopEngine(){ worker.postMessage("stop"); }
@@ -940,6 +994,63 @@ async function realWebResearch(query){
   }catch(e){}
   return parts;
 }
+function agentExtras(agent){
+  let t = "";
+  const g = (state.groups || []).find(x => x.id === agent.group);
+  if(g && g.instructions) t += " Consignes permanentes de ton équipe « " + g.name + " » (à respecter) : " + g.instructions + ".";
+  const sk = (agent.skills || []).map(id => (state.skills || []).find(x => x.id === id)).filter(Boolean);
+  if(sk.length) t += " Tes compétences spécialisées (applique-les dès que la tâche s'y rapporte) : " + sk.map(k => "« " + k.name + " » : " + k.instructions).join(" | ") + ".";
+  return t;
+}
+function renderSkills(){
+  const box = document.getElementById("skList");
+  if(!box) return;
+  const add = document.getElementById("skAdd");
+  if(add && !add.dataset.ok){
+    add.dataset.ok = "1";
+    add.addEventListener("click", ()=>{
+      const n = document.getElementById("skName").value.trim(), t = document.getElementById("skText").value.trim();
+      if(!n || !t){ logGlobal("Une skill a besoin d'un nom et d'instructions.", "Système"); return; }
+      state.skills.push({ id: uid(), name: n.slice(0, 40), instructions: t.slice(0, 1500) });
+      document.getElementById("skName").value = ""; document.getElementById("skText").value = "";
+      logGlobal("Skill « " + esc(n) + " » créée : cochez-la sur un agent (crayon) pour qu'il l'utilise.", "DRH");
+      renderSkills(); renderHR(); save();
+    });
+  }
+  box.innerHTML = (state.skills || []).map(k => '<div class="hrrow"><div><div class="hrname">' + esc(k.name) + '</div><div class="hrole">' + esc(k.instructions.slice(0, 90)) + (k.instructions.length > 90 ? "…" : "") + '</div></div><button class="iconbtn skDel" data-id="' + k.id + '" title="Supprimer la skill">' + icon("trash") + '</button></div>').join("") || '<div class="hint">Aucune skill pour l\'instant.</div>';
+  box.querySelectorAll(".skDel").forEach(b => b.addEventListener("click", ()=>{
+    state.skills = state.skills.filter(x => x.id !== b.dataset.id);
+    state.agents.forEach(a => { a.skills = (a.skills || []).filter(id => id !== b.dataset.id); });
+    renderSkills(); renderHR(); save();
+  }));
+}
+const CODER_RE = /d[ée]velop|codeur|programm|\bcode\b|web|front|back|devops|logiciel/i;
+function isCoder(a){ return CODER_RE.test(a.role || "") && !/v[ée]rificateur|testeur/i.test(a.role || ""); }
+/* vraie boucle : vérificateur -> codeur -> vérificateur, jusqu'à validation (3 tours max) */
+async function reviewLoop(code, rev, coder, maxRounds){
+  const who = coder ? coder.name : "le codeur";
+  if(code.length > 12000){ logGlobal("Le code est trop long pour une relecture complète : relecture ignorée.", rev.name); return { code, valid: false, rounds: 0 }; }
+  let cur = code;
+  for(let i = 1; i <= maxRounds; i++){
+    logGlobal("<b>" + esc(rev.name) + "</b> (vérificateur) relit le code — tour " + i + "/" + maxRounds + "...", rev.name);
+    const issues = await enqueueLLM(()=> callLLM([
+      { role: "system", content: "Tu es vérificateur qualité de code, exigeant et concret. Liste les vrais problèmes du code fourni (bugs, erreurs de logique, syntaxe, sécurité, cas limites, accessibilité si c'est du web). Réponds en français avec une liste courte de points précis (max 6 lignes). Si le code est vraiment bon, réponds exactement : RIEN À SIGNALER." },
+      { role: "user", content: cur }
+    ], 1000));
+    if(!issues || issues.trim().length <= 12 || /rien\s*à\s*signaler/i.test(issues)){
+      logGlobal("<b>" + esc(rev.name) + "</b> valide le code" + (i > 1 ? " après " + (i - 1) + " correction(s) de " + esc(who) : "") + ".", rev.name);
+      return { code: cur, valid: true, rounds: i };
+    }
+    logGlobal(esc(rev.name) + " a trouvé des défauts : il les renvoie à <b>" + esc(who) + "</b> pour correction.", "Patron");
+    const fixed = await enqueueLLM(()=> callLLM([
+      { role: "system", content: "Tu es le développeur de l'équipe. Un vérificateur a listé des défauts dans le code fourni. Corrige TOUS ces défauts en gardant le reste identique. Réponds UNIQUEMENT avec le code complet corrigé, sans explication ni balises." },
+      { role: "user", content: "Code actuel :\n" + cur + "\n\nDéfauts à corriger :\n" + issues.slice(0, 2000) }
+    ], 14000));
+    cur = stripFence(fixed || cur);
+  }
+  logGlobal("Limite de " + maxRounds + " tours atteinte : dernière version conservée, à relire par vous.", rev.name);
+  return { code: cur, valid: false, rounds: maxRounds };
+}
 async function executeTask(agent){
   const t = agent.currentTask;
   const rid = uid();
@@ -958,10 +1069,18 @@ async function executeTask(agent){
         context = "\n\n(La recherche web en direct n'a rien renvoy\u00e9 : r\u00e9ponds avec tes connaissances et signale qu'aucune source en direct n'a pu \u00eatre consult\u00e9e.)";
       }
     }
-    const out = await enqueueLLM(()=> callLLM([
-      {role:"system", content:"Tu es l'agent " + agent.name + " (sp\u00e9cialit\u00e9 : " + (agent.role || "polyvalent") + (agent.persona ? ", personnalit\u00e9 : " + agent.persona : "") + ") d'une \u00e9quipe de travail. Ex\u00e9cute la t\u00e2che suivante et produis directement le livrable concret, en fran\u00e7ais, pr\u00eat \u00e0 l'emploi (texte structur\u00e9, complet, actionnable). Ta personnalit\u00e9 doit se ressentir dans ton rendu (ton, choix, pr\u00e9sentation) sans nuire \u00e0 la qualit\u00e9 professionnelle. Pas d'introduction, pas de commentaire : uniquement le livrable." + context},
+    let out = await enqueueLLM(()=> callLLM([
+      {role:"system", content:"Tu es l'agent " + agent.name + " (sp\u00e9cialit\u00e9 : " + (agent.role || "polyvalent") + (agent.persona ? ", personnalit\u00e9 : " + agent.persona : "") + ") d'une \u00e9quipe de travail. Ex\u00e9cute la t\u00e2che suivante et produis directement le livrable concret, en fran\u00e7ais, pr\u00eat \u00e0 l'emploi (texte structur\u00e9, complet, actionnable). Ta personnalit\u00e9 doit se ressentir dans ton rendu (ton, choix, pr\u00e9sentation) sans nuire \u00e0 la qualit\u00e9 professionnelle. Pas d'introduction, pas de commentaire : uniquement le livrable." + agentExtras(agent) + context},
       {role:"user", content: t.text}
     ], 3000));
+    const rev = state.agents.find(a => a.id !== agent.id && a.role === "vérificateur");
+    const fence = (out || "").match(/```([a-zA-Z0-9]*)\n([\s\S]*?)```/);
+    if(rev && isCoder(agent) && fence){
+      try{
+        const res = await reviewLoop(fence[2], rev, agent, 3);
+        out = out.replace(fence[0], "```" + fence[1] + "\n" + res.code.replace(/\s+$/, "") + "\n```");
+      }catch(eR){ logGlobal("La relecture du vérificateur a échoué (non bloquant) : " + esc(eR.message) + ".", "Patron"); }
+    }
     if(agent.currentTask !== t) return;
     const r = state.results.find(x=>x.id===rid);
     if(r){ r.output = out; r.status = "done"; }
@@ -1147,10 +1266,10 @@ async function pushRemote(){
     const updated_at = new Date().toISOString();
     state.meta.syncedAt = updated_at;
     pendingLocal = false;
-    const { agents, mission, backlog, autonomous, speed, doneCount, activity } = state;
+    const { agents, mission, backlog, autonomous, speed, doneCount, activity, groups, skills, notes } = state;
     await sb.from("agent_workspaces").upsert({
       id: session.user.id,
-      data: { agents, mission, backlog, autonomous, speed, doneCount, activity },
+      data: { agents, mission, backlog, autonomous, speed, doneCount, activity, groups, skills, notes },
       updated_at
     });
     try{ localStorage.setItem(scopeKey(), JSON.stringify(state)); }catch(e){}
@@ -1166,8 +1285,9 @@ async function pullRemote(force){
     if(data && data.data){
       const remoteNewer = !state.meta.syncedAt || (data.updated_at > state.meta.syncedAt);
       if((remoteNewer && !pendingLocal) || force){
-        const keep = { results: state.results, chat: state.chat, sites: state.sites, scheduled: state.scheduled, meetings: state.meetings, groups: state.groups, notes: state.notes, connectors: state.connectors, assistantChat: state.assistantChat, drhAuto: state.drhAuto };
+        const keep = { results: state.results, chat: state.chat, sites: state.sites, scheduled: state.scheduled, meetings: state.meetings, groups: state.groups, skills: state.skills, notes: state.notes, connectors: state.connectors, assistantChat: state.assistantChat, drhAuto: state.drhAuto };
         state = Object.assign(freshState(), data.data, keep, { meta: { syncedAt: data.updated_at } });
+        ["groups", "skills", "notes"].forEach(k => { if(Array.isArray(data.data[k])) state[k] = data.data[k]; });
         ensurePersonas();
         renderAll(); save();
       }
@@ -1309,6 +1429,12 @@ function togglePause(a){
     delete a.autoBreak;
   } else {
     if(state.coffeeClosed){ logGlobal("Le self est fermé : <b>" + esc(a.name) + "</b> reste à son poste.", "Patron"); return; }
+    const workPending = bossQueue.length > 0 || state.agents.some(x => x.currentTask || x.queue.length > 0);
+    const othersAtDesk = state.agents.filter(x => x.id !== a.id && x.status !== "paused").length;
+    if(workPending && othersAtDesk === 0){
+      logGlobal("<b>" + esc(a.name) + "</b> reste au bureau : du travail est en cours et il faut toujours quelqu'un à son poste.", "Patron");
+      return;
+    }
     a.status = "paused";
   }
   logGlobal("<b>" + esc(a.name) + "</b> " + (a.status === "paused" ? "part manger au self." : "reprend le travail."), "Système");
@@ -2003,23 +2129,9 @@ async function launchSiteProject(desc){
     const revAgent = state.agents.find(a => ["vérificateur", "testeur"].includes(a.role || ""));
     if(revAgent){
       try{
-        logGlobal("<b>" + esc(revAgent.name) + "</b> (vérificateur) relit le code du site à la recherche de bugs...", revAgent.name);
-        const codeSoFar = stripFence((sp.steps.find(s => s.key === "code").output || ""));
-        const issues = await enqueueLLM(()=> callLLM([
-          { role: "system", content: "Tu es vérificateur qualité d'un site web, exigeant et concret. Voici le code HTML d'un site : liste les vrais problèmes (bugs JavaScript, CSS cassé, contenu incohérent, fautes, accessibilité, mobile). Réponds en français avec une liste courte de points précis (max 6 lignes). Si le site est vraiment bon, réponds exactement : RIEN À SIGNALER." },
-          { role: "user", content: codeSoFar.slice(0, 12000) }
-        ], 1000));
-        if(issues && issues.trim().length > 12 && !/rien\s*à\s*signaler/i.test(issues)){
-          logGlobal("le vérificateur a trouvé des défauts : il renvoie le tout au codeur pour correction.", "Patron");
-          const fixed = await enqueueLLM(()=> callLLM([
-            { role: "system", content: "Tu es le développeur web senior de l'équipe. Un vérificateur qualité a listé des défauts dans le code HTML fourni. Corrige TOUS ces défauts en gardant le reste identique. Réponds UNIQUEMENT avec le code HTML complet corrigé, sans explication." },
-            { role: "user", content: "Code actuel :\n" + codeSoFar.slice(0, 12000) + "\n\nDéfauts à corriger :\n" + issues.slice(0, 2000) }
-          ], 14000));
-          sp.steps.find(s => s.key === "code").output = fixed;
-          logGlobal("<b>" + esc(revAgent.name) + "</b> valide : les corrections du codeur sont appliquées.", "Patron");
-        } else {
-          logGlobal("<b>" + esc(revAgent.name) + "</b> valide le site : aucun bug bloquant détecté.", revAgent.name);
-        }
+        const stp = sp.steps.find(x => x.key === "code");
+        const res = await reviewLoop(stripFence(stp.output || ""), revAgent, null, 3);
+        stp.output = res.code;
       }catch(eV){
         logGlobal("la relecture du vérificateur a échoué (non bloquant) : " + esc(eV.message) + ".", "Patron");
       }
@@ -2164,6 +2276,7 @@ async function openDrhDlg(){
 function renderHR(){
   const el = document.getElementById("hrList");
   if(!el || !pcOverlay.classList.contains("show")) return;
+  renderSkills();
   if(!state.agents.length){
     el.innerHTML = '<div style="color:var(--faint);font-style:italic;padding:14px 0;text-align:center;">Aucun agent. Embauchez votre premier employé IA ci-dessus.</div>';
     return;
@@ -2191,12 +2304,14 @@ function renderHR(){
     row.innerHTML = '<div class="hredit"><input class="heName" value="' + esc(a.name) + '" placeholder="Nom" maxlength="24">' +
       '<select class="heRole">' + opts + '</select>' +
       '<input class="hePersona" value="' + esc(a.persona || "") + '" placeholder="Personnalité (ex : créatif et imaginatif)" maxlength="60">' +
+      ((state.skills || []).length ? '<div style="flex-basis:100%;font-size:12px;color:var(--dim);">Skills : ' + state.skills.map(k => '<label style="display:inline-flex;gap:5px;margin:0 12px 4px 0;text-transform:none;"><input type="checkbox" class="heSk" value="' + k.id + '"' + ((a.skills || []).includes(k.id) ? " checked" : "") + '>' + esc(k.name) + '</label>').join("") + '</div>' : "") +
       '<button class="iconbtn heSave" title="Enregistrer">' + icon("check") + '</button>' +
       '<button class="iconbtn heCancel" title="Annuler">' + icon("cross") + '</button></div>';
     row.querySelector(".heSave").addEventListener("click", ()=>{
       const nn = row.querySelector(".heName").value.trim();
       const nr = row.querySelector(".heRole").value;
       const np = row.querySelector(".hePersona").value.trim();
+      a.skills = Array.from(row.querySelectorAll(".heSk:checked")).map(c => c.value);
       if(nn) a.name = nn;
       if(nr) a.role = nr;
       a.persona = np || a.persona || "professionnel";
@@ -3001,10 +3116,12 @@ function screenMat(hex, intensity){
 }
 function makeCharacter(bodyHex){
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(.17, .42, 4, 10), new THREE.MeshStandardMaterial({ color: bodyHex, roughness: .7 }));
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(.17, .42, 4, 10), new THREE.MeshStandardMaterial({ color: bodyHex, roughness: .55 }));
   body.position.y = .55; g.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(.15, 14, 12), new THREE.MeshStandardMaterial({ color: 0x9aa38c, roughness: .6 }));
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.15, 14, 12), new THREE.MeshStandardMaterial({ color: 0xd8d4c8, roughness: .5 }));
   head.position.y = 1.02; g.add(head);
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1b1d19, roughness: .4 });
+  for(const ex of [-.055, .055]){ const eye = new THREE.Mesh(new THREE.SphereGeometry(.022, 8, 6), eyeMat); eye.position.set(ex, 1.04, .135); g.add(eye); }
   const chest = new THREE.Mesh(new THREE.BoxGeometry(.16, .1, .05), screenMat(0xc6f542, .8));
   chest.position.set(0, .68, .17); g.add(chest);
   const legMat = new THREE.MeshStandardMaterial({ color: 0x2c3125, roughness: .85 });
@@ -3019,8 +3136,8 @@ function makeCharacter(bodyHex){
 }
 function makeDeskGroup(opts){
   const g = new THREE.Group();
-  const wood = new THREE.MeshStandardMaterial({ color: opts.wood || 0x9c7a52, roughness: .8 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: .85 });
+  const wood = new THREE.MeshStandardMaterial({ color: opts.wood || 0xd6cfc0, roughness: .55 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x2b2e2a, roughness: .6, metalness: .2 });
   const top = new THREE.Mesh(new THREE.BoxGeometry(opts.w, .1, opts.d), wood);
   top.position.y = .92; g.add(top);
   const legGeo = new THREE.BoxGeometry(.07, .9, .07);
@@ -3034,6 +3151,8 @@ function makeDeskGroup(opts){
   const sm = screenMat(opts.screen, opts.glow);
   const scr = new THREE.Mesh(new THREE.BoxGeometry(opts.sw, opts.sh, .05), sm);
   scr.position.set(0, 1.08 + .11 + opts.sh/2, -opts.d/2 + .24); g.add(scr);
+  const kb = new THREE.Mesh(new THREE.BoxGeometry(Math.min(.5, opts.w * .3), .02, .16), dark);
+  kb.position.set(0, .985, opts.d / 2 - .3); g.add(kb);
   g.userData.screenMat = sm;
   return g;
 }
@@ -3050,8 +3169,8 @@ function init3D(){
   renderer.setSize(W(), H());
   wrap.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0b0d0a);
-  const camera = new THREE.PerspectiveCamera(50, W()/H(), .1, 100);
+  scene.background = new THREE.Color(0x0d0e0d);
+  const camera = new THREE.PerspectiveCamera(50, W()/H(), .1, 220);
   let az = -.55, pol = 1.08, dist = 24;
   const target = new THREE.Vector3(0, .6, 0);
   function updateCam(){
@@ -3068,19 +3187,19 @@ function init3D(){
   const dir = new THREE.DirectionalLight(0xffffff, .7);
   dir.position.set(6, 12, 5);
   scene.add(dir);
-  const limeLight = new THREE.PointLight(0xc6f542, .5, 24);
+  const limeLight = new THREE.PointLight(0xc6f542, .22, 24);
   limeLight.position.set(0, 5, 0);
   scene.add(limeLight);
   function makePlanks(){
     const c = document.createElement("canvas");
     c.width = 512; c.height = 512;
     const x = c.getContext("2d");
-    const shades = ["#7a5a3a", "#8a6844", "#75563a", "#8f6c48", "#7e5e3e"];
+    const shades = ["#d9d3c6", "#d4cdbf", "#dcd6c9", "#d1cabb", "#d7d0c2"];
     const pw = 512 / 8;
     for(let i = 0; i < 8; i++){
       x.fillStyle = shades[i % shades.length];
       x.fillRect(i * pw, 0, pw, 512);
-      x.fillStyle = "rgba(0,0,0,.28)";
+      x.fillStyle = "rgba(0,0,0,.07)";
       x.fillRect(i * pw, 0, 2, 512);
       for(let j = 0; j < 3; j++) x.fillRect(i * pw, (i * 137 + j * 171) % 512, pw, 2);
     }
@@ -3098,13 +3217,17 @@ function init3D(){
   const floor = new THREE.Mesh(new THREE.BoxGeometry(28, .2, 20), new THREE.MeshStandardMaterial({ map: makePlanks(), roughness: .8 }));
   floor.position.y = -.1;
   scene.add(floor);
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0xe6e1d3, roughness: 1 });
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0xf2f0ea, roughness: 1 });
   const wallB = new THREE.Mesh(new THREE.BoxGeometry(28, 4.4, .2), wallMat);
   wallB.position.set(0, 2.2, -10); scene.add(wallB);
   const wallL = new THREE.Mesh(new THREE.BoxGeometry(.2, 4.4, 20), wallMat);
   wallL.position.set(-14, 2.2, 0); scene.add(wallL);
-  const wallR = new THREE.Mesh(new THREE.BoxGeometry(.2, 4.4, 20), wallMat);
-  wallR.position.set(14, 2.2, 0); scene.add(wallR);
+  const wallR1 = new THREE.Mesh(new THREE.BoxGeometry(.2, 4.4, 8.5), wallMat);
+  wallR1.position.set(14, 2.2, -5.75); scene.add(wallR1);
+  const wallR2 = new THREE.Mesh(new THREE.BoxGeometry(.2, 4.4, 8.5), wallMat);
+  wallR2.position.set(14, 2.2, 5.75); scene.add(wallR2);
+  const wallRL = new THREE.Mesh(new THREE.BoxGeometry(.2, 2, 3), wallMat);
+  wallRL.position.set(14, 3.4, 0); scene.add(wallRL);
   const ceil = new THREE.Mesh(new THREE.BoxGeometry(28, .2, 20), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 1 }));
   ceil.position.set(0, 4.5, 0); scene.add(ceil);
   const panelGroup = new THREE.Group();
@@ -3119,7 +3242,7 @@ function init3D(){
   }
   scene.add(panelGroup);
   ceil.visible = panelGroup.visible = false;
-  const skirtMat = new THREE.MeshStandardMaterial({ color: 0x5c4630, roughness: .85 });
+  const skirtMat = new THREE.MeshStandardMaterial({ color: 0xcfc8ba, roughness: .85 });
   const skirtB = new THREE.Mesh(new THREE.BoxGeometry(27.6, .14, .07), skirtMat);
   skirtB.position.set(0, .07, -9.86); scene.add(skirtB);
   const skirtL = new THREE.Mesh(new THREE.BoxGeometry(.07, .14, 19.6), skirtMat);
@@ -3141,8 +3264,8 @@ function init3D(){
   drawSign();
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshBasicMaterial({ map: signTex }));
   sign.position.set(0, 3.55, -9.88); scene.add(sign);
-  const potMat = new THREE.MeshStandardMaterial({ color: 0x8b5e3c, roughness: .9 });
-  const leafMat = new THREE.MeshStandardMaterial({ color: 0x3e7a34, roughness: .9 });
+  const potMat = new THREE.MeshStandardMaterial({ color: 0xe4ded0, roughness: .9 });
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x5f8a55, roughness: .9 });
   for(const [px, pz] of [[-13.4, -9.4], [13.4, -9.4], [13.4, 9.4], [-13.4, 9.4]]){
     const pot = new THREE.Mesh(new THREE.CylinderGeometry(.3, .22, .5, 10), potMat);
     pot.position.set(px, .25, pz); scene.add(pot);
@@ -3153,11 +3276,11 @@ function init3D(){
     const foliage2 = new THREE.Mesh(new THREE.ConeGeometry(.36, .8, 9), leafMat);
     foliage2.position.set(px, 2.05, pz); scene.add(foliage2);
   }
-  const rug = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 2.7, .03, 26), new THREE.MeshStandardMaterial({ color: 0x6e3b3b, roughness: 1 }));
+  const rug = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 2.7, .03, 26), new THREE.MeshStandardMaterial({ color: 0xaaa497, roughness: 1 }));
   rug.position.set(0, .03, -6.5); scene.add(rug);
 
   /* salle de réunion (grande, fond gauche) */
-  const inWallMat = new THREE.MeshStandardMaterial({ color: 0xded8c8, roughness: 1 });
+  const inWallMat = new THREE.MeshStandardMaterial({ color: 0xeae7df, roughness: 1 });
   function roomWall(w, d, x, z){
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, 3.2, d), inWallMat);
     m.position.set(x, 1.6, z);
@@ -3167,14 +3290,14 @@ function init3D(){
   roomWall(6.6, .18, -10.7, -4);
   roomWall(.6, .18, -6.3, -4);
   roomWall(.18, 6, -6, -7);
-  const meetTable = new THREE.Mesh(new THREE.BoxGeometry(4.5, .12, 1.8), new THREE.MeshStandardMaterial({ color: 0x6e4f33, roughness: .75 }));
+  const meetTable = new THREE.Mesh(new THREE.BoxGeometry(4.5, .12, 1.8), new THREE.MeshStandardMaterial({ color: 0xd6cfc0, roughness: .6 }));
   meetTable.position.set(-10, .95, -7); scene.add(meetTable);
   meetTable.userData.reunion = true;
   for(const [lx, lz] of [[-1.9, -.65], [1.9, -.65], [-1.9, .65], [1.9, .65]]){
     const leg = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .9, 8), new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: .85 }));
     leg.position.set(-10 + lx, .45, -7 + lz); scene.add(leg);
   }
-  const chairMat = new THREE.MeshStandardMaterial({ color: 0x5c4630, roughness: .85 });
+  const chairMat = new THREE.MeshStandardMaterial({ color: 0x3a3d38, roughness: .7 });
   for(const [cx, cz, side] of [[-11.1, -5.7, "n"], [-10, -5.7, "n"], [-8.9, -5.7, "n"], [-11.1, -8.3, "s"], [-10, -8.3, "s"], [-8.9, -8.3, "s"], [-12.9, -7, "w"], [-7.1, -7, "e"]]){
     const seat = new THREE.Mesh(new THREE.BoxGeometry(.42, .07, .42), chairMat);
     seat.position.set(cx, .5, cz); scene.add(seat);
@@ -3194,7 +3317,7 @@ function init3D(){
   roomWall(.18, 6, 6, -7);
   roomWall(.6, .18, 6.3, -4);
   roomWall(6.6, .18, 10.7, -4);
-  const drhDesk = makeDeskGroup({ w: 2.6, d: 1.2, sw: 1.6, sh: .8, screen: 0xffb454, glow: .5, wood: 0x6e4f33 });
+  const drhDesk = makeDeskGroup({ w: 2.6, d: 1.2, sw: 1.6, sh: .8, screen: 0xffb454, glow: .5, wood: 0xd6cfc0 });
   drhDesk.position.set(10, 0, -8.2);
   drhDesk.traverse(o => o.userData.drh = true);
   const drhLabel = makeLabel("ADMINISTRATION", "DRH — embauche & licencie");
@@ -3208,11 +3331,11 @@ function init3D(){
 
   const accent = new THREE.Mesh(new THREE.BoxGeometry(11, 3.6, .12), new THREE.MeshStandardMaterial({ color: 0x75604a, roughness: .9 }));
   accent.position.set(0, 1.8, -9.94); scene.add(accent);
-  const rugL = new THREE.Mesh(new THREE.BoxGeometry(11.2, .02, 10.2), new THREE.MeshStandardMaterial({ color: 0x6e4a38, roughness: .95 }));
+  const rugL = new THREE.Mesh(new THREE.BoxGeometry(11.2, .02, 10.2), new THREE.MeshStandardMaterial({ color: 0xbfb9ac, roughness: .95 }));
   rugL.position.set(-7.9, .012, 2.2); scene.add(rugL);
-  const rugR = new THREE.Mesh(new THREE.BoxGeometry(9.2, .02, 10.2), new THREE.MeshStandardMaterial({ color: 0x5f5142, roughness: .95 }));
+  const rugR = new THREE.Mesh(new THREE.BoxGeometry(9.2, .02, 10.2), new THREE.MeshStandardMaterial({ color: 0xc8c2b5, roughness: .95 }));
   rugR.position.set(6.4, .012, 2.2); scene.add(rugR);
-  const bossGroup = makeDeskGroup({ w: 3.4, d: 1.6, sw: 2.3, sh: .85, screen: 0xc6f542, glow: .5, wood: 0x6e4f33 });
+  const bossGroup = makeDeskGroup({ w: 3.4, d: 1.6, sw: 2.3, sh: .85, screen: 0xc6f542, glow: .5, wood: 0xd6cfc0 });
   bossGroup.position.set(0, 0, -6.5);
   bossGroup.traverse(o => o.userData.boss = true);
   const bossLabel = makeLabel("LE PATRON", "direction");
@@ -3268,11 +3391,11 @@ function init3D(){
   }
   const machineLed = new THREE.Mesh(new THREE.BoxGeometry(.12, .12, .03), screenMat(0xffb454, 1));
   machineLed.position.set(12.9, 1.25, 4.2); scene.add(machineLed);
-  const coffeeTable = new THREE.Mesh(new THREE.CylinderGeometry(.85, .85, .1, 20), new THREE.MeshStandardMaterial({ color: 0x9c7a52, roughness: .8 }));
+  const coffeeTable = new THREE.Mesh(new THREE.CylinderGeometry(.85, .85, .1, 20), new THREE.MeshStandardMaterial({ color: 0xd6cfc0, roughness: .6 }));
   coffeeTable.position.set(9.2, .85, 6); scene.add(coffeeTable);
   const coffeeLeg = new THREE.Mesh(new THREE.CylinderGeometry(.12, .2, .85, 10), new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: .8 }));
   coffeeLeg.position.set(9.2, .42, 6); scene.add(coffeeLeg);
-  const coffeeTable2 = new THREE.Mesh(new THREE.CylinderGeometry(.85, .85, .1, 20), new THREE.MeshStandardMaterial({ color: 0x9c7a52, roughness: .8 }));
+  const coffeeTable2 = new THREE.Mesh(new THREE.CylinderGeometry(.85, .85, .1, 20), new THREE.MeshStandardMaterial({ color: 0xd6cfc0, roughness: .6 }));
   coffeeTable2.position.set(9.2, .85, 8.2); scene.add(coffeeTable2);
   const coffeeLeg2 = new THREE.Mesh(new THREE.CylinderGeometry(.12, .2, .85, 10), new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: .8 }));
   coffeeLeg2.position.set(9.2, .42, 8.2); scene.add(coffeeLeg2);
@@ -3290,7 +3413,7 @@ function init3D(){
 
   const loungeLeg = new THREE.Mesh(new THREE.CylinderGeometry(.07, .1, .68, 10), new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: .8 }));
   loungeLeg.position.set(0, .34, 9.1); scene.add(loungeLeg);
-  const loungeTable = new THREE.Mesh(new THREE.CylinderGeometry(.5, .5, .06, 16), new THREE.MeshStandardMaterial({ color: 0x9c7a52, roughness: .8 }));
+  const loungeTable = new THREE.Mesh(new THREE.CylinderGeometry(.5, .5, .06, 16), new THREE.MeshStandardMaterial({ color: 0xd6cfc0, roughness: .6 }));
   loungeTable.position.set(0, .71, 9.1); scene.add(loungeTable);
   const laptopBase = new THREE.Mesh(new THREE.BoxGeometry(.5, .03, .34), new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: .4, metalness: .3 }));
   laptopBase.position.set(0, .77, 9.08); scene.add(laptopBase);
@@ -3304,6 +3427,44 @@ function init3D(){
   const corridorStrip = new THREE.Mesh(new THREE.BoxGeometry(2.2, .015, 13.3), new THREE.MeshStandardMaterial({ color: 0x8a7a62, roughness: .9 }));
   corridorStrip.position.set(3.7, .018, 2.85); scene.add(corridorStrip);
 
+  /* couloir des équipes : 50 m vers la droite, une salle tous les 10 m */
+  const corCeils = [];
+  const RX = [24, 34, 44, 54, 64];
+  const corFloorTex = makePlanks(); corFloorTex.repeat.set(10, .6);
+  const corFloor = new THREE.Mesh(new THREE.BoxGeometry(53.4, .2, 3.2), new THREE.MeshStandardMaterial({ map: corFloorTex, roughness: .8 }));
+  corFloor.position.set(40.6, -.1, 0); scene.add(corFloor);
+  const corWallMat = new THREE.MeshStandardMaterial({ color: 0xe6e1d3, roughness: 1 });
+  function corWall(w, d, x, z){
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 3.2, d), corWallMat);
+    m.position.set(x, 1.6, z); scene.add(m); return m;
+  }
+  corWall(53.2, .18, 40.6, 1.59);
+  for(const [x1, x2] of [[14.1, 23.1], [24.9, 33.1], [34.9, 43.1], [44.9, 53.1], [54.9, 63.1], [64.9, 67.2]]){
+    corWall(x2 - x1, .18, (x1 + x2) / 2, -1.59);
+  }
+  corWall(.18, 3.2, 67.1, 0);
+  RX.forEach((rx, i) => {
+    const rf = new THREE.Mesh(new THREE.BoxGeometry(6, .2, 5.6), new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .85 }));
+    rf.position.set(rx, -.09, -4.3); scene.add(rf);
+    corWall(.18, 5.6, rx - 3, -4.3);
+    corWall(.18, 5.6, rx + 3, -4.3);
+    corWall(6, .18, rx, -7.1);
+    const rc = new THREE.Mesh(new THREE.BoxGeometry(6, .2, 5.6), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 1 }));
+    rc.position.set(rx, 3.3, -4.3); scene.add(rc); corCeils.push(rc);
+    const lbl = makeLabel("SALLE " + (i + 1), "placez vos employés ici");
+    lbl.position.set(rx, 2.75, -4.3); scene.add(lbl);
+    const pl = new THREE.PointLight(0xfff4d6, .35, 14);
+    pl.position.set(rx, 2.9, -4); scene.add(pl);
+  });
+  const corC = new THREE.Mesh(new THREE.BoxGeometry(53.2, .2, 3.2), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 1 }));
+  corC.position.set(40.6, 3.3, 0); scene.add(corC); corCeils.push(corC);
+  for(const lx of [24, 44, 64]){
+    const pl = new THREE.PointLight(0xfff4d6, .35, 14);
+    pl.position.set(lx, 2.9, 0); scene.add(pl);
+  }
+  const corLbl = makeLabel("COULOIR DES SALLES", "50 m — une salle tous les 10 m");
+  corLbl.position.set(17, 2.8, 0); scene.add(corLbl);
+
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
   let downX = 0, downY = 0, dragged = false;
@@ -3313,12 +3474,13 @@ function init3D(){
     camMode = m;
     document.getElementById("camBtn").textContent = m === "fps" ? "Vue libre" : "1ère personne";
     ceil.visible = panelGroup.visible = (m === "fps");
+    corCeils.forEach(c => c.visible = (m === "fps"));
     if(m === "fps"){
       let px = 0, pz = 5.6, pyaw = 0, ppitch = 0;
       try{
         const sp = JSON.parse(localStorage.getItem("ac_pos") || "null");
         if(sp && isFinite(sp.x) && isFinite(sp.z)){
-          px = Math.min(13.4, Math.max(-13.4, sp.x));
+          px = Math.min(66.4, Math.max(-13.4, sp.x));
           pz = Math.min(9.4, Math.max(-9.4, sp.z));
           pyaw = sp.yaw || 0; ppitch = sp.pitch || 0;
         }
@@ -3368,7 +3530,7 @@ function init3D(){
   dom.addEventListener("wheel", e => {
     if(camMode === "fps") return;
     e.preventDefault();
-    dist = Math.min(42, Math.max(9, dist + e.deltaY * .012));
+    dist = Math.min(58, Math.max(9, dist + e.deltaY * .012));
     updateCam();
   }, { passive: false });
   dom.addEventListener("click", e => {
@@ -3442,11 +3604,7 @@ function init3D(){
           }
         }
       }
-      const walls3d = [
-        [-14, -7.4, -4.1, -3.9], [-6.6, -6, -4.1, -3.9], [-6.1, -5.9, -10, -4],
-        [5.9, 6.1, -10, -4], [6, 6.6, -4.1, -3.9], [7.4, 14, -4.1, -3.9],
-        [7.3, 7.5, 3.3, 5.7], [7.3, 7.5, 6.7, 10.1], [7.4, 14.1, 3.3, 3.5]
-      ];
+      const walls3d = NAV_WALLS;
       for(const [x1, x2, z1, z2] of walls3d){
         if(fpsState.x > x1 - .35 && fpsState.x < x2 + .35 && fpsState.z > z1 - .35 && fpsState.z < z2 + .35){
           const dl = fpsState.x - (x1 - .35), dr2 = (x2 + .35) - fpsState.x;
@@ -3480,11 +3638,13 @@ function init3D(){
       const slot = coffeeSlots[(state.agents.filter(x => x.status === "paused").indexOf(a) + coffeeSlots.length) % coffeeSlots.length];
       const tx = paused ? slot.x : rec.home.x;
       const tz = paused ? slot.z : rec.home.z;
-      const dxw = tx - rec.char.position.x, dzw = tz - rec.char.position.z;
-      const dw = Math.hypot(dxw, dzw);
+      const dw = Math.hypot(tx - rec.char.position.x, tz - rec.char.position.z);
       if(dw > .05){
-        const step = Math.min(.035, dw);
-        const mx = dxw / dw * step, mz = dzw / dw * step;
+        const wp = navNextWaypoint(rec, tx, tz);
+        const dxw = wp.x - rec.char.position.x, dzw = wp.z - rec.char.position.z;
+        const dwp = Math.hypot(dxw, dzw) || 1;
+        const step = Math.min(.035, dwp);
+        const mx = dxw / dwp * step, mz = dzw / dwp * step;
         rec.char.position.x += mx; rec.char.position.z += mz;
         rec.char.rotation.y = Math.atan2(mx, mz);
         rec.walkPhase = (rec.walkPhase || 0) + .3;
@@ -3505,6 +3665,136 @@ function init3D(){
   sync3D();
   updateHud();
 }
+/* ================= déplacements : chemins réels (couloirs, porte du self) ================= */
+const NAV_WALLS = [
+  [-14, -7.4, -4.1, -3.9], [-6.6, -6, -4.1, -3.9], [-6.1, -5.9, -10, -4],
+  [5.9, 6.1, -10, -4], [6, 6.6, -4.1, -3.9], [7.4, 14, -4.1, -3.9],
+  [7.3, 7.5, 3.3, 5.7], [7.3, 7.5, 6.7, 10.1], [7.4, 14.1, 3.3, 3.5],
+  [13.3, 14.2, -9.4, -1.5], [13.3, 14.2, 1.5, 9.4],
+  [14.1, 67.2, 1.5, 10.2], [14.1, 67.2, -10.2, -7],
+  [14.1, 23.1, -1.7, -1.4], [24.9, 33.1, -1.7, -1.4], [34.9, 43.1, -1.7, -1.4],
+  [44.9, 53.1, -1.7, -1.4], [54.9, 63.1, -1.7, -1.4], [64.9, 67.3, -1.7, -1.4],
+  [66.9, 67.3, -1.5, 1.5],
+  [20.7, 21.3, -7.1, -1.4], [26.7, 27.3, -7.1, -1.4],
+  [30.7, 31.3, -7.1, -1.4], [36.7, 37.3, -7.1, -1.4],
+  [40.7, 41.3, -7.1, -1.4], [46.7, 47.3, -7.1, -1.4],
+  [50.7, 51.3, -7.1, -1.4], [56.7, 57.3, -7.1, -1.4],
+  [60.7, 61.3, -7.1, -1.4], [66.7, 67.3, -7.1, -1.4]
+];
+const NAV = { G: .2, X0: -13.6, Z0: -9.6, nx: 406, nz: 97, R: .28, blocked: null, version: 0, bootT: performance.now(), entry: { x: 3.7, z: 9.0 } };
+function navBuild(){
+  const { G, X0, Z0, nx, nz, R } = NAV;
+  const b = new Uint8Array(nx * nz);
+  const rects = NAV_WALLS.slice();
+  agent3d.forEach(rec => { const p = rec.group.position; rects.push([p.x - .85, p.x + .85, p.z - .525, p.z + .525]); });
+  rects.push([-1.7, 1.7, -7.3, -5.7], [8.7, 11.3, -8.8, -7.6], [-13.35, -11.45, 8.375, 9.425],
+             [-12.25, -7.75, -7.9, -6.1], [12.4, 13.4, 4, 9.2], [-13.75, -12.85, 0, 3.2]);
+  const circles = [[9.2, 6, .85], [9.2, 8.2, .85], [0, 9.1, .7]];
+  for(let k = 0; k < nz; k++){
+    const z = Z0 + k * G;
+    for(let i = 0; i < nx; i++){
+      const x = X0 + i * G;
+      let bl = x < -13.4 || x > 66.4 || z < -9.4 || z > 9.4;
+      for(let r = 0; !bl && r < rects.length; r++){
+        const q = rects[r];
+        if(x > q[0] - R && x < q[1] + R && z > q[2] - R && z < q[3] + R) bl = true;
+      }
+      for(let c = 0; !bl && c < circles.length; c++){
+        if(Math.hypot(x - circles[c][0], z - circles[c][1]) < circles[c][2]) bl = true;
+      }
+      if(bl) b[k * nx + i] = 1;
+    }
+  }
+  NAV.blocked = b;
+}
+function navCell(x, z){
+  const i = Math.max(0, Math.min(NAV.nx - 1, Math.round((x - NAV.X0) / NAV.G)));
+  const k = Math.max(0, Math.min(NAV.nz - 1, Math.round((z - NAV.Z0) / NAV.G)));
+  return k * NAV.nx + i;
+}
+function navLos(ax, az, bx, bz, free1, free2){
+  const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / (NAV.G / 2)));
+  for(let s = 0; s <= n; s++){
+    const c = navCell(ax + (bx - ax) * s / n, az + (bz - az) * s / n);
+    if(NAV.blocked[c] && c !== free1 && c !== free2) return false;
+  }
+  return true;
+}
+function navFindPath(sx, sz, gx, gz){
+  if(!NAV.blocked) navBuild();
+  const { nx, nz, G, X0, Z0 } = NAV, B = NAV.blocked;
+  const s = navCell(sx, sz);
+  let g = navCell(gx, gz);
+  const inSelf = (x, z) => x > 7.4 && z > 3.4;
+  const straight = inSelf(sx, sz) !== inSelf(gx, gz)
+    ? (inSelf(gx, gz) ? [{ x: 6.9, z: 6.2 }, { x: 7.9, z: 6.2 }, { x: gx, z: gz }] : [{ x: 7.9, z: 6.2 }, { x: 6.9, z: 6.2 }, { x: gx, z: gz }])
+    : [{ x: gx, z: gz }];
+  if(s === g) return [{ x: gx, z: gz }];
+  if(B[g]){
+    let best = -1, bd = 1e9;
+    const gi = g % nx, gk = Math.floor(g / nx);
+    for(let dk = -3; dk <= 3; dk++) for(let di = -3; di <= 3; di++){
+      const i = gi + di, k = gk + dk;
+      if(i < 0 || k < 0 || i >= nx || k >= nz || B[k * nx + i]) continue;
+      const d = di * di + dk * dk;
+      if(d < bd){ bd = d; best = k * nx + i; }
+    }
+    if(best < 0) return straight;
+    g = best;
+  }
+  const gI = g % nx, gK = Math.floor(g / nx);
+  const gScore = new Float32Array(nx * nz).fill(1e9);
+  const from = new Int32Array(nx * nz).fill(-1);
+  const closed = new Uint8Array(nx * nz);
+  const heap = [];
+  const hf = c => { const i = c % nx, k = Math.floor(c / nx), dx = Math.abs(i - gI), dz = Math.abs(k - gK); return (dx + dz) + (Math.SQRT2 - 2) * Math.min(dx, dz); };
+  const push = (c, f) => { heap.push([f, c]); let i = heap.length - 1; while(i > 0){ const p = (i - 1) >> 1; if(heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+  const pop = () => { const top = heap[0], last = heap.pop(); if(heap.length){ heap[0] = last; let i = 0; for(;;){ let l = 2 * i + 1, r = l + 1, m = i; if(l < heap.length && heap[l][0] < heap[m][0]) m = l; if(r < heap.length && heap[r][0] < heap[m][0]) m = r; if(m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+  gScore[s] = 0; push(s, hf(s));
+  let found = false;
+  while(heap.length){
+    const cur = pop()[1];
+    if(closed[cur]) continue;
+    closed[cur] = 1;
+    if(cur === g){ found = true; break; }
+    const ci = cur % nx, ck = Math.floor(cur / nx);
+    for(let dk = -1; dk <= 1; dk++) for(let di = -1; di <= 1; di++){
+      if(!di && !dk) continue;
+      const i = ci + di, k = ck + dk;
+      if(i < 0 || k < 0 || i >= nx || k >= nz) continue;
+      const nc = k * nx + i;
+      if(B[nc] && nc !== g || closed[nc]) continue;
+      if(di && dk && (B[ck * nx + i] || B[k * nx + ci])) continue;
+      const ng = gScore[cur] + (di && dk ? Math.SQRT2 : 1);
+      if(ng < gScore[nc]){ gScore[nc] = ng; from[nc] = cur; push(nc, ng + hf(nc)); }
+    }
+  }
+  if(!found) return straight;
+  const pts = [];
+  for(let c = g; c !== -1; c = from[c]) pts.push({ x: X0 + (c % nx) * G, z: Z0 + Math.floor(c / nx) * G });
+  pts.reverse();
+  pts[0] = { x: sx, z: sz };
+  pts.push({ x: gx, z: gz });
+  const out = [];
+  let a = 0;
+  while(a < pts.length - 1){
+    let j = pts.length - 1;
+    while(j > a + 1 && !navLos(pts[a].x, pts[a].z, pts[j].x, pts[j].z, s, g)) j--;
+    out.push(pts[j]);
+    a = j;
+  }
+  return out;
+}
+function navNextWaypoint(rec, tx, tz){
+  const key = tx.toFixed(2) + "," + tz.toFixed(2);
+  if(rec.navKey !== key || rec.navVer !== NAV.version || !rec.navPath){
+    rec.navKey = key; rec.navVer = NAV.version;
+    rec.navPath = navFindPath(rec.char.position.x, rec.char.position.z, tx, tz);
+  }
+  while(rec.navPath.length > 1 && Math.hypot(rec.navPath[0].x - rec.char.position.x, rec.navPath[0].z - rec.char.position.z) < .08) rec.navPath.shift();
+  return rec.navPath[0];
+}
+
 function sync3D(){
   if(!three) return;
   for(const [id, rec] of Array.from(agent3d)){
@@ -3517,7 +3807,11 @@ function sync3D(){
   const CX = [5.6, 7.8, 10, 12.2];
   const CZ = [-3.2, -0.8, 1.6];
   CZ.forEach(z => CX.forEach(x => SLOTS.push([x, z])));
-  [4.8, 6.6, 8.4].forEach(z => SLOTS.push([6.2, z]));
+  [24, 34, 44, 54, 64].forEach(rx => {
+    [-1.6, 1.6].forEach(dx => { [-2.6, -5.2].forEach(z => SLOTS.push([rx + dx, z])); });
+  });
+  /* au-delà de 12 agents : grande zone libre à gauche (rien devant la porte du self) */
+  [-0.8, -3, -5.2, -7.4, -9.6].forEach(x => [-1, 1.4, 3.8].forEach(z => SLOTS.push([x, z])));
   const clusters = [];
   if((state.groups || []).length){
     state.groups.forEach(g => {
@@ -3534,6 +3828,7 @@ function sync3D(){
       c.members.push(a);
     });
   }
+  NAV.version++; NAV.blocked = null;
   const posOf = new Map();
   let si = 0;
   clusters.forEach(c => c.members.forEach(a => {
@@ -3558,7 +3853,10 @@ function sync3D(){
     const label = makeLabel(a.name, a.role || "polyvalent");
     label.position.set(x, 2.35, z);
     const char = makeCharacter(0x333a2a);
-    char.position.set(x, 0, z + .95);
+    /* recrue arrivée après le chargement : elle entre par le couloir et marche jusqu'à son bureau */
+    const arrivesOnFoot = (performance.now() - NAV.bootT) > 10000;
+    if(arrivesOnFoot) char.position.set(NAV.entry.x, 0, NAV.entry.z);
+    else char.position.set(x, 0, z + .95);
     three.scene.add(group, label, char);
     agent3d.set(a.id, { group, label, char, mat: group.userData.screenMat, legL: char.userData.legL, legR: char.userData.legR, home: { x, z: z + .95 } });
   });
@@ -3632,6 +3930,28 @@ renderPcSettings();
     showAuthMsg("Échec de connexion : " + err, true);
   }
   setTimeout(()=>{ try{ if(location.hash || location.search) history.replaceState(null, "", location.pathname); }catch(e){} }, 3000);
+})();
+
+/* ================= interface simplifiée : panneaux secondaires repliables ================= */
+(function(){
+  const FOLD_KEY = "ac_folded";
+  let saved = null;
+  try{ saved = JSON.parse(localStorage.getItem(FOLD_KEY) || "null"); }catch(e){}
+  const defaults = { sitesHead: true, schedHead: true, logHead: true, settingsHead: false };
+  const folded = saved || Object.assign({}, defaults, { settingsHead: !hasKey() });
+  ["sitesHead", "schedHead", "settingsHead", "logHead"].forEach(id => {
+    const head = document.getElementById(id);
+    if(!head || !head.parentElement) return;
+    const panel = head.parentElement;
+    head.setAttribute("data-fold", "1");
+    head.setAttribute("role", "button");
+    head.tabIndex = 0;
+    const apply = () => { panel.classList.toggle("collapsed", !!folded[id]); head.setAttribute("aria-expanded", folded[id] ? "false" : "true"); };
+    const toggle = () => { folded[id] = !folded[id]; apply(); try{ localStorage.setItem(FOLD_KEY, JSON.stringify(folded)); }catch(e){} };
+    head.addEventListener("click", toggle);
+    head.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); toggle(); } });
+    apply();
+  });
 })();
 </script>
 </body>
