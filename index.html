@@ -488,6 +488,7 @@
       <button class="tab" data-tab="tasks"></button>
       <button class="tab" data-tab="reunion"></button>
       <button class="tab" data-tab="teams"></button>
+      <button class="tab" data-tab="salles"></button>
       <button class="tab" data-tab="chat"></button>
       <button class="tab" data-tab="hr"></button>
       <button class="tab" data-tab="servers"></button>
@@ -584,6 +585,10 @@
       </div>
       <button class="btn wide" id="teamCreate" style="margin-top:8px;"></button>
       <div id="teamsBox" style="margin-top:14px;"></div>
+    </div>
+    <div class="pcpane" id="pane-salles" style="display:none;">
+      <div class="hint">Placez vos employés dans les 5 salles du couloir et renommez-les : les panneaux au-dessus de chaque entrée se mettent à jour tout seuls.</div>
+      <div id="sallesBox" style="margin-top:12px;"></div>
     </div>
     <div class="pcpane" id="pane-notes" style="display:none;">
       <label>Notes pour moi — votre pense-bête personnel</label>
@@ -725,7 +730,7 @@ function scopeKey(){
 }
 function freshState(){
   return { agents: [], mission: "", backlog: [], autonomous: false, speed: 1, doneCount: 0,
-           activity: [], results: [], chat: [], sites: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], drhAuto: false, coffeeClosed: false, meta: { syncedAt: null } };
+           activity: [], results: [], chat: [], sites: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], roomNames: {}, drhAuto: false, coffeeClosed: false, meta: { syncedAt: null } };
 }
 let state = freshState();
 const PERSONAS = ["efficace et direct","créatif et imaginatif","rigoureux et méthodique","enthousiaste et positif","pédagogue et clair","analytique et critique","chaleureux et diplomate","pragmatique, orienté résultats"];
@@ -738,6 +743,7 @@ function ensurePersonas(){
   if(!state.skills) state.skills = [];
   if(!state.notes) state.notes = [];
   if(!state.connectors) state.connectors = [];
+  if(!state.roomNames) state.roomNames = {};
   if(!state.assistantChat) state.assistantChat = [];
   if(state.drhAuto === undefined) state.drhAuto = false;
   state.agents.forEach(a => { if(a.group === undefined) a.group = ""; if(!a.skills) a.skills = []; });
@@ -1921,6 +1927,7 @@ const PC_TABS = [
   { id: "tasks", label: "Tâches", icon: "tasks" },
   { id: "reunion", label: "Réunion", icon: "clock" },
   { id: "teams", label: "Équipes", icon: "user" },
+  { id: "salles", label: "Salles", icon: "list" },
   { id: "chat", label: "Conversations", icon: "text-bubble" },
   { id: "hr", label: "DRH", icon: "user" },
   { id: "servers", label: "Serveurs", icon: "code" },
@@ -1939,7 +1946,7 @@ function initPcTabs(){
 initPcTabs();
 function switchPcTab(name){
   document.querySelectorAll("#pcTabs .tab").forEach(t => t.classList.toggle("on", t.dataset.tab === name));
-  for(const id of ["files", "tasks", "reunion", "teams", "chat", "hr", "servers", "notes", "assistant", "conn", "settings"]){
+  for(const id of ["files", "tasks", "reunion", "teams", "salles", "chat", "hr", "servers", "notes", "assistant", "conn", "settings"]){
     document.getElementById("pane-" + id).style.display = id === name ? "" : "none";
   }
   if(name === "files") renderResults();
@@ -1949,6 +1956,7 @@ function switchPcTab(name){
   if(name === "hr") renderHR();
   if(name === "servers") renderPcServers();
   if(name === "teams") renderTeams();
+  if(name === "salles") renderSalles();
   if(name === "notes") renderNotes();
   if(name === "assistant") renderPcAssistant();
   if(name === "conn") renderConnectors();
@@ -2810,6 +2818,44 @@ document.getElementById("teamCreate").addEventListener("click", ()=>{
   renderTeams(); save();
 });
 
+function renderSalles(){
+  const box = document.getElementById("sallesBox");
+  if(!box) return;
+  if(!state.roomNames) state.roomNames = {};
+  let h = "";
+  for(let i = 0; i < 5; i++){
+    const members = state.agents.filter(a => a.room === i);
+    h += '<div class="hrrow" style="flex-wrap:wrap;"><div style="min-width:200px;"><div class="hrname">' + icon("list") + " Salle " + (i + 1) + '</div>' +
+      '<input type="text" class="roomName" data-i="' + i + '" value="' + esc(roomName(i)) + '" maxlength="24" style="margin-top:6px;">' +
+      '<div style="margin-top:6px;">' + (members.length ? members.map(m => '<span class="hstat idle" style="margin-right:6px;">' + esc(m.name) + '</span>').join("") : '<span class="hstat paused">salle vide</span>') + '</div></div>' +
+      '<select class="roomAdd" data-i="' + i + '" style="flex:0 0 auto;max-width:180px;"><option value="">+ placer un agent…</option>' +
+      state.agents.filter(a => a.room !== i).map(a => '<option value="' + a.id + '">' + esc(a.name) + '</option>').join("") + '</select>' +
+      '<button class="iconbtn roomClear" data-i="' + i + '" title="Vider la salle">' + icon("trash") + '</button></div>';
+  }
+  h += '<div class="hint" style="margin-top:10px;">Les agents sans salle suivent leur groupe / pôle dans le bureau principal.</div>';
+  box.innerHTML = h;
+  box.querySelectorAll(".roomName").forEach(inp => inp.addEventListener("change", ()=>{
+    const i = +inp.dataset.i;
+    state.roomNames[i] = inp.value.trim().slice(0, 24) || ("Salle " + (i + 1));
+    if(three && three.redrawRooms) three.redrawRooms();
+    save(); renderSalles();
+  }));
+  box.querySelectorAll(".roomAdd").forEach(sel => sel.addEventListener("change", ()=>{
+    const a = state.agents.find(x => x.id === sel.value);
+    if(a){
+      a.room = +sel.dataset.i;
+      logGlobal("<b>" + esc(a.name) + "</b> est placé dans « " + esc(roomName(a.room)) + " ».", "DRH");
+      sync3D(); save(); renderSalles();
+    }
+    sel.value = "";
+  }));
+  box.querySelectorAll(".roomClear").forEach(b => b.addEventListener("click", ()=>{
+    const i = +b.dataset.i;
+    state.agents.forEach(a => { if(a.room === i) a.room = ""; });
+    sync3D(); save(); renderSalles();
+  }));
+}
+
 /* ================= notes pour moi ================= */
 function renderNotes(){
   const box = document.getElementById("notesList");
@@ -3022,7 +3068,10 @@ let three = null;
 let camMode = "orbit";
 const agent3d = new Map();
 const zoneLabels = new Map();
-const fpsState = { x: 0, z: 5.6, yaw: 0, pitch: 0 };
+const fpsState = { x: 0, z: 5.6, yaw: 0, pitch: 0, y: 0, vy: 0 };
+let laptopPocket = false;
+let setLaptopPocket = () => {};
+function roomName(i){ return (state.roomNames && state.roomNames[i]) || ("Salle " + (i + 1)); }
 let nearTarget = null;
 const fpsPromptEl = document.getElementById("fpsPrompt");
 const fpsCrossEl = document.getElementById("fpsCross");
@@ -3049,7 +3098,10 @@ function interactNear(){
   } else if(nt.type === "reunion"){
     openPc("reunion");
   } else if(nt.type === "laptop"){
-    openPc("notes");
+    setLaptopPocket(!laptopPocket);
+    logGlobal(laptopPocket ? "PC portable pris — touche P pour l’ouvrir partout." : "PC portable posé sur la table du lounge.", "Système");
+    setPrompt(null);
+    return;
   } else if(nt.type === "agent"){
     showAgentPopup(nt.agent, window.innerWidth / 2 - 100, window.innerHeight / 2 - 60);
   }
@@ -3068,7 +3120,7 @@ function checkNear(){
   consider(-12.4, 8.9, 2.6, { type: "pc", label: "Ouvrir votre PC (fichiers, tâches, réunion)" });
   consider(-13.3, 1.6, 2.6, { type: "servers", label: "Salle serveurs — héberger un site à coder" });
   consider(-10, -7, 3.2, { type: "reunion", label: "Salle de réunion — convoquer une réunion" });
-  consider(0, 9.1, 2.2, { type: "laptop", label: "Votre PC portable — touche P (notes & assistant)" });
+  consider(0, 9.1, 2.2, { type: "laptop", label: laptopPocket ? "Poser le PC portable sur la table" : "Mettre le PC portable dans la poche — touche P partout" });
   for(const a of state.agents){
     const rec = agent3d.get(a.id);
     if(rec) consider(rec.group.position.x, rec.group.position.z, 2.3,
@@ -3263,7 +3315,7 @@ function init3D(){
   }
   drawSign();
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshBasicMaterial({ map: signTex }));
-  sign.position.set(0, 3.55, -9.88); scene.add(sign);
+  sign.position.set(0, 3.55, -9.68); scene.add(sign);
   const potMat = new THREE.MeshStandardMaterial({ color: 0xe4ded0, roughness: .9 });
   const leafMat = new THREE.MeshStandardMaterial({ color: 0x5f8a55, roughness: .9 });
   for(const [px, pz] of [[-13.4, -9.4], [13.4, -9.4], [13.4, 9.4], [-13.4, 9.4]]){
@@ -3424,6 +3476,17 @@ function init3D(){
   scene.add(laptopScr);
   const laptopLabel = makeLabel("VOTRE PC PORTABLE", "touche P — notes & assistant");
   laptopLabel.position.set(0, 2.2, 9.1); scene.add(laptopLabel);
+  const pocketLaptop = new THREE.Mesh(new THREE.BoxGeometry(.36, .05, .26), new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: .4, metalness: .3 }));
+  pocketLaptop.position.set(.34, -.34, -.66);
+  pocketLaptop.rotation.set(-.55, .1, .14);
+  pocketLaptop.visible = false;
+  camera.add(pocketLaptop);
+  scene.add(camera);
+  setLaptopPocket = v => {
+    laptopPocket = v;
+    laptopBase.visible = laptopScr.visible = laptopLabel.visible = !v;
+    pocketLaptop.visible = v && camMode === "fps";
+  };
   const corridorStrip = new THREE.Mesh(new THREE.BoxGeometry(2.2, .015, 13.3), new THREE.MeshStandardMaterial({ color: 0x8a7a62, roughness: .9 }));
   corridorStrip.position.set(3.7, .018, 2.85); scene.add(corridorStrip);
 
@@ -3443,6 +3506,7 @@ function init3D(){
     corWall(x2 - x1, .18, (x1 + x2) / 2, -1.59);
   }
   corWall(.18, 3.2, 67.1, 0);
+  const roomSprites = [], roomPanels = [], roomPanelTex = [];
   RX.forEach((rx, i) => {
     const rf = new THREE.Mesh(new THREE.BoxGeometry(6, .2, 5.6), new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .85 }));
     rf.position.set(rx, -.09, -4.3); scene.add(rf);
@@ -3451,8 +3515,14 @@ function init3D(){
     corWall(6, .18, rx, -7.1);
     const rc = new THREE.Mesh(new THREE.BoxGeometry(6, .2, 5.6), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 1 }));
     rc.position.set(rx, 3.3, -4.3); scene.add(rc); corCeils.push(rc);
-    const lbl = makeLabel("SALLE " + (i + 1), "placez vos employés ici");
+    const lbl = makeLabel(roomName(i), "placez vos employés ici");
     lbl.position.set(rx, 2.75, -4.3); scene.add(lbl);
+    roomSprites[i] = lbl;
+    const pc = document.createElement("canvas"); pc.width = 512; pc.height = 128;
+    const ptex = new THREE.CanvasTexture(pc);
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(2.7, .67), new THREE.MeshBasicMaterial({ map: ptex, transparent: true, depthWrite: false }));
+    panel.position.set(rx, 2.5, -1.4); scene.add(panel);
+    roomPanels[i] = pc; roomPanelTex[i] = ptex;
     const pl = new THREE.PointLight(0xfff4d6, .35, 14);
     pl.position.set(rx, 2.9, -4); scene.add(pl);
   });
@@ -3475,6 +3545,7 @@ function init3D(){
     document.getElementById("camBtn").textContent = m === "fps" ? "Vue libre" : "1ère personne";
     ceil.visible = panelGroup.visible = (m === "fps");
     corCeils.forEach(c => c.visible = (m === "fps"));
+    pocketLaptop.visible = laptopPocket && (m === "fps");
     if(m === "fps"){
       let px = 0, pz = 5.6, pyaw = 0, ppitch = 0;
       try{
@@ -3502,6 +3573,7 @@ function init3D(){
     if(["KeyA","KeyQ","ArrowLeft"].includes(e.code)) fpsKeys.left = true;
     if(["KeyD","ArrowRight"].includes(e.code)) fpsKeys.right = true;
     if(e.code === "ShiftLeft" || e.code === "ShiftRight") fpsKeys.sprint = true;
+    if(e.code === "Space" && !e.repeat && fpsState.y <= 0) fpsState.vy = 3.4;
     if(e.code === "KeyE") interactNear();
     if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code)) e.preventDefault();
   });
@@ -3566,7 +3638,31 @@ function init3D(){
     camera.updateProjectionMatrix();
   });
 
-  three = { scene, camera, renderer, bossChar, coffeeSlots, limeLight, redrawSign: drawSign, coffeeLabel: machineLabel, corridorStrip };
+  function redrawRooms(){
+    for(let i = 0; i < 5; i++){
+      if(roomPanels[i]){
+        const g = roomPanels[i].getContext("2d");
+        g.clearRect(0, 0, 512, 128);
+        g.fillStyle = "rgba(11,13,10,0.85)"; g.fillRect(0, 0, 512, 128);
+        g.strokeStyle = "#333a2a"; g.lineWidth = 5; g.strokeRect(5, 5, 502, 118);
+        g.textAlign = "center";
+        g.fillStyle = "#c6f542"; g.font = "bold 46px monospace";
+        g.fillText(roomName(i).toUpperCase().slice(0, 20), 256, 58);
+        g.fillStyle = "#9aa38c"; g.font = "24px monospace";
+        g.fillText("entrée — salle " + (i + 1), 256, 102);
+        roomPanelTex[i].needsUpdate = true;
+      }
+      if(roomSprites[i]){
+        const old = roomSprites[i];
+        const nl = makeLabel(roomName(i), "placez vos employés ici");
+        nl.position.copy(old.position);
+        scene.add(nl); scene.remove(old);
+        roomSprites[i] = nl;
+      }
+    }
+  }
+  three = { scene, camera, renderer, bossChar, coffeeSlots, limeLight, redrawSign: drawSign, coffeeLabel: machineLabel, corridorStrip, redrawRooms };
+  redrawRooms();
   syncCoffeeUI();
   const clock = new THREE.Clock();
   let lastT = performance.now();
@@ -3616,7 +3712,12 @@ function init3D(){
           else fpsState.z = z2 + .35;
         }
       }
-      camera.position.set(fpsState.x, 1.62, fpsState.z);
+      if(fpsState.y > 0 || fpsState.vy){
+        fpsState.y += fpsState.vy * dt;
+        fpsState.vy -= 9.8 * dt;
+        if(fpsState.y <= 0){ fpsState.y = 0; fpsState.vy = 0; }
+      }
+      camera.position.set(fpsState.x, 1.62 + fpsState.y, fpsState.z);
       camera.rotation.order = "YXZ";
       camera.rotation.set(fpsState.pitch, fpsState.yaw, 0);
       checkNear();
@@ -3625,7 +3726,12 @@ function init3D(){
         lastPosSave = np;
         try{ localStorage.setItem("ac_pos", JSON.stringify({ x: fpsState.x, z: fpsState.z, yaw: fpsState.yaw, pitch: fpsState.pitch })); }catch(err){}
       }
-    } else lastT = performance.now();
+    } else {
+      lastT = performance.now();
+      target.x += (fpsState.x - target.x) * .04;
+      target.z += (fpsState.z - target.z) * .04;
+      updateCam();
+    }
     for(const a of state.agents){
       const rec = agent3d.get(a.id);
       if(!rec) continue;
@@ -3807,8 +3913,10 @@ function sync3D(){
   const CX = [5.6, 7.8, 10, 12.2];
   const CZ = [-3.2, -0.8, 1.6];
   CZ.forEach(z => CX.forEach(x => SLOTS.push([x, z])));
-  [24, 34, 44, 54, 64].forEach(rx => {
-    [-1.6, 1.6].forEach(dx => { [-2.6, -5.2].forEach(z => SLOTS.push([rx + dx, z])); });
+  const roomSlots = [[], [], [], [], []];
+  [24, 34, 44, 54, 64].forEach((rx, ri) => {
+    [-1.6, 1.6].forEach(dx => { [-2.6, -5.2].forEach(z => roomSlots[ri].push([rx + dx, z])); });
+    [-2.2, 2.2].forEach(dx => roomSlots[ri].push([rx + dx, -3.9]));
   });
   /* au-delà de 12 agents : grande zone libre à gauche (rien devant la porte du self) */
   [-0.8, -3, -5.2, -7.4, -9.6].forEach(x => [-1, 1.4, 3.8].forEach(z => SLOTS.push([x, z])));
@@ -3830,8 +3938,18 @@ function sync3D(){
   }
   NAV.version++; NAV.blocked = null;
   const posOf = new Map();
+  const roomUsed = [0, 0, 0, 0, 0];
+  const inRoom = new Set();
+  state.agents.forEach(a => {
+    const r = a.room;
+    if(Number.isInteger(r) && r >= 0 && r < 5){
+      const s = roomSlots[r][roomUsed[r]];
+      if(s){ posOf.set(a.id, s); roomUsed[r]++; inRoom.add(a.id); }
+    }
+  });
   let si = 0;
   clusters.forEach(c => c.members.forEach(a => {
+    if(inRoom.has(a.id)) return;
     const wave = Math.floor(si / SLOTS.length);
     const baseSlot = SLOTS[si % SLOTS.length];
     posOf.set(a.id, baseSlot ? [baseSlot[0] + wave * .3, baseSlot[1] + wave * .24] : [-5.4 + (si % 5) * 2.7, Math.floor(si / 5) === 0 ? -1.4 : 1.6]);
@@ -3867,7 +3985,7 @@ function sync3D(){
     }
   }
   clusters.forEach(c => {
-    const pts = c.members.map(a => posOf.get(a.id)).filter(Boolean);
+    const pts = c.members.filter(a => !inRoom.has(a.id)).map(a => posOf.get(a.id)).filter(Boolean);
     if(!pts.length) return;
     const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
     const cz = pts.reduce((s, p) => s + p[1], 0) / pts.length;
