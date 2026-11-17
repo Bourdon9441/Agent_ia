@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261118-0300">
+<meta name="build" content="b-20261118-0400">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -4662,6 +4662,7 @@ function init3D(){
   const roomSprites = [], roomPanels = [], roomPanelTex = [];
 
   /* bâtiments séparés au sud : deux annexes avec porte coulissante, fenêtre et bureaux assignables (salles 6 et 7) */
+  const connLights = [];
   try{
   RX.forEach((rx, i) => {
     const rf = new THREE.Mesh(new THREE.BoxGeometry(8, .2, 7), new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .85 }));
@@ -4701,6 +4702,45 @@ function init3D(){
   const skyTex = new THREE.CanvasTexture(skyC);
   const skyMat = new THREE.MeshBasicMaterial({ map: skyTex });
   const frameMat = new THREE.MeshStandardMaterial({ color: 0xf4f1e8, roughness: .6 });
+
+  /* façade sud du bâtiment 1 : mur + baies vitrées vers le grand bâtiment, porte coulissante alignée avec la sienne (rien devant) */
+  try{
+    const ws1 = new THREE.Mesh(new THREE.BoxGeometry(2.8, 4.4, .2), wallMat); ws1.position.set(-12.6, 2.2, 10); scene.add(ws1);
+    const ws2 = new THREE.Mesh(new THREE.BoxGeometry(2.8, 4.4, .2), wallMat); ws2.position.set(12.6, 2.2, 10); scene.add(ws2);
+    const wsLink = new THREE.Mesh(new THREE.BoxGeometry(1.85, 4.4, .2), wallMat); wsLink.position.set(1.825, 2.2, 10); scene.add(wsLink);
+    const wsLintel = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.6, .2), wallMat); wsLintel.position.set(0, 3.6, 10); scene.add(wsLintel);
+    const wstrip = (w, cx) => {
+      const bandT = new THREE.Mesh(new THREE.BoxGeometry(w, 1.4, .2), wallMat); bandT.position.set(cx, 3.7, 10); scene.add(bandT);
+      const sill = new THREE.Mesh(new THREE.BoxGeometry(w, .1, .22), frameMat); sill.position.set(cx, .05, 10); scene.add(sill);
+      const pane = new THREE.Mesh(new THREE.BoxGeometry(w, 2.9, .06), glassMat); pane.position.set(cx, 1.55, 10); scene.add(pane);
+    };
+    wstrip(10.3, -6.05);
+    wstrip(8.45, 6.975);
+    for(const mx of [-9.6, -6.05, -2.5]){
+      const m = new THREE.Mesh(new THREE.BoxGeometry(.1, 2.9, .14), frameMat); m.position.set(mx, 1.55, 10); scene.add(m);
+    }
+    for(const mx of [4.0, 7.0, 10.0]){
+      const m = new THREE.Mesh(new THREE.BoxGeometry(.1, 2.9, .14), frameMat); m.position.set(mx, 1.55, 10); scene.add(m);
+    }
+    const csDoor = new THREE.Mesh(new THREE.BoxGeometry(1.72, 2.8, .12), doorMat);
+    csDoor.position.set(0, 1.4, 10.13);
+    csDoor.userData.door = { axis: "x", base: 0, slide: 1.85, cx: 0, cz: 10, t: 0, pz: 10.13, tz: 10.0 };
+    scene.add(csDoor); officeDoors.push(csDoor);
+    const csLbl = makeLabel("PASSAGE COUVERT", "bâtiment 1 ↔ bâtiment 2 — porte coulissante");
+    csLbl.position.set(0, 2.7, 11.5); scene.add(csLbl);
+    for(const sx of [-11.2, 11.2]){
+      const band = new THREE.Mesh(new THREE.BoxGeometry(.2, 1.5, 3.2), wallMat); band.position.set(sx, 3.6, 11.5); scene.add(band);
+      const pane = new THREE.Mesh(new THREE.BoxGeometry(.06, 2.9, 3.0), glassMat); pane.position.set(sx, 1.5, 11.5); scene.add(pane);
+      const sill = new THREE.Mesh(new THREE.BoxGeometry(.22, .1, 3.0), frameMat); sill.position.set(sx, .05, 11.5); scene.add(sill);
+    }
+    const connRoof = new THREE.Mesh(new THREE.BoxGeometry(22.4, .12, 3.2), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 1 }));
+    connRoof.position.set(0, 4.42, 11.5); scene.add(connRoof); corCeils.push(connRoof);
+    for(const lx2 of [-5.5, 5.5]){
+      const cl = new THREE.PointLight(0xfff4d6, .35, 12);
+      cl.position.set(lx2, 3.5, 11.5); scene.add(cl);
+      connLights.push(cl);
+    }
+  }catch(e){ console.warn("façade sud indisponible", e); }
   function addWindow(w, h, x, y, z, ry){
     const g = new THREE.Group();
     const sky = new THREE.Mesh(new THREE.PlaneGeometry(w, h), skyMat);
@@ -4885,6 +4925,7 @@ function init3D(){
       dcPower = !!br[0];
       bpl.visible = dcPower && !!br[1];
       bpl2.visible = dcPower && !!br[1];
+      for(const L of connLights) L.visible = dcPower && !!br[1];
       el1.visible = dcPower && !!br[2];
       dcLight.visible = dcPower && !!br[3];
       for(let i = 0; i < brkLevers.length; i++){
@@ -5214,6 +5255,8 @@ const NAV_WALLS = [
   [-14, 3.1, -10.15, -9.85], [4.9, 14, -10.15, -9.85],
   [-13.2, -12.8, -24, -10], [12.8, 13.2, -24, -10], [-13, 13, -24.15, -23.85],
   [-2.3, 2.3, -21.9, -19.3], [-13.1, -12.4, -18.9, -15.1], [-10.1, -8.9, -12.9, -12.3], [1.1, 1.7, -18.9, -18.3],
+  [-14.1, -0.9, 9.9, 10.1], [0.9, 14.1, 9.9, 10.1],
+  [-11.4, -11.0, 9.9, 13.1], [11.0, 11.4, 9.9, 13.1],
   [-11.15, -10.85, 13, 27], [10.85, 11.15, 13, 27], [-11, 11, 26.85, 27.15],
   [-11, -0.9, 12.85, 13.15], [0.9, 11, 12.85, 13.15],
   [9.1, 10.6, 22.8, 26.2]
