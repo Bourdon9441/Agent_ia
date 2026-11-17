@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261118-0115">
+<meta name="build" content="b-20261118-0130">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -3837,6 +3837,36 @@ function setBLevel(l){
   logGlobal(l === 1 ? "Vous montez à l'étage du grand bâtiment — votre second bureau." : l === 2 ? "Vous descendez au sous-sol — datacenter et disjoncteurs." : "Vous remontez au rez-de-chaussée.", "Système");
   setPrompt(null);
 }
+
+/* technicien de maintenance : 100% local, n'utilise jamais l'API */
+const trippedByEvent = new Set();
+setInterval(() => {
+  const br = state.breakers || [true, true, true, true];
+  if(!br[0]) return;
+  if(Math.random() < .04){
+    const i = Math.floor(Math.random() * 4);
+    state.breakers[i] = false;
+    trippedByEvent.add(i);
+    logGlobal("⚡ Surcharge : le disjoncteur « " + BRK_NAMES[i] + " » a sauté" + (i === 0 ? " — tout le bâtiment est hors tension." : "."), "Système");
+    if(three && three.applyBreakers) three.applyBreakers();
+    save();
+  }
+}, 40000);
+setInterval(() => {
+  if(!trippedByEvent.size) return;
+  let fixed = false;
+  for(const i of Array.from(trippedByEvent)){
+    trippedByEvent.delete(i);
+    if(!state.breakers || state.breakers[i]) continue;
+    state.breakers[i] = true;
+    fixed = true;
+    logGlobal("🔧 Le technicien a réenclenché « " + BRK_NAMES[i] + " »" + (i === 0 ? " — courant rétabli, les PC redémarrent." : "."), "Technicien");
+  }
+  if(fixed){
+    if(three && three.applyBreakers) three.applyBreakers();
+    save();
+  }
+}, 7000);
 let camMode = "orbit";
 let overviewMode = false;
 const agent3d = new Map();
@@ -3925,7 +3955,7 @@ function checkNear(){
     consider(0, 20.2, 2.8, { type: "pc", label: "Votre PC fixe — copie du bureau (étage)" });
     consider(-10.3, 18, 2.8, { type: "tni", label: "Tableau numérique — étage" });
   } else {
-    consider(9.9, 24.5, 2.6, { type: "stairsUp", label: "Monter au rez-de-chaussée (E)" });
+    consider(9.9, 24.5, 26, { type: "stairsUp", label: "Monter au rez-de-chaussée — remontée (E)" });
     consider(-10.6, 16, 2.4, { type: "breaker", label: "Disjoncteurs — électricité du bâtiment (E)" });
   }
   LAPTOP_SPOTS.forEach((sp, i) => {
@@ -4778,6 +4808,17 @@ function init3D(){
     dcLight.position.set(0, DY + 2.4, 20); sousGroup.add(dcLight);
     const dcLbl = makeLabel("DATACENTER", "baies serveurs — vos agents tournent ici");
     dcLbl.position.set(0, DY + 2.8, 14.2); sousGroup.add(dcLbl);
+    const upPad = new THREE.Mesh(new THREE.CylinderGeometry(.9, .9, .06, 20), new THREE.MeshBasicMaterial({ color: 0xc6f542 }));
+    upPad.position.set(9.9, DY + .06, 24.5); sousGroup.add(upPad);
+    const upLbl = makeLabel("REMONTÉE", "E pour remonter au rez-de-chaussée");
+    upLbl.position.set(9.9, DY + 2.2, 24.5); sousGroup.add(upLbl);
+    const techChar = makeCharacter(0x5a6470);
+    techChar.position.set(-4.5, DY, 17.5);
+    const hard = new THREE.Mesh(new THREE.SphereGeometry(.16, 10, 8), new THREE.MeshStandardMaterial({ color: 0xffb454, roughness: .4 }));
+    hard.position.y = 1.32; techChar.add(hard);
+    scene.add(techChar);
+    const techLbl = makeLabel("TECHNICIEN", "maintenance — répare tout, sans API");
+    techLbl.position.set(-4.5, DY + 2.6, 17.5); scene.add(techLbl);
     const hatch = new THREE.Mesh(new THREE.BoxGeometry(1.4, .1, 1.4), new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: .8 }));
     hatch.position.set(8.2, .02, 26.4); scene.add(hatch);
     const hatchLbl = makeLabel("SOUS-SOL", "datacenter — E pour descendre");
