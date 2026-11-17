@@ -498,6 +498,13 @@
       <button class="tab" data-tab="settings"></button>
     </div>
     <div class="pcpane" id="pane-files">
+      <div class="row" style="align-items:center;">
+        <input type="file" id="pcFileInput" multiple style="display:none;">
+        <button class="btn" id="pcFileUpload" style="flex:0 0 auto;"></button>
+        <span class="hint" style="margin:0;">Envoyez des fichiers sur votre PC — téléchargez-les depuis n’importe quel appareil connecté à votre compte.</span>
+      </div>
+      <div id="pcUserFiles" style="margin-top:12px;"></div>
+      <div class="panel-head" style="margin-top:18px;">Livrables des agents</div>
       <div id="pcFilesList"></div>
       <div class="row" id="pcFilesActions" style="margin-top:14px;"></div>
     </div>
@@ -730,7 +737,7 @@ function scopeKey(){
 }
 function freshState(){
   return { agents: [], mission: "", backlog: [], autonomous: false, speed: 1, doneCount: 0,
-           activity: [], results: [], chat: [], sites: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], roomNames: {}, drhAuto: false, coffeeClosed: false, meta: { syncedAt: null } };
+           activity: [], results: [], chat: [], sites: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], files: [], roomNames: {}, drhAuto: false, coffeeClosed: false, meta: { syncedAt: null } };
 }
 let state = freshState();
 const PERSONAS = ["efficace et direct","créatif et imaginatif","rigoureux et méthodique","enthousiaste et positif","pédagogue et clair","analytique et critique","chaleureux et diplomate","pragmatique, orienté résultats"];
@@ -744,6 +751,7 @@ function ensurePersonas(){
   if(!state.notes) state.notes = [];
   if(!state.connectors) state.connectors = [];
   if(!state.roomNames) state.roomNames = {};
+  if(!state.files) state.files = [];
   if(!state.assistantChat) state.assistantChat = [];
   if(state.drhAuto === undefined) state.drhAuto = false;
   state.agents.forEach(a => { if(a.group === undefined) a.group = ""; if(!a.skills) a.skills = []; });
@@ -1118,6 +1126,63 @@ function resultsText(){
   return (state.results || []).map(r => "## " + r.task + "\nAgent : " + r.agent + " — " + r.at + "\n\n" + (r.output || "(en cours)"))
     .join("\n\n---\n\n");
 }
+function renderUserFiles(){
+  const box = document.getElementById("pcUserFiles");
+  if(!box) return;
+  if(!(state.files || []).length){
+    box.innerHTML = '<div class="hint">Aucun fichier. Cliquez sur « Envoyer un fichier » : il sera disponible sur votre PC, sur tous vos appareils, et lisible par vos agents s’il contient du texte.</div>';
+    return;
+  }
+  box.innerHTML = state.files.map(f =>
+    '<div class="hrrow"><div><div class="hrname">' + icon("folder") + " " + esc(f.name) + '</div><div class="hrole">' + esc(f.size) + " · " + esc(f.at) + (f.text ? " · texte lisible par les agents" : "") + '</div></div>' +
+    '<button class="iconbtn fileDl" data-id="' + f.id + '" title="Télécharger">' + icon("folder") + '</button>' +
+    '<button class="iconbtn fileDel" data-id="' + f.id + '" title="Supprimer">' + icon("trash") + '</button></div>'
+  ).join("");
+  box.querySelectorAll(".fileDl").forEach(b => b.addEventListener("click", ()=>{
+    const f = state.files.find(x => x.id === b.dataset.id);
+    if(!f) return;
+    const a = document.createElement("a");
+    a.href = f.data;
+    a.download = f.name;
+    a.click();
+  }));
+  box.querySelectorAll(".fileDel").forEach(b => b.addEventListener("click", ()=>{
+    state.files = state.files.filter(x => x.id !== b.dataset.id);
+    renderUserFiles(); save();
+  }));
+}
+document.getElementById("pcFileUpload").innerHTML = icon("folder") + " Envoyer un fichier";
+document.getElementById("pcFileUpload").addEventListener("click", ()=> document.getElementById("pcFileInput").click());
+document.getElementById("pcFileInput").addEventListener("change", e=>{
+  const list = Array.from(e.target.files || []);
+  if(!list.length) return;
+  if(!state.files) state.files = [];
+  const txtExt = ["txt", "md", "csv", "json", "js", "html", "css", "py", "xml", "yml", "yaml"];
+  let done = 0, skipped = 0;
+  const finish = ()=>{
+    logGlobal(done + " fichier(s) envoyé(s) sur votre PC" + (skipped ? " — " + skipped + " trop gros (max 1,5 Mo)" : "") + ".", "Système");
+    renderUserFiles(); save();
+  };
+  list.forEach(file => {
+    if(file.size > 1.5 * 1024 * 1024){ skipped++; if(done + skipped === list.length) finish(); return; }
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    const isTxt = txtExt.includes(ext) && file.size < 200 * 1024;
+    const rd = new FileReader();
+    rd.onload = ()=>{
+      const f = { id: uid(), name: file.name.slice(0, 80), size: file.size > 1024 ? Math.round(file.size / 1024) + " Ko" : file.size + " o", at: new Date().toLocaleString("fr-FR") };
+      if(isTxt){
+        f.text = String(rd.result).slice(0, 20000);
+        f.data = "data:text/plain;base64," + b64utf8(String(rd.result));
+      } else f.data = rd.result;
+      state.files.unshift(f);
+      if(state.files.length > 30) state.files.length = 30;
+      done++;
+      if(done + skipped === list.length) finish();
+    };
+    if(isTxt) rd.readAsText(file); else rd.readAsDataURL(file);
+  });
+  e.target.value = "";
+});
 function renderResultsList(listId, actionsId){
   const list = document.getElementById(listId);
   if(!list) return;
@@ -1949,7 +2014,7 @@ function switchPcTab(name){
   for(const id of ["files", "tasks", "reunion", "teams", "salles", "chat", "hr", "servers", "notes", "assistant", "conn", "settings"]){
     document.getElementById("pane-" + id).style.display = id === name ? "" : "none";
   }
-  if(name === "files") renderResults();
+  if(name === "files"){ renderResults(); renderUserFiles(); }
   if(name === "tasks") renderPcTasks();
   if(name === "reunion") renderPcMeetings();
   if(name === "chat") renderChatLog();
@@ -2997,6 +3062,7 @@ function stateSummary(){
     "\nGroupes : " + ((state.groups || []).map(g => g.name).join(", ") || "aucun") +
     "\nSites construits : " + (state.sites || []).length + "\nNotes : " + ((state.notes || []).map(n => n.text).join(" | ") || "aucune") +
     "\nConnecteurs : " + ((state.connectors || []).map(c => c.name).join(", ") || "aucun") +
+    "\nFichiers sur le PC : " + ((state.files || []).map(f => f.name + (f.text ? " (texte lisible)" : "")).join(", ") || "aucun") +
     "\nTâches programmées : " + (state.scheduled || []).length + "\nRéunions : " + (state.meetings || []).length;
 }
 const pcAssistantLog = document.getElementById("pcAssistantLog");
@@ -3224,6 +3290,7 @@ function init3D(){
   scene.background = new THREE.Color(0x0d0e0d);
   const camera = new THREE.PerspectiveCamera(50, W()/H(), .1, 220);
   let az = -.55, pol = 1.08, dist = 24;
+  let lastFollowX = null, lastFollowZ = null;
   const target = new THREE.Vector3(0, .6, 0);
   function updateCam(){
     camera.position.set(
@@ -3535,6 +3602,37 @@ function init3D(){
   const corLbl = makeLabel("COULOIR DES SALLES", "50 m — une salle tous les 10 m");
   corLbl.position.set(17, 2.8, 0); scene.add(corLbl);
 
+  /* vitres : ciel degrade + verre + encadrement, posees devant les murs */
+  const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xbfd8e2, transparent: true, opacity: .22, roughness: .05, metalness: .12, side: THREE.DoubleSide, depthWrite: false });
+  const skyC = document.createElement("canvas"); skyC.width = 256; skyC.height = 256;
+  const skyG = skyC.getContext("2d");
+  const grad = skyG.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, "#bfe3f7"); grad.addColorStop(.6, "#e8f4fb"); grad.addColorStop(1, "#f6f3ea");
+  skyG.fillStyle = grad; skyG.fillRect(0, 0, 256, 256);
+  const skyTex = new THREE.CanvasTexture(skyC);
+  const skyMat = new THREE.MeshBasicMaterial({ map: skyTex });
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0xf4f1e8, roughness: .6 });
+  function addWindow(w, h, x, y, z, ry){
+    const g = new THREE.Group();
+    const sky = new THREE.Mesh(new THREE.PlaneGeometry(w, h), skyMat);
+    sky.position.z = -.03; g.add(sky);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(w, h), glassMat);
+    glass.position.z = .01; g.add(glass);
+    const fh = .09;
+    const fT = new THREE.Mesh(new THREE.BoxGeometry(w + .16, fh, .1), frameMat); fT.position.set(0, h / 2, .02); g.add(fT);
+    const fB = fT.clone(); fB.position.y = -h / 2; g.add(fB);
+    const fL = new THREE.Mesh(new THREE.BoxGeometry(fh, h, .1), frameMat); fL.position.set(-w / 2, 0, .02); g.add(fL);
+    const fR = fL.clone(); fR.position.x = w / 2; g.add(fR);
+    const mullV = new THREE.Mesh(new THREE.BoxGeometry(.06, h, .09), frameMat); g.add(mullV);
+    const mullH = new THREE.Mesh(new THREE.BoxGeometry(w, .06, .09), frameMat); g.add(mullH);
+    g.position.set(x, y, z); g.rotation.y = ry;
+    scene.add(g);
+  }
+  for(const wx of [-9, 0, 9]) addWindow(3.4, 1.7, wx, 1.9, -9.86, 0);
+  for(const wz of [-5, 0, 5]) addWindow(3.4, 1.7, -13.86, 2.1, wz, Math.PI / 2);
+  for(const wx of [18, 28, 38, 48, 58]) addWindow(3, 1.5, wx, 2, 1.46, Math.PI);
+  RX.forEach(rx => addWindow(3, 1.5, rx, 1.9, -7.15, Math.PI));
+
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
   let downX = 0, downY = 0, dragged = false;
@@ -3591,9 +3689,21 @@ function init3D(){
     fpsState.pitch = Math.min(1.2, Math.max(-1.2, fpsState.pitch - (e.movementY || 0) * .0022));
   });
   dom.addEventListener("pointerdown", e => { downX = e.clientX; downY = e.clientY; dragged = false; dom.setPointerCapture(e.pointerId); });
+  dom.addEventListener("contextmenu", e => e.preventDefault());
   dom.addEventListener("pointermove", e => {
-    if(camMode === "fps" || e.buttons !== 1) return;
+    if(camMode === "fps") return;
     const dx = e.movementX || 0, dy = e.movementY || 0;
+    if(e.buttons === 2){
+      const s2 = dist * .0011, c = Math.cos(az), sn = Math.sin(az);
+      target.x += (-dx * c - dy * sn) * s2;
+      target.z += (dx * sn - dy * c) * s2;
+      target.x = Math.min(67, Math.max(-14, target.x));
+      target.z = Math.min(11, Math.max(-11, target.z));
+      lastFollowX = fpsState.x; lastFollowZ = fpsState.z;
+      updateCam();
+      return;
+    }
+    if(e.buttons !== 1) return;
     if(Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 6) dragged = true;
     az -= dx * .005;
     pol = Math.min(1.45, Math.max(.35, pol - dy * .005));
@@ -3602,7 +3712,7 @@ function init3D(){
   dom.addEventListener("wheel", e => {
     if(camMode === "fps") return;
     e.preventDefault();
-    dist = Math.min(58, Math.max(9, dist + e.deltaY * .012));
+    dist = Math.min(85, Math.max(9, dist + e.deltaY * .012));
     updateCam();
   }, { passive: false });
   dom.addEventListener("click", e => {
@@ -3683,7 +3793,7 @@ function init3D(){
         const rx = Math.cos(fpsState.yaw), rz = -Math.sin(fpsState.yaw);
         fpsState.x += (fx * f + rx * r) * sp;
         fpsState.z += (fz * f + rz * r) * sp;
-        fpsState.x = Math.min(13.4, Math.max(-13.4, fpsState.x));
+        fpsState.x = Math.min(66.4, Math.max(-13.4, fpsState.x));
         fpsState.z = Math.min(9.4, Math.max(-9.4, fpsState.z));
         const circles = [];
         for(const a of state.agents){
@@ -3728,9 +3838,12 @@ function init3D(){
       }
     } else {
       lastT = performance.now();
-      target.x += (fpsState.x - target.x) * .04;
-      target.z += (fpsState.z - target.z) * .04;
-      updateCam();
+      if(fpsState.x !== lastFollowX || fpsState.z !== lastFollowZ){
+        lastFollowX = fpsState.x; lastFollowZ = fpsState.z;
+        target.x += (fpsState.x - target.x) * .08;
+        target.z += (fpsState.z - target.z) * .08;
+        updateCam();
+      }
     }
     for(const a of state.agents){
       const rec = agent3d.get(a.id);
