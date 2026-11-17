@@ -1472,7 +1472,10 @@ function oauthErrHelp(provider, msg){
 }
 const cleanUrl = () => location.origin + location.pathname;
 async function signInProvider(provider){
-  if(!sb) return;
+  if(!sb){
+    showAuthMsg("L’espace de synchronisation n’est pas chargé sur cette page. Cliquez sur « Tester la configuration des fournisseurs » ci-dessous, ou faites Ctrl+F5 pour recharger le site.", true);
+    return;
+  }
   showAuthMsg("Redirection vers " + provider + "...", false);
   try{
     if(location.hash || location.search) history.replaceState(null, "", cleanUrl());
@@ -1788,7 +1791,7 @@ function openAuthModal(){
   document.getElementById("authTitle").innerHTML = icon("login") + " Connexion";
   document.getElementById("authClose").style.display = session ? "" : "none";
   const body = document.getElementById("authBody");
-  if(supabaseReady()){
+  if(supabaseReady()){ try{
     document.getElementById("authSub").textContent = "Connectez-vous pour retrouver vos agents et vos tâches sur tous vos appareils, avec le même compte.";
     const proj = (cfg.url || "").replace("https://","").split(".")[0];
     body.innerHTML = `
@@ -1839,6 +1842,7 @@ function openAuthModal(){
       this.textContent = "Copié ✓";
       setTimeout(()=>{ this.textContent = "Copier l'URL du site"; }, 1500);
     });
+    }catch(e){ console.error(e); showAuthMsg("Erreur d’affichage de la fenêtre de connexion : " + e.message + ". Faites Ctrl+F5 pour recharger le site.", true); }
   } else {
     document.getElementById("authSub").textContent = "Pour vous connecter avec GitHub, Gmail ou Outlook et retrouver vos agents sur tous vos appareils, reliez d'abord un espace de synchronisation Supabase (gratuit, 2 minutes) :";
     body.innerHTML = `
@@ -4324,6 +4328,16 @@ function updateHud(){
 }
 
 /* ================= démarrage ================= */
+window.addEventListener("error", function(ev){
+  try{
+    const m = document.getElementById("authMsg");
+    const ov = document.getElementById("authOverlay");
+    if(m && ov && ov.classList.contains("show") && !m.textContent){
+      m.className = "msg err";
+      m.textContent = "Erreur interne : " + (ev.message || "inconnue") + ". Faites Ctrl+F5 pour recharger le site, puis réessayez.";
+    }
+  }catch(e){}
+});
 initSupabase();
 if(!session) loadLocal();
 if(!state.results) state.results = [];
