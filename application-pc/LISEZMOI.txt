@@ -1,0 +1,17 @@
+AGENT_IA — Application pour Windows
+====================================
+
+1. Copiez le dossier AGENT_IA où vous voulez (par exemple dans Documents).
+2. Double-cliquez sur AGENT_IA.exe.
+   -> Windows va peut-être afficher "Windows a protégé votre ordinateur"
+      (car l'application n'est pas signée par un grand éditeur).
+      Cliquez sur "Informations complémentaires" puis "Exécuter quand même".
+3. La fenêtre AGENT_IA s'ouvre : c'est votre bureau, avec vos agents,
+   votre clé API et votre connexion GitHub — tout est conservé d'une
+   fois à l'autre, comme sur le site.
+
+Astuce : clic droit sur AGENT_IA.exe -> "Épingler à l'écran de démarrage",
+ou envoyer un raccourci sur le Bureau pour l'avoir toujours sous la main.
+
+L'application affiche votre site GitHub Pages : à chaque mise à jour du
+site, elle se met à jour toute seule (comme dans le navigateur).
