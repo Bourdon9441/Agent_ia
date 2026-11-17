@@ -807,6 +807,8 @@ function ensurePersonas(){
   if(!state.assistantChat) state.assistantChat = [];
   if(state.drhAuto === undefined) state.drhAuto = false;
   state.agents.forEach(a => { if(a.group === undefined) a.group = ""; if(!a.skills) a.skills = []; if(!a.memories) a.memories = []; });
+  const ADMIN_ROLES = ["gestion administrative", "comptabilité", "secrétariat de direction"];
+  state.agents.forEach(a => { if(a.roomAuto === undefined && !Number.isInteger(a.room) && ADMIN_ROLES.indexOf(a.role || "") >= 0){ a.room = 0; a.roomAuto = true; } });
   if(state.siteProject){
     state.sites.push(Object.assign({ id: uid(), name: (state.siteProject.desc || "site").slice(0, 40), createdAt: new Date().toLocaleString("fr-FR") }, state.siteProject));
     delete state.siteProject;
@@ -1180,6 +1182,13 @@ async function executeTask(agent){
   state.results.unshift({ id: rid, agent: agent.name, task: t.text, output: "", status: "pending", at: new Date().toLocaleString("fr-FR") });
   if(state.results.length > 50) state.results.length = 50;
   renderResults(); save();
+  state.apiStats = state.apiStats || { count: 0, chars: 0, byAgent: {} };
+  if(!state.apiStats.byAgent) state.apiStats.byAgent = {};
+  state.apiStats.byAgent[agent.name] = (state.apiStats.byAgent[agent.name] || 0) + 1;
+  if(state.apiStats.count > 1000 && !state.apiStats.warned){
+    state.apiStats.warned = true;
+    logGlobal("plus de 1000 appels API depuis le début : surveillez votre forfait Groq (compteur sur le Tableau de votre PC).", "Système");
+  }
   const myGroup = (state.groups || []).find(g => g.boss === agent.id);
   if(myGroup && t.from !== "sous-patron" && t.from !== "Réunion"){
     const members = state.agents.filter(a => a.group === myGroup.id && a.id !== agent.id && a.status !== "busy");
@@ -2204,7 +2213,7 @@ function renderDash(){
     const dur = ct ? Math.max(1, Math.round((Date.now() - ct.startedAt) / 60000)) : 0;
     const stTxt = a.status === "busy" ? "travaille depuis " + dur + " min" : a.status === "paused" ? "au self" : "disponible";
     const last = (a.log || []).find(l => l.msg.indexOf("Termin") === 0);
-    return '<div class="hrrow"><div><div class="hrname">' + esc(a.name) + '</div><div class="hrole">' + esc(a.role || "polyvalent") + (ct ? " — " + esc(ct.text) : "") + (last ? " · dernier : " + esc(last.msg.replace(/^Termin\u00e9 : /, "")) : "") + '</div></div><span class="hstat ' + a.status + '">' + esc(stTxt) + ((a.queue || []).length ? " · " + a.queue.length + " en file" : "") + '</span></div>';
+    return '<div class="hrrow"><div><div class="hrname">' + esc(a.name) + '</div><div class="hrole">' + esc(a.role || "polyvalent") + (ct ? " — " + esc(ct.text) : "") + (last ? " · dernier : " + esc(last.msg.replace(/^Termin\u00e9 : /, "")) : "") + '</div></div><span class="hstat ' + a.status + '">' + esc(stTxt) + ((a.queue || []).length ? " · " + a.queue.length + " en file" : "") + ((state.apiStats && state.apiStats.byAgent && state.apiStats.byAgent[a.name]) ? " · " + state.apiStats.byAgent[a.name] + " appels API" : "") + '</span></div>';
   }).join("") || '<div class="hint">Aucun agent pour le moment.</div>';
 }
 setInterval(()=>{ const pd = document.getElementById("pane-dash"); if(pcOverlay.classList.contains("show") && pd && pd.style.display === "") renderDash(); }, 5000);
@@ -2923,6 +2932,8 @@ function renderPcMeetings(){
 }
 async function runMeeting(m){
   m.status = "running"; renderPcMeetings(); save();
+  const autoSeating = !state.liveMeeting;
+  if(autoSeating) state.liveMeeting = { topic: m.subject, participants: state.agents.map(a => a.id), transcript: [], phase: "auto", summary: "", tasks: [] };
   logGlobal("la réunion « " + esc(m.subject) + " » commence dans la salle de réunion.", "Patron");
   try{
     const agentsDesc = state.agents.map(a => "- " + a.name + " (" + (a.role || "polyvalent") + (a.persona ? ", " + a.persona : "") + ")").join("\n") || "(aucun agent)";
@@ -2945,6 +2956,7 @@ async function runMeeting(m){
     m.status = "error";
     m.notes = "La réunion n'a pas pu avoir lieu : " + (e.message || "erreur");
   }
+  if(autoSeating) state.liveMeeting = null;
   renderPcMeetings(); save();
 }
 function processMeetings(){
@@ -3293,7 +3305,7 @@ function renderSalles(){
   let h = "";
   for(let i = 0; i < 5; i++){
     const members = state.agents.filter(a => a.room === i);
-    h += '<div class="hrrow" style="flex-wrap:wrap;"><div style="min-width:200px;"><div class="hrname">' + icon("list") + " Salle " + (i + 1) + '</div>' +
+    h += '<div class="hrrow" style="flex-wrap:wrap;"><div style="min-width:200px;"><div class="hrname">' + icon("list") + " " + esc(roomName(i)) + '</div>' +
       '<input type="text" class="roomName" data-i="' + i + '" value="' + esc(roomName(i)) + '" maxlength="24" style="margin-top:6px;">' +
       '<div style="margin-top:6px;">' + (members.length ? members.map(m => '<span class="hstat idle" style="margin-right:6px;">' + esc(m.name) + '</span>').join("") : '<span class="hstat paused">salle vide</span>') + '</div></div>' +
       '<select class="roomAdd" data-i="' + i + '" style="flex:0 0 auto;max-width:180px;"><option value="">+ placer un agent…</option>' +
@@ -3304,7 +3316,7 @@ function renderSalles(){
   box.innerHTML = h;
   box.querySelectorAll(".roomName").forEach(inp => inp.addEventListener("change", ()=>{
     const i = +inp.dataset.i;
-    state.roomNames[i] = inp.value.trim().slice(0, 24) || ("Salle " + (i + 1));
+    state.roomNames[i] = inp.value.trim().slice(0, 24) || (i === 0 ? "Administration" : "Salle " + (i + 1));
     if(three && three.redrawRooms) three.redrawRooms();
     save(); renderSalles();
   }));
@@ -3312,6 +3324,7 @@ function renderSalles(){
     const a = state.agents.find(x => x.id === sel.value);
     if(a){
       a.room = +sel.dataset.i;
+      a.roomAuto = false;
       logGlobal("<b>" + esc(a.name) + "</b> est placé dans « " + esc(roomName(a.room)) + " ».", "DRH");
       sync3D(); save(); renderSalles();
     }
@@ -3319,7 +3332,7 @@ function renderSalles(){
   }));
   box.querySelectorAll(".roomClear").forEach(b => b.addEventListener("click", ()=>{
     const i = +b.dataset.i;
-    state.agents.forEach(a => { if(a.room === i) a.room = ""; });
+    state.agents.forEach(a => { if(a.room === i){ a.room = ""; a.roomAuto = false; } });
     sync3D(); save(); renderSalles();
   }));
 }
@@ -3540,7 +3553,7 @@ const zoneLabels = new Map();
 const fpsState = { x: 0, z: 5.6, yaw: 0, pitch: 0, y: 0, vy: 0 };
 let laptopPocket = false;
 let setLaptopPocket = () => {};
-function roomName(i){ return (state.roomNames && state.roomNames[i]) || ("Salle " + (i + 1)); }
+function roomName(i){ return (state.roomNames && state.roomNames[i]) || (i === 0 ? "Administration" : "Salle " + (i + 1)); }
 let nearTarget = null;
 const fpsPromptEl = document.getElementById("fpsPrompt");
 const fpsCrossEl = document.getElementById("fpsCross");
