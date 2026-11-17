@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="build" content="b-20261117-1822">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -4791,6 +4792,45 @@ renderPcSettings();
     head.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); toggle(); } });
     apply();
   });
+})();
+
+/* ================= mise à jour automatique quand le site change ================= */
+(function(){
+  const myBuild = (document.querySelector('meta[name="build"]') || {}).content || "";
+  let checking = false;
+  function offerUpdate(){
+    if(document.getElementById("updToast")) return;
+    const t = document.createElement("div");
+    t.id = "updToast";
+    t.style.cssText = "position:fixed;bottom:18px;right:18px;z-index:9999;background:#191d15;border:1px solid #c6f542;color:#eef2e4;font:14px 'IBM Plex Mono',monospace;padding:12px 16px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.5);display:flex;gap:12px;align-items:center;max-width:90vw;";
+    t.innerHTML = "<span>Une nouvelle version du site est disponible.</span>";
+    const b = document.createElement("button");
+    b.className = "btn";
+    b.style.flex = "0 0 auto";
+    b.textContent = "Mettre à jour";
+    b.addEventListener("click", ()=> location.reload());
+    t.appendChild(b);
+    document.body.appendChild(t);
+  }
+  async function checkUpdate(){
+    if(checking || !navigator.onLine) return;
+    checking = true;
+    try{
+      const r = await fetch(location.pathname + "?maj=" + Date.now(), { cache: "no-store" });
+      const txt = await r.text();
+      const m = txt.match(/<meta name="build" content="([^"]+)"/);
+      if(m && m[1] && m[1] !== myBuild){
+        const busy = llmBusy || llmQueue.length > 0 || state.liveMeeting || document.querySelector(".overlay.show");
+        if(!busy && document.hidden) location.reload();
+        else offerUpdate();
+      }
+    }catch(e){}
+    checking = false;
+  }
+  setInterval(checkUpdate, 90000);
+  document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) checkUpdate(); });
+  window.addEventListener("online", checkUpdate);
+  setTimeout(checkUpdate, 8000);
 })();
 </script>
 </body>
