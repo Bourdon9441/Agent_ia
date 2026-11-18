@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261119-1800">
+<meta name="build" content="b-20261119-1900">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -521,6 +521,7 @@
       <button class="tab" data-tab="chat"></button>
       <button class="tab" data-tab="hr"></button>
       <button class="tab" data-tab="servers"></button>
+      <button class="tab" data-tab="dc"></button>
       <button class="tab" data-tab="notes"></button>
       <button class="tab" data-tab="assistant"></button>
       <button class="tab" data-tab="conn"></button>
@@ -641,6 +642,16 @@
       </div>
       <div id="pannesBox" style="margin-top:12px;"></div>
       <div class="hint" style="margin-top:12px;">Vos agents construisent un vrai site : architecture, code complet, assistant service client intégré (il discute vraiment, avec votre clé Groq configurée dans le site). Ensuite, demandez des modifications : le Patron les fait appliquer par vos agents.</div>
+    </div>
+    <div class="pcpane" id="pane-dc" style="display:none;">
+      <label>Datacenter (sous-sol) — hébergez vos propres fichiers</label>
+      <div class="hint">Vos fichiers sont stockés dans votre espace : privés (visibles uniquement depuis votre compte), synchronisés sur tous vos appareils, et sauvegardés dans le datacenter du sous-sol. Pages HTML : bouton Aperçu pour les ouvrir.</div>
+      <div class="row" style="margin-top:10px;">
+        <input type="file" id="dcInput" multiple style="display:none;">
+        <button class="btn" id="dcUpload"></button>
+      </div>
+      <div id="dcQuota" class="hint" style="margin-top:8px;"></div>
+      <div id="dcList" style="margin-top:12px;"></div>
     </div>
     <div class="pcpane" id="pane-teams" style="display:none;">
       <label>Groupes d'équipes — organisez vos agents par service</label>
@@ -873,7 +884,7 @@ function scopeKey(){
 }
 function freshState(){
   return { agents: [], mission: "", backlog: [], autonomous: false, speed: 1, doneCount: 0,
-           activity: [], results: [], chat: [], sites: [], clients: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], assistantMemory: [], files: [], templates: [], breakers: [true, true, true, true], pcPannes: [], roomNames: {}, drhAuto: false, coffeeClosed: false, liveMeeting: null, liveInterview: null, meta: { syncedAt: null } };
+           activity: [], results: [], chat: [], sites: [], clients: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], assistantMemory: [], files: [], templates: [], breakers: [true, true, true, true], pcPannes: [], roomNames: {}, dcFiles: [], drhAuto: false, coffeeClosed: false, liveMeeting: null, liveInterview: null, meta: { syncedAt: null } };
 }
 let state = freshState();
 const PERSONAS = ["efficace et direct, va droit au but", "créatif et imaginatif, propose toujours une idée en plus", "rigoureux et méthodique, ne laisse rien au hasard", "enthousiaste et positif, motive l\u2019équipe", "pédagogue et clair, explique simplement", "analytique et critique, questionne chaque choix", "chaleureux et diplomate, apaise les tensions", "pragmatique et orienté résultats, livre vite", "perfectionniste du détail, soigne la finition", "curieux et explorateur, teste de nouvelles approches", "calme et fiable, garde son sang-froid sous pression", "proactif et autonome, anticipe les besoins", "minutieux et organisé, structure tout en listes", "audacieux et ambitieux, vise toujours plus haut", "patient et à l\u2019écoute, reformule avant d\u2019agir", "énergique et rapide, préfère itérer vite"];
@@ -883,6 +894,7 @@ function ensurePersonas(){
   if(!state.clients) state.clients = [];
   if(!state.breakers) state.breakers = [true, true, true, true];
   if(!state.pcPannes) state.pcPannes = [];
+  if(!state.dcFiles) state.dcFiles = [];
   if(!state.scheduled) state.scheduled = [];
   if(!state.meetings) state.meetings = [];
   if(!state.groups) state.groups = [];
@@ -1685,7 +1697,7 @@ async function pullRemote(force){
     if(data && data.data){
       const remoteNewer = !state.meta.syncedAt || (data.updated_at > state.meta.syncedAt);
       if((remoteNewer && !pendingLocal) || force){
-        const keep = { results: state.results, chat: state.chat, sites: state.sites, clients: state.clients, breakers: state.breakers, pcPannes: state.pcPannes, scheduled: state.scheduled, meetings: state.meetings, groups: state.groups, skills: state.skills, notes: state.notes, connectors: state.connectors, assistantChat: state.assistantChat, assistantMemory: state.assistantMemory, drhAuto: state.drhAuto, liveMeeting: state.liveMeeting, liveInterview: state.liveInterview, apiStats: state.apiStats };
+        const keep = { results: state.results, chat: state.chat, sites: state.sites, clients: state.clients, breakers: state.breakers, pcPannes: state.pcPannes, scheduled: state.scheduled, meetings: state.meetings, groups: state.groups, skills: state.skills, notes: state.notes, connectors: state.connectors, assistantChat: state.assistantChat, assistantMemory: state.assistantMemory, drhAuto: state.drhAuto, liveMeeting: state.liveMeeting, liveInterview: state.liveInterview, apiStats: state.apiStats, dcFiles: state.dcFiles };
         state = Object.assign(freshState(), data.data, keep, { meta: { syncedAt: data.updated_at } });
         ["groups", "skills", "notes"].forEach(k => { if(Array.isArray(data.data[k])) state[k] = data.data[k]; });
         ensurePersonas();
@@ -2358,6 +2370,7 @@ const PC_TABS = [
   { id: "chat", label: "Conversations", icon: "text-bubble" },
   { id: "hr", label: "DRH", icon: "user" },
   { id: "servers", label: "Serveurs", icon: "code" },
+  { id: "dc", label: "Datacenter", icon: "folder" },
   { id: "notes", label: "Notes", icon: "pen" },
   { id: "assistant", label: "Assistant", icon: "sparkles" },
   { id: "conn", label: "Connecteurs", icon: "globe" },
@@ -2373,7 +2386,7 @@ function initPcTabs(){
 initPcTabs();
 function switchPcTab(name){
   document.querySelectorAll("#pcTabs .tab").forEach(t => t.classList.toggle("on", t.dataset.tab === name));
-  for(const id of ["dash", "files", "tasks", "reunion", "teams", "salles", "clients", "chat", "hr", "servers", "notes", "assistant", "conn", "settings"]){
+  for(const id of ["dash", "files", "tasks", "reunion", "teams", "salles", "clients", "chat", "hr", "servers", "dc", "notes", "assistant", "conn", "settings"]){
     document.getElementById("pane-" + id).style.display = id === name ? "" : "none";
   }
   if(name === "dash") renderDash();
@@ -2387,6 +2400,7 @@ function switchPcTab(name){
   if(name === "salles") renderSalles();
   if(name === "clients") renderClients();
   if(name === "servers") renderPannes();
+  if(name === "dc") renderDc();
   if(name === "notes") renderNotes();
   if(name === "assistant") renderPcAssistant();
   if(name === "conn") renderConnectors();
@@ -2657,6 +2671,88 @@ async function siteModify(text, siteId){
   btn.disabled = false;
   renderPcServers(); renderDashSites(); save();
 }
+/* ================= datacenter : fichiers hébergés du patron (sous-sol) ================= */
+const DC_MAX_FILE = 1200 * 1024, DC_MAX_TOTAL = 3 * 1024 * 1024, DC_MAX_COUNT = 20;
+function dcBytes(){ return (state.dcFiles || []).reduce((t, f) => t + (f.size || 0), 0); }
+function dcFmt(n){ return n >= 1048576 ? (n / 1048576).toFixed(2).replace(".", ",") + " Mo" : Math.max(1, Math.round(n / 1024)) + " Ko"; }
+function renderDc(){
+  const up = document.getElementById("dcUpload");
+  if(up) up.innerHTML = icon("add") + " Héberger des fichiers";
+  const q = document.getElementById("dcQuota");
+  if(q){
+    const n = (state.dcFiles || []).length;
+    q.textContent = n ? (n + " fichier" + (n > 1 ? "s" : "") + " hébergé" + (n > 1 ? "s" : "") + " · " + dcFmt(dcBytes()) + " / 3 Mo · privé : visible uniquement depuis votre compte, synchronisé sur vos appareils")
+                      : "aucun fichier pour le moment · quota : 3 Mo · 1,2 Mo max par fichier · privé : visible uniquement depuis votre compte";
+  }
+  const box = document.getElementById("dcList");
+  if(!box) return;
+  const files = state.dcFiles || [];
+  if(!files.length){ box.innerHTML = '<div class="hint">Aucun fichier hébergé. Cliquez sur « Héberger des fichiers » pour envoyer les vôtres dans votre datacenter.</div>'; return; }
+  box.innerHTML = files.map(f => {
+    const html = (f.mime || "").indexOf("text/html") === 0;
+    return '<div class="hrrow"><div><div class="hrname">' + esc(f.name) + '</div><div class="hrole">' + dcFmt(f.size) + (html ? " · page web" : "") + '</div></div><span style="display:flex;gap:6px;flex:0 0 auto;">'
+      + (html ? '<button class="btn line" data-dcv="' + f.id + '">' + icon("eye") + " Aperçu</button> " : "")
+      + '<button class="btn line" data-dcd="' + f.id + '">' + icon("folder") + " Télécharger</button> "
+      + '<button class="btn line" data-dcx="' + f.id + '">' + icon("trash") + "</button></span></div>";
+  }).join("");
+  box.querySelectorAll("[data-dcv]").forEach(b => b.addEventListener("click", () => {
+    const f = files.find(x => x.id === b.dataset.dcv); if(!f) return;
+    fetch(f.data).then(r => r.blob()).then(bl => {
+      const url = URL.createObjectURL(new Blob([bl], { type: "text/html" }));
+      const w = window.open(url, "_blank");
+      if(!w) logGlobal("aperçu bloqué par le navigateur — autorisez les fenêtres pour ce site.", "Système");
+      setTimeout(() => URL.revokeObjectURL(url), 120000);
+    });
+  }));
+  box.querySelectorAll("[data-dcd]").forEach(b => b.addEventListener("click", () => {
+    const f = files.find(x => x.id === b.dataset.dcd); if(!f) return;
+    const a = document.createElement("a"); a.href = f.data; a.download = f.name;
+    document.body.appendChild(a); a.click(); a.remove();
+    logGlobal("fichier téléchargé du datacenter : " + esc(f.name), "Système");
+  }));
+  box.querySelectorAll("[data-dcx]").forEach(b => b.addEventListener("click", () => {
+    const f = files.find(x => x.id === b.dataset.dcx); if(!f) return;
+    state.dcFiles = (state.dcFiles || []).filter(x => x.id !== f.id);
+    logGlobal("fichier retiré du datacenter : " + esc(f.name), "Système");
+    if(three && three.drawDc) three.drawDc();
+    renderDc(); save();
+  }));
+}
+document.getElementById("dcUpload").addEventListener("click", () => document.getElementById("dcInput").click());
+document.getElementById("dcInput").addEventListener("change", e => {
+  const chosen = Array.from(e.target.files || []);
+  e.target.value = "";
+  if(!chosen.length) return;
+  if(!state.dcFiles) state.dcFiles = [];
+  const okFiles = []; let run = dcBytes(), full = 0, big = 0, dupe = 0;
+  for(const fl of chosen){
+    if(state.dcFiles.length + okFiles.length >= DC_MAX_COUNT){ full++; continue; }
+    if(fl.size > DC_MAX_FILE){ big++; continue; }
+    if(run + fl.size > DC_MAX_TOTAL){ full++; continue; }
+    if((state.dcFiles || []).some(x => x.name === fl.name) || okFiles.some(x => x.name === fl.name)){ dupe++; continue; }
+    okFiles.push(fl); run += fl.size;
+  }
+  if(!okFiles.length){
+    logGlobal("aucun fichier hébergé — " + (big ? "trop gros (1,2 Mo max par fichier). " : "") + (full ? "quota atteint (3 Mo ou 20 fichiers). " : "") + (dupe ? "un fichier du même nom existe déjà. " : "") + "vous pouvez supprimer des fichiers pour libérer de la place.", "Système");
+    renderDc(); return;
+  }
+  Promise.all(okFiles.map(fl => new Promise(res => {
+    const rd = new FileReader();
+    rd.onload = () => res({ ok: true, file: fl, data: rd.result });
+    rd.onerror = () => res({ ok: false, file: fl });
+    rd.readAsDataURL(fl);
+  }))).then(list => {
+    let n = 0;
+    for(const it of list){
+      if(!it.ok) continue;
+      state.dcFiles.push({ id: uid(), name: it.file.name, size: it.file.size, mime: it.file.type || "application/octet-stream", at: Date.now(), data: it.data });
+      logGlobal("hébergé sur votre datacenter : " + esc(it.file.name) + " (" + dcFmt(it.file.size) + ") — privé, synchronisé avec votre compte.", "Système");
+      n++;
+    }
+    if(n && three && three.drawDc) three.drawDc();
+    renderDc(); save();
+  });
+});
 document.getElementById("srvLaunch").addEventListener("click", ()=>{
   const inp = document.getElementById("srvDesc");
   const desc = inp.value.trim();
@@ -4136,6 +4232,8 @@ function interactNear(){
     setBLevel(bLevel === 2 ? 0 : 1);
   } else if(nt.type === "stairsDown"){
     setBLevel(bLevel === 1 ? 0 : 2);
+  } else if(nt.type === "dcfiles"){
+    openPc("dc");
   } else if(nt.type === "breaker"){
     openBreakers();
   } else if(nt.type === "clients"){
@@ -4175,6 +4273,7 @@ function checkNear(){
     consider(-10.3, 18, 2.8, { type: "tni", label: "Tableau numérique — étage" });
   } else {
     consider(9.9, 24.5, 26, { type: "stairsUp", label: "Monter au rez-de-chaussée — remontée (E)" });
+    consider(2.5, 20, 2.8, { type: "dcfiles", label: "Datacenter — héberger / voir vos fichiers (E)" });
     consider(-10.6, 16, 2.4, { type: "breaker", label: "Disjoncteurs — électricité du bâtiment (E)" });
   }
   for(const a of state.agents){
@@ -5060,6 +5159,12 @@ function init3D(){
         }
       }
     }
+    /* borne d'hébergement : baie dédiée aux fichiers privés du patron */
+    const hostRack = new THREE.Mesh(new THREE.BoxGeometry(1, 2.2, .9),
+      new THREE.MeshStandardMaterial({ color: 0x14171c, roughness: .5, metalness: .3, emissive: 0xc6f542, emissiveIntensity: .12 }));
+    hostRack.position.set(2.5, DY + 1.1, 20); sousGroup.add(hostRack);
+    const hostLbl = makeLabel("HÉBERGEMENT", "vos fichiers privés — E pour gérer");
+    hostLbl.position.set(2.5, DY + 2.7, 20); sousGroup.add(hostLbl);
     const brkLevers = [];
     const brkPanel = new THREE.Mesh(new THREE.BoxGeometry(.12, 1.6, 1.1), new THREE.MeshStandardMaterial({ color: 0xd8d2c4, roughness: .8 }));
     brkPanel.position.set(-10.78, DY + 1.7, 16); sousGroup.add(brkPanel);
@@ -5092,7 +5197,7 @@ function init3D(){
         dcX.fillText(nm, 82, 146 + i * 26);
       });
       dcX.fillStyle = "#5c6450";
-      dcX.fillText("12 baies serveurs · " + (state.agents || []).length + " agents hébergés", 20, 248);
+      dcX.fillText("12 baies serveurs · " + (state.agents || []).length + " agents hébergés" + ((state.dcFiles || []).length ? " · " + state.dcFiles.length + " fichier" + (state.dcFiles.length > 1 ? "s" : "") + " hébergé" + (state.dcFiles.length > 1 ? "s" : "") : ""), 20, 248);
       dcTex.needsUpdate = true;
     };
     drawDc();
