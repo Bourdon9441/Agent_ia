@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261119-1000">
+<meta name="build" content="b-20261119-1100">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -680,6 +680,13 @@
         <button class="btn" id="pcAssistantSend" style="flex:0 0 auto;">Envoyer</button>
       </div>
       <div class="hint">Il a accès à tout le PC : équipe, tâches, groupes, sites, notes, connecteurs — et il peut agir (créer des tâches, des groupes, des notes).</div>
+      <div class="row" style="margin-top:12px; align-items:center;">
+        <button class="btn" id="asmMemToggle" style="flex:0 0 auto;">Mémoire du PC <span id="asmMemCount">(0)</span></button>
+        <input type="text" id="asmMemInput" placeholder="Lui faire retenir un fait (ex : mon magasin ferme le dimanche)" style="flex:1;">
+        <button class="btn" id="asmMemAdd" style="flex:0 0 auto;">Retenir</button>
+      </div>
+      <div id="asmMemList" style="display:none; margin-top:8px;"></div>
+      <div class="hint">Sa <b>mémoire permanente</b> est enregistrée et synchronisée sur vos appareils : il se souvient de vos conversations même après avoir tout fermé — c'est le même assistant sur le PC, le téléphone et le navigateur.</div>
     </div>
     <div class="pcpane" id="pane-conn" style="display:none;">
       <label>Connecteurs MCP — Gmail, Notion, Discord…</label>
@@ -866,7 +873,7 @@ function scopeKey(){
 }
 function freshState(){
   return { agents: [], mission: "", backlog: [], autonomous: false, speed: 1, doneCount: 0,
-           activity: [], results: [], chat: [], sites: [], clients: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], files: [], templates: [], breakers: [true, true, true, true], pcPannes: [], roomNames: {}, drhAuto: false, coffeeClosed: false, liveMeeting: null, liveInterview: null, meta: { syncedAt: null } };
+           activity: [], results: [], chat: [], sites: [], clients: [], scheduled: [], meetings: [], groups: [], skills: [], notes: [], connectors: [], assistantChat: [], assistantMemory: [], files: [], templates: [], breakers: [true, true, true, true], pcPannes: [], roomNames: {}, drhAuto: false, coffeeClosed: false, liveMeeting: null, liveInterview: null, meta: { syncedAt: null } };
 }
 let state = freshState();
 const PERSONAS = ["efficace et direct, va droit au but", "créatif et imaginatif, propose toujours une idée en plus", "rigoureux et méthodique, ne laisse rien au hasard", "enthousiaste et positif, motive l\u2019équipe", "pédagogue et clair, explique simplement", "analytique et critique, questionne chaque choix", "chaleureux et diplomate, apaise les tensions", "pragmatique et orienté résultats, livre vite", "perfectionniste du détail, soigne la finition", "curieux et explorateur, teste de nouvelles approches", "calme et fiable, garde son sang-froid sous pression", "proactif et autonome, anticipe les besoins", "minutieux et organisé, structure tout en listes", "audacieux et ambitieux, vise toujours plus haut", "patient et à l\u2019écoute, reformule avant d\u2019agir", "énergique et rapide, préfère itérer vite"];
@@ -886,6 +893,7 @@ function ensurePersonas(){
   if(!state.files) state.files = [];
   if(!state.templates) state.templates = [];
   if(!state.assistantChat) state.assistantChat = [];
+  if(!state.assistantMemory) state.assistantMemory = [];
   if(state.drhAuto === undefined) state.drhAuto = false;
   state.agents.forEach(a => { if(a.group === undefined) a.group = ""; if(!a.skills) a.skills = []; if(!a.memories) a.memories = []; });
   const ADMIN_ROLES = ["gestion administrative", "comptabilité", "secrétariat de direction"];
@@ -1677,7 +1685,7 @@ async function pullRemote(force){
     if(data && data.data){
       const remoteNewer = !state.meta.syncedAt || (data.updated_at > state.meta.syncedAt);
       if((remoteNewer && !pendingLocal) || force){
-        const keep = { results: state.results, chat: state.chat, sites: state.sites, clients: state.clients, breakers: state.breakers, pcPannes: state.pcPannes, scheduled: state.scheduled, meetings: state.meetings, groups: state.groups, skills: state.skills, notes: state.notes, connectors: state.connectors, assistantChat: state.assistantChat, drhAuto: state.drhAuto, liveMeeting: state.liveMeeting, liveInterview: state.liveInterview, apiStats: state.apiStats };
+        const keep = { results: state.results, chat: state.chat, sites: state.sites, clients: state.clients, breakers: state.breakers, pcPannes: state.pcPannes, scheduled: state.scheduled, meetings: state.meetings, groups: state.groups, skills: state.skills, notes: state.notes, connectors: state.connectors, assistantChat: state.assistantChat, assistantMemory: state.assistantMemory, drhAuto: state.drhAuto, liveMeeting: state.liveMeeting, liveInterview: state.liveInterview, apiStats: state.apiStats };
         state = Object.assign(freshState(), data.data, keep, { meta: { syncedAt: data.updated_at } });
         ["groups", "skills", "notes"].forEach(k => { if(Array.isArray(data.data[k])) state[k] = data.data[k]; });
         ensurePersonas();
@@ -3880,7 +3888,36 @@ function renderPcAssistant(){
     '<div class="bub ' + (m.role === "user" ? "user" : "boss") + '"><span class="who">' + (m.role === "user" ? "vous" : "assistant") + " · " + esc(m.t) + '</span>' + esc(m.text) + '</div>'
   ).join("") || '<div class="hint">Votre assistant personnel a accès à tout le PC : équipe, tâches, sites, notes, connecteurs. Essayez : « crée une équipe Gmail et donne-lui une tâche ».</div>');
   pcAssistantLog.scrollTop = pcAssistantLog.scrollHeight;
+  renderAsmMemory();
 }
+function renderAsmMemory(){
+  const cnt = document.getElementById("asmMemCount"); if(!cnt) return;
+  const mem = state.assistantMemory || [];
+  cnt.textContent = "(" + mem.length + ")";
+  const list = document.getElementById("asmMemList");
+  if(list) list.innerHTML = mem.length
+    ? mem.map(m => '<div class="row" style="margin:4px 0; align-items:baseline;"><div style="flex:1;">\u2022 ' + esc(m.text) + ' <span style="color:var(--faint); font-size:11px;">' + esc(m.t) + '</span></div><button class="btn" data-memdel="' + m.id + '" style="flex:0 0 auto;">\u2715</button></div>').join("")
+    : '<div class="hint">Aucun souvenir pour l\u2019instant : il retient tout seul ce que vous lui racontez, ou laissez-lui un fait ci-dessus.</div>';
+}
+document.getElementById("asmMemToggle").addEventListener("click", ()=>{
+  const l = document.getElementById("asmMemList");
+  l.style.display = (l.style.display === "none") ? "block" : "none";
+  renderAsmMemory();
+});
+document.getElementById("asmMemAdd").addEventListener("click", ()=>{
+  const inp = document.getElementById("asmMemInput");
+  const v = inp.value.trim(); if(!v) return;
+  if(!state.assistantMemory) state.assistantMemory = [];
+  state.assistantMemory.unshift({ id: uid(), text: v.slice(0, 140), t: nowT() });
+  if(state.assistantMemory.length > 40) state.assistantMemory.length = 40;
+  inp.value = ""; renderAsmMemory(); save();
+  logGlobal("l'assistant du PC a retenu un nouveau souvenir permanent.", "Patron");
+});
+document.getElementById("asmMemList").addEventListener("click", e=>{
+  const b = e.target.closest("[data-memdel]"); if(!b) return;
+  state.assistantMemory = (state.assistantMemory || []).filter(m => m.id !== b.dataset.memdel);
+  renderAsmMemory(); save();
+});
 document.getElementById("pcAssistantSend").addEventListener("click", pcAssistantSendMsg);
 document.getElementById("pcAssistantInput").addEventListener("keydown", e=>{ if(e.key === "Enter") pcAssistantSendMsg(); });
 async function pcAssistantSendMsg(){
@@ -3896,21 +3933,40 @@ async function pcAssistantSendMsg(){
   inp.value = "";
   state.assistantChat.push({ role: "user", text, t: nowT() });
   renderPcAssistant();
+  save();
   try{
+    const history = ((state.assistantChat || []).slice(0, -1).slice(-10)).map(m => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
+    const memoire = "Ta mémoire permanente sur le patron (respecte-la dans tes réponses) : " + ((state.assistantMemory || []).length ? (state.assistantMemory.slice(0, 25).map(m => m.text).join(" | ")) : "(vide pour l'instant)");
     const reply = await enqueueLLM(()=> callLLM([
-      { role: "system", content: "Tu es l'assistant personnel du patron, installé sur son PC portable. Tu as accès à toute l'entreprise. État actuel :\n" + stateSummary() + "\n\nTu peux AGIR en terminant ta réponse par des sections optionnelles :\nTACHES: puis une ligne par tâche au format \"Nom de l'agent : la tâche\" (max 6, l'agent doit exister).\nNOTE: une note à enregistrer pour le patron.\nGROUPE: nom du groupe | consignes (crée le groupe).\nRéponds en français, de façon concise et concrète (max 120 mots)." },
+      { role: "system", content: "Tu es l'assistant personnel du patron, installé sur son PC portable. Tu as accès à toute l'entreprise. État actuel :\n" + stateSummary() + "\n\n" + memoire + "\n\nTu te souviens durablement de ce que le patron t'apprend : si son message contient une information durable à retenir (goûts, faits sur l'entreprise, consignes permanentes), termine par une ligne\nMEMORISE:\npuis une ligne par souvenir (max 2, court).\n\nTu peux aussi AGIR en terminant ta réponse par des sections optionnelles :\nTACHES: puis une ligne par tâche au format \"Nom de l'agent : la tâche\" (max 6, l'agent doit exister).\nNOTE: une note à enregistrer pour le patron.\nGROUPE: nom du groupe | consignes (crée le groupe).\nRéponds en français, de façon concise et concrète (max 120 mots)." },
+      ...history,
       { role: "user", content: text }
-    ], 700));
-    let msg = reply, tasks = [], note = "", groupe = "";
+    ], 900));
+    let msg = reply, tasks = [], note = "", groupe = "", memKeep = [];
+    const heads = [/^TACHES:?\s*$/im, /^NOTE:\s*/im, /^GROUPE:\s*/im, /^MEMORISE:?\s*$/im].map(r => {
+      const m = reply.match(r); return m ? m.index : -1;
+    }).filter(i => i >= 0);
+    if(heads.length) msg = reply.slice(0, Math.min.apply(null, heads)).trim();
     const idx = reply.search(/^TACHES:?\s*$/im);
     if(idx >= 0){
-      msg = reply.slice(0, idx).trim();
       tasks = reply.slice(idx).split("\n").slice(1).map(s => s.replace(/^[-*\d.\s]+/, "").trim()).filter(Boolean).slice(0, 6).map(parseDelegation);
     }
     const nM = reply.match(/^NOTE:\s*(.+)$/im);
     if(nM) note = nM[1].trim();
     const gM = reply.match(/^GROUPE:\s*(.+)$/im);
     if(gM) groupe = gM[1].trim();
+    const kI = reply.search(/^MEMORISE:?\s*$/im);
+    if(kI >= 0){
+      memKeep = reply.slice(kI).split("\n").slice(1).map(x => x.replace(/^[-*\d.\s]+/, "").trim()).filter(Boolean).slice(0, 2);
+    }
+    if(memKeep.length){
+      if(!state.assistantMemory) state.assistantMemory = [];
+      const dedup = memKeep.map(x => x.slice(0, 140)).filter(x => !state.assistantMemory.some(m => m.text.toLowerCase() === x.toLowerCase()));
+      dedup.forEach(x => state.assistantMemory.unshift({ id: uid(), text: x, t: nowT() }));
+      if(state.assistantMemory.length > 40) state.assistantMemory.length = 40;
+      renderAsmMemory();
+      logGlobal("l'assistant du PC a retenu <b>" + dedup.length + "</b> souvenir(s) permanent(s).", "Patron");
+    }
     if(note){
       if(!state.notes) state.notes = [];
       state.notes.unshift({ id: uid(), text: note.slice(0, 500), at: new Date().toLocaleString("fr-FR") });
@@ -3922,7 +3978,7 @@ async function pcAssistantSendMsg(){
       state.groups.push({ id: uid(), name: parts[0].trim().slice(0, 30), instructions: (parts[1] || "").trim().slice(0, 200) });
       renderTeams();
     }
-    state.assistantChat.push({ role: "boss", text: (msg || "C'est noté.") + (note ? "\n✔ note enregistrée." : "") + (groupe ? "\n✔ groupe créé." : ""), t: nowT() });
+    state.assistantChat.push({ role: "boss", text: (msg || "C'est noté.") + (note ? "\n✔ note enregistrée." : "") + (groupe ? "\n✔ groupe créé." : "") + (memKeep.length ? "\n🧠 retenu : " + memKeep.join(" ; ") : ""), t: nowT() });
     if(state.assistantChat.length > 60) state.assistantChat.splice(0, state.assistantChat.length - 60);
     renderPcAssistant();
     if(tasks.length){
