@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261119-1500">
+<meta name="build" content="b-20261119-1600">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -4814,8 +4814,8 @@ function init3D(){
     rc.position.set(rx, 3.3, -5.05); scene.add(rc); corCeils.push(rc);
     const pc = document.createElement("canvas"); pc.width = 512; pc.height = 128;
     const ptex = new THREE.CanvasTexture(pc);
-    const panel = new THREE.Mesh(new THREE.PlaneGeometry(2.7, .67), new THREE.MeshBasicMaterial({ map: ptex, transparent: true, depthWrite: false }));
-    panel.position.set(rx, 2.5, -1.4); scene.add(panel);
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(2.2, .55), new THREE.MeshBasicMaterial({ map: ptex, transparent: true, depthWrite: false }));
+    panel.position.set(rx, 3.02, -1.42); scene.add(panel); /* au-dessus de la porte, plaqué au mur — ne gêne plus le passage */
     roomPanels[i] = pc; roomPanelTex[i] = ptex;
     const pl = new THREE.PointLight(0xfff4d6, .35, 14);
     pl.position.set(rx, 2.9, -5); scene.add(pl);
@@ -4971,9 +4971,9 @@ function init3D(){
   elvCab = elvCabin;
   [LVL_Y[0], LVL_Y[1]].forEach(yy => {
     const pad = new THREE.Mesh(new THREE.CylinderGeometry(.55, .55, .05, 18), new THREE.MeshBasicMaterial({ color: 0xc6f542 }));
-    pad.position.set(elvX, yy + .03, elvZ + 1.5); scene.add(pad);
+    pad.position.set(elvX + 1.5, yy + .03, elvZ); scene.add(pad);
     const padLbl = makeLabel("ASCENSEUR", "E — monter / descendre");
-    padLbl.position.set(elvX, yy + 1.9, elvZ + 1.5); scene.add(padLbl);
+    padLbl.position.set(elvX + 1.5, yy + 1.9, elvZ); scene.add(padLbl);
   });
 
   const bpl = new THREE.PointLight(0xfff4d6, .45, 20);
