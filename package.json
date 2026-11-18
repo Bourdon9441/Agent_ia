@@ -1,0 +1,12 @@
+{
+  "name": "agent-ia",
+  "version": "1.0.0",
+  "description": "Agent IA Control Center with Vercel Web Analytics",
+  "private": true,
+  "scripts": {
+    "test": "echo \"No tests specified\""
+  },
+  "dependencies": {
+    "@vercel/analytics": "^1.1.1"
+  }
+}
