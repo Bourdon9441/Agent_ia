@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261119-1600">
+<meta name="build" content="b-20261119-1700">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -4738,8 +4738,8 @@ function init3D(){
     scene.add(d); officeDoors.push(d);
   });
   const entDoor = new THREE.Mesh(new THREE.BoxGeometry(.1, 2.8, 2.9), doorMat);
-  entDoor.position.set(13.27, 1.4, 0);
-  entDoor.userData.door = { axis: "z", base: 0, slide: 3, cx: 13.75, cz: 0, t: 0, px: 13.27, tx: 13.95 };
+  entDoor.position.set(14, 1.4, 0); /* alignée dans l'ouverture du mur (x = 14) — plus aucun décalage */
+  entDoor.userData.door = { axis: "z", base: 0, slide: 3, cx: 14, cz: 0, t: 0, px: 14, tx: 14 };
   scene.add(entDoor); officeDoors.push(entDoor);
 
   /* bureau du patron : immense salle privée derrière le mur nord */
