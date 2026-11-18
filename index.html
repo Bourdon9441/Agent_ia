@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261119-1100">
+<meta name="build" content="b-20261119-1200">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -4570,8 +4570,7 @@ function init3D(){
   const drhDesk = makeDeskGroup({ w: 2.6, d: 1.2, sw: 1.6, sh: .8, screen: 0xffb454, glow: .5, wood: 0xd6cfc0 });
   drhDesk.position.set(10, 0, -8.2);
   drhDesk.traverse(o => o.userData.drh = true);
-  const drhLabel = makeLabel("ADMINISTRATION", "DRH — embauche & licencie");
-  drhLabel.position.set(10, 2.9, -7.9);
+  /* étiquette flottante supprimée (doublon du badge porté par le personnage) */
   const drhChar = makeCharacter(0x6e3b3b);
   drhChar.position.set(10, 0, -7.3);
   drhChar.traverse(o => o.userData.drh = true);
@@ -4579,7 +4578,7 @@ function init3D(){
   drhBadge.position.set(0, .78, .18); drhChar.add(drhBadge);
   const drhPlate = makeBadge("DRH", "ressources humaines");
   drhPlate.position.set(0, 1.72, 0); drhChar.add(drhPlate);
-  scene.add(drhDesk, drhLabel, drhChar);
+  scene.add(drhDesk, drhChar);
 
   const accentMat = new THREE.MeshStandardMaterial({ color: 0x75604a, roughness: .9 });
   const accent = new THREE.Mesh(new THREE.BoxGeometry(8.6, 3.6, .12), accentMat);
@@ -4595,15 +4594,14 @@ function init3D(){
   const bossGroup = makeDeskGroup({ w: 3.4, d: 1.6, sw: 2.3, sh: .85, screen: 0xc6f542, glow: .5, wood: 0xd6cfc0 });
   bossGroup.position.set(0, 0, -6.5);
   bossGroup.traverse(o => o.userData.boss = true);
-  const bossLabel = makeLabel("LE PATRON", "direction");
-  bossLabel.position.set(0, 2.6, -6.5);
+  /* étiquette flottante supprimée (doublon du badge porté par le personnage) */
   const bossChar = makeCharacter(0x333a2a);
   bossChar.position.set(0, 0, -7.4);
   const crown = new THREE.Mesh(new THREE.ConeGeometry(.13, .2, 8), screenMat(0xffb454, .9));
   crown.position.y = 1.24; bossChar.add(crown);
   const bossPlate = makeBadge("LE PATRON", "votre chef");
   bossPlate.position.set(0, 1.72, 0); bossChar.add(bossPlate);
-  scene.add(bossGroup, bossLabel, bossChar);
+  scene.add(bossGroup, bossChar);
 
   const pcGroup = makeDeskGroup({ w: 1.9, d: 1.05, sw: 1.15, sh: .68, screen: 0xc6f542, glow: .85 });
   pcGroup.position.set(-12.4, 0, 8.9);
@@ -4689,6 +4687,7 @@ function init3D(){
   const corCeils = [];
   const RX = [24, 34, 44, 54, 64];
   const corFloorTex = makePlanks(); corFloorTex.repeat.set(10, .6);
+  const corRoomTex = makePlanks(); corRoomTex.repeat.set(6, 5);
   const corFloor = new THREE.Mesh(new THREE.BoxGeometry(55, .2, 3.2), new THREE.MeshStandardMaterial({ map: corFloorTex, roughness: .8 }));
   corFloor.position.set(41.5, -.1, 0); scene.add(corFloor);
   const corWallMat = new THREE.MeshStandardMaterial({ color: 0xe6e1d3, roughness: 1 });
@@ -4771,22 +4770,19 @@ function init3D(){
   scene.add(bossDoor); officeDoors.push(bossDoor);
   const officeSign = makeLabel("VOTRE BUREAU", "salle privée du patron");
   officeSign.position.set(4, 3.4, -9.4); scene.add(officeSign);
-  const roomSprites = [], roomPanels = [], roomPanelTex = [];
+  const roomPanels = [], roomPanelTex = [];
 
   /* bâtiments séparés au sud : deux annexes avec porte coulissante, fenêtre et bureaux assignables (salles 6 et 7) */
   const connLights = [];
   try{
   RX.forEach((rx, i) => {
-    const rf = new THREE.Mesh(new THREE.BoxGeometry(8, .2, 7), new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .85 }));
+    const rf = new THREE.Mesh(new THREE.BoxGeometry(8, .2, 7), new THREE.MeshStandardMaterial({ map: corRoomTex, roughness: .85 }));
     rf.position.set(rx, -.09, -5.05); scene.add(rf);
     corWall(.18, 7, rx - 4, -5.05);
     corWall(.18, 7, rx + 4, -5.05);
     corWall(8, .18, rx, -8.6);
     const rc = new THREE.Mesh(new THREE.BoxGeometry(8, .2, 7), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 1 }));
     rc.position.set(rx, 3.3, -5.05); scene.add(rc); corCeils.push(rc);
-    const lbl = makeLabel(roomName(i), "placez vos employés ici");
-    lbl.position.set(rx, 2.75, -5.05); scene.add(lbl);
-    roomSprites[i] = lbl;
     const pc = document.createElement("canvas"); pc.width = 512; pc.height = 128;
     const ptex = new THREE.CanvasTexture(pc);
     const panel = new THREE.Mesh(new THREE.PlaneGeometry(2.7, .67), new THREE.MeshBasicMaterial({ map: ptex, transparent: true, depthWrite: false }));
@@ -4794,6 +4790,27 @@ function init3D(){
     roomPanels[i] = pc; roomPanelTex[i] = ptex;
     const pl = new THREE.PointLight(0xfff4d6, .35, 14);
     pl.position.set(rx, 2.9, -5); scene.add(pl);
+    const sofaG = new THREE.Group();
+    const sfMat = new THREE.MeshStandardMaterial({ color: 0x5f6f57, roughness: .85 });
+    const sBase = new THREE.Mesh(new THREE.BoxGeometry(2.2, .4, .9), sfMat); sBase.position.y = .34; sofaG.add(sBase);
+    const sBack = new THREE.Mesh(new THREE.BoxGeometry(2.2, .58, .22), sfMat); sBack.position.set(0, .8, -.34); sofaG.add(sBack);
+    [-1.0, 1.0].forEach(ax => {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(.2, .52, .9), sfMat); arm.position.set(ax, .6, 0); sofaG.add(arm);
+    });
+    const cushMat = new THREE.MeshStandardMaterial({ color: 0xd9d3c2, roughness: .95 });
+    [-.55, .55].forEach(cx => {
+      const cush = new THREE.Mesh(new THREE.BoxGeometry(1.0, .14, .7), cushMat); cush.position.set(cx, .6, .08); sofaG.add(cush);
+      const bck = new THREE.Mesh(new THREE.BoxGeometry(1.0, .44, .16), cushMat); bck.position.set(cx, .88, -.3); sofaG.add(bck);
+    });
+    [-1.0, 1.0].forEach(fx => {
+      const foot = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, .16, 8), new THREE.MeshStandardMaterial({ color: 0x22252a, roughness: .6 }));
+      foot.position.set(fx, .08, 0); sofaG.add(foot);
+    });
+    sofaG.position.set(rx - 2.5, 0, -7.85); scene.add(sofaG);
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(.22, .17, .34, 12), new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: .9 }));
+    pot.position.set(rx + 3.3, .17, -7.9); scene.add(pot);
+    const leaf = new THREE.Mesh(new THREE.SphereGeometry(.36, 10, 8), new THREE.MeshStandardMaterial({ color: 0x4f7a3a, roughness: 1 }));
+    leaf.position.set(rx + 3.3, .66, -7.9); scene.add(leaf);
   });
   const corC = new THREE.Mesh(new THREE.BoxGeometry(55, .2, 3.2), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 1 }));
   corC.position.set(41.5, 3.3, 0); scene.add(corC); corCeils.push(corC);
@@ -4914,9 +4931,6 @@ function init3D(){
   const bPanelMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.7, .67), new THREE.MeshBasicMaterial({ map: bPanelTex, transparent: true, depthWrite: false }));
   bPanelMesh.position.set(0, 2.5, 12.84); bPanelMesh.rotation.y = Math.PI; scene.add(bPanelMesh);
   roomPanels[5] = bPanel; roomPanelTex[5] = bPanelTex;
-  const bLbl = makeLabel(roomName(5), "grand bâtiment à étage — gestion des clients");
-  bLbl.position.set(0, 4.6, 12.4); scene.add(bLbl);
-  roomSprites[5] = bLbl;
   const cliDesk = makeDeskGroup({ w: 2.6, d: 1.2, sw: 1.6, sh: .8, screen: 0xc6f542, glow: .5, wood: 0xd6cfc0 });
   cliDesk.position.set(6, 0, 17);
   cliDesk.traverse(o => o.userData.clients = true);
@@ -5241,13 +5255,6 @@ function init3D(){
         g.fillStyle = "#9aa38c"; g.font = "24px monospace";
         g.fillText("entrée — salle " + (i + 1), 256, 102);
         roomPanelTex[i].needsUpdate = true;
-      }
-      if(roomSprites[i]){
-        const old = roomSprites[i];
-        const nl = makeLabel(roomName(i), "placez vos employés ici");
-        nl.position.copy(old.position);
-        scene.add(nl); scene.remove(old);
-        roomSprites[i] = nl;
       }
     }
   }
