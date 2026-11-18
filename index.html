@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261119-1400">
+<meta name="build" content="b-20261119-1500">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -4020,8 +4020,9 @@ fetchWeather();
 setInterval(fetchWeather, 15 * 60 * 1000);
 /* ascenseur du bâtiment 2 : monte/descend entre RDC et étage (cabine animée) */
 let elevRide = null;
+let elvCab = null; /* pont de portée : la cabine 3D est créée dans le try, l'animation est dehors */
 function elevGo(){
-  if(!three || elevRide) return;
+  if(!three || !elvCab || elevRide) return;
   const target = bLevel === 0 ? 1 : 0;
   elevRide = { to: LVL_Y[target], target, last: LVL_Y[bLevel] };
   logGlobal(target === 1 ? "L'ascenseur du bâtiment 2 monte à l'étage..." : "L'ascenseur descend au rez-de-chaussée...", "Système");
@@ -4967,6 +4968,7 @@ function init3D(){
   });
   const elvLamp = new THREE.PointLight(0xfff4d6, .5, 4); elvLamp.position.y = 2.1; elvCabin.add(elvLamp);
   elvCabin.position.set(elvX, .05, elvZ);
+  elvCab = elvCabin;
   [LVL_Y[0], LVL_Y[1]].forEach(yy => {
     const pad = new THREE.Mesh(new THREE.CylinderGeometry(.55, .55, .05, 18), new THREE.MeshBasicMaterial({ color: 0xc6f542 }));
     pad.position.set(elvX, yy + .03, elvZ + 1.5); scene.add(pad);
@@ -5379,11 +5381,11 @@ function init3D(){
         elevRide.last += dir * 2.6 * dt;
         if((dir > 0 && elevRide.last >= elevRide.to) || (dir < 0 && elevRide.last <= elevRide.to)) elevRide.last = elevRide.to;
         camLift = elevRide.last - LVL_Y[bLevel];
-        elvCabin.position.y = .05 + elevRide.last;
+        if(elvCab) elvCab.position.y = .05 + elevRide.last;
         if(elevRide.last === elevRide.to){
           const tgt = elevRide.target;
           elevRide = null;
-          elvCabin.position.y = .05 + LVL_Y[tgt];
+          if(elvCab) elvCab.position.y = .05 + LVL_Y[tgt];
           setBLevel(tgt);
         }
       }
