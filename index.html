@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261119-1300">
+<meta name="build" content="b-20261119-1400">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -4018,6 +4018,14 @@ async function fetchWeather(){
 }
 fetchWeather();
 setInterval(fetchWeather, 15 * 60 * 1000);
+/* ascenseur du bâtiment 2 : monte/descend entre RDC et étage (cabine animée) */
+let elevRide = null;
+function elevGo(){
+  if(!three || elevRide) return;
+  const target = bLevel === 0 ? 1 : 0;
+  elevRide = { to: LVL_Y[target], target, last: LVL_Y[bLevel] };
+  logGlobal(target === 1 ? "L'ascenseur du bâtiment 2 monte à l'étage..." : "L'ascenseur descend au rez-de-chaussée...", "Système");
+}
 function setBLevel(l){
   if(bLevel === l) return;
   bLevel = l;
@@ -4121,6 +4129,8 @@ function interactNear(){
     if(state.liveMeeting) openMeetOverlay(); else openPc("reunion");
   } else if(nt.type === "tni"){
     openPc("dash");
+  } else if(nt.type === "elevator"){
+    elevGo();
   } else if(nt.type === "stairsUp"){
     setBLevel(bLevel === 2 ? 0 : 1);
   } else if(nt.type === "stairsDown"){
@@ -4156,8 +4166,10 @@ function checkNear(){
   if(bLevel === 0){
     consider(9.9, 24.5, 2.6, { type: "stairsUp", label: "Monter à l'étage — votre second bureau (E)" });
     consider(8.2, 26.4, 2.2, { type: "stairsDown", label: "Descendre au datacenter — sous-sol (E)" });
+    consider(-9.5, 25.9, 2.4, { type: "elevator", label: "Ascenseur — monter à l'étage (E)" });
   } else if(bLevel === 1){
     consider(9.9, 24.5, 2.6, { type: "stairsDown", label: "Descendre au rez-de-chaussée (E)" });
+    consider(-9.5, 25.9, 2.4, { type: "elevator", label: "Ascenseur — descendre au rez-de-chaussée (E)" });
     consider(0, 20.2, 2.8, { type: "pc", label: "Votre PC fixe — copie du bureau (étage)" });
     consider(-10.3, 18, 2.8, { type: "tni", label: "Tableau numérique — étage" });
   } else {
@@ -4683,6 +4695,24 @@ function init3D(){
 
   /* couloir des équipes : 50 m vers la droite, une salle tous les 10 m */
   const corCeils = [];
+  /* toits fantômes : de loin (vue libre / vue d'ensemble) les toits et plafonds deviennent translucides
+     pour voir l'intérieur depuis le ciel — en 1ère personne ils redeviennent solides. */
+  function setRoofsGhost(on){
+    const meshes = corCeils.concat([ceil]);
+    for(const c of meshes){
+      if(!c.userData._solidMat) c.userData._solidMat = c.material;
+      if(on){
+        if(!c.userData._ghostMat){
+          const gm = c.userData._solidMat.clone();
+          gm.transparent = true; gm.opacity = .14; gm.depthWrite = false;
+          c.userData._ghostMat = gm;
+        }
+        c.material = c.userData._ghostMat;
+      } else {
+        c.material = c.userData._solidMat;
+      }
+    }
+  }
   const RX = [24, 34, 44, 54, 64];
   const corFloorTex = makePlanks(); corFloorTex.repeat.set(10, .6);
   const corRoomTex = makePlanks(); corRoomTex.repeat.set(6, 5);
@@ -4916,6 +4946,34 @@ function init3D(){
     const step = new THREE.Mesh(new THREE.BoxGeometry(1.3, .16, .3), new THREE.MeshStandardMaterial({ color: 0xb8ad9c, roughness: .85 }));
     step.position.set(9.9, .08 + st * .16, 25.4 - st * .3); scene.add(step);
   }
+  /* ascenseur vitré du bâtiment 2 : cabine qui relie RDC et étage */
+  const elvX = -9.5, elvZ = 25.9;
+  const elvFrameMat = new THREE.MeshStandardMaterial({ color: 0x23262b, roughness: .45, metalness: .5 });
+  [[-.72, -.72], [.72, -.72], [-.72, .72], [.72, .72]].forEach(([ox, oz]) => {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, 7.2, 10), elvFrameMat);
+    post.position.set(elvX + ox, 3.6, elvZ + oz); scene.add(post);
+  });
+  const elvGlassMat = new THREE.MeshPhysicalMaterial({ color: 0xbfd8e2, transparent: true, opacity: .15, roughness: .05, metalness: .1, side: THREE.DoubleSide, depthWrite: false });
+  [[0, -.72, 1.44, 0], [-.72, 0, 0, 1.44], [.72, 0, 0, 1.44]].forEach(w => {
+    const gl = new THREE.Mesh(new THREE.BoxGeometry(w[2] || .04, 7.2, w[3] || .04), elvGlassMat);
+    gl.position.set(elvX + w[0], 3.6, elvZ + w[1]); scene.add(gl);
+  });
+  const elvCabin = new THREE.Group(); scene.add(elvCabin);
+  elvCabin.add(new THREE.Mesh(new THREE.BoxGeometry(1.36, .1, 1.36), new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: .5, metalness: .3 })));
+  const elvRailMat = new THREE.MeshStandardMaterial({ color: 0x8a8478, roughness: .5, metalness: .55 });
+  [[0, -.65, 1.36, 0], [-.65, 0, 0, 1.36], [.65, 0, 0, 1.36]].forEach(r => {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(r[2] || .05, .5, r[3] || .05), elvRailMat);
+    rail.position.set(r[0], .55, r[1]); elvCabin.add(rail);
+  });
+  const elvLamp = new THREE.PointLight(0xfff4d6, .5, 4); elvLamp.position.y = 2.1; elvCabin.add(elvLamp);
+  elvCabin.position.set(elvX, .05, elvZ);
+  [LVL_Y[0], LVL_Y[1]].forEach(yy => {
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(.55, .55, .05, 18), new THREE.MeshBasicMaterial({ color: 0xc6f542 }));
+    pad.position.set(elvX, yy + .03, elvZ + 1.5); scene.add(pad);
+    const padLbl = makeLabel("ASCENSEUR", "E — monter / descendre");
+    padLbl.position.set(elvX, yy + 1.9, elvZ + 1.5); scene.add(padLbl);
+  });
+
   const bpl = new THREE.PointLight(0xfff4d6, .45, 20);
   bpl.position.set(0, 2.9, 20); scene.add(bpl);
   const bpl2 = new THREE.PointLight(0xfff4d6, .35, 16);
@@ -5082,7 +5140,8 @@ function init3D(){
     overviewMode = false;
     document.getElementById("camBtn").textContent = m === "fps" ? "Vue libre" : "1ère personne";
     ceil.visible = panelGroup.visible = true;
-    corCeils.forEach(c => c.visible = true); /* toits toujours visibles — vue d'ensemble propre */
+    corCeils.forEach(c => c.visible = true);
+    setRoofsGhost(m !== "fps"); /* vue du ciel : toits translucides ; à pied : solides */
     pocketLaptop.visible = laptopPocket && (m === "fps");
     const tb = document.getElementById("touchBtns"); if(tb) tb.style.display = (m === "fps") ? "" : "none";
     if(m === "fps"){
@@ -5259,7 +5318,8 @@ function init3D(){
   three = { scene, camera, renderer, bossChar, coffeeSlots, limeLight, redrawSign: drawSign, coffeeLabel: machineLabel, corridorStrip, redrawRooms, drawDc: dcDraw, applyBreakers: dcBrk, applyWeather: dcWx };
   redrawRooms();
   syncCoffeeUI();
-  corCeils.forEach(c => c.visible = true); /* toits toujours visibles */
+  corCeils.forEach(c => c.visible = true);
+  setRoofsGhost(camMode !== "fps"); /* vue du ciel : toits translucides */
   const clock = new THREE.Clock();
   let lastT = performance.now();
   let lastPosSave = 0;
@@ -5313,7 +5373,21 @@ function init3D(){
         fpsState.vy -= 9.8 * dt;
         if(fpsState.y <= 0){ fpsState.y = 0; fpsState.vy = 0; }
       }
-      camera.position.set(fpsState.x, 1.62 + fpsState.y + LVL_Y[bLevel], fpsState.z);
+      let camLift = 0;
+      if(elevRide){
+        const dir = Math.sign(elevRide.to - elevRide.last);
+        elevRide.last += dir * 2.6 * dt;
+        if((dir > 0 && elevRide.last >= elevRide.to) || (dir < 0 && elevRide.last <= elevRide.to)) elevRide.last = elevRide.to;
+        camLift = elevRide.last - LVL_Y[bLevel];
+        elvCabin.position.y = .05 + elevRide.last;
+        if(elevRide.last === elevRide.to){
+          const tgt = elevRide.target;
+          elevRide = null;
+          elvCabin.position.y = .05 + LVL_Y[tgt];
+          setBLevel(tgt);
+        }
+      }
+      camera.position.set(fpsState.x, 1.62 + fpsState.y + LVL_Y[bLevel] + camLift, fpsState.z);
       camera.rotation.order = "YXZ";
       camera.rotation.set(fpsState.pitch, fpsState.yaw, 0);
       checkNear();
@@ -5437,7 +5511,7 @@ function navBuild(){
   const rects = NAV_WALLS.slice();
   agent3d.forEach(rec => { const p = rec.group.position; rects.push([p.x - .85, p.x + .85, p.z - .525, p.z + .525]); });
   rects.push([-1.7, 1.7, -7.3, -5.7], [8.7, 11.3, -8.8, -7.6], [-13.35, -11.45, 8.375, 9.425],
-             [-12.25, -7.75, -7.9, -6.1], [12.4, 13.4, 4, 9.2], [-13.75, -12.85, 0, 3.2]);
+             [-12.25, -7.75, -7.9, -6.1], [12.4, 13.4, 4, 9.2], [-13.75, -12.85, 0, 3.2], [-10.25, -8.75, 25.15, 26.65]);
   const circles = [[9.2, 6, .85], [9.2, 8.2, .85], [6, 17, .95], [9.9, 24.5, .9], [-10.2, 25.8, .45]];
   for(let k = 0; k < nz; k++){
     const z = Z0 + k * G;
