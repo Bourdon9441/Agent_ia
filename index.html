@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261118-0700">
+<meta name="build" content="b-20261119-1000">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -298,7 +298,7 @@
   .panel.collapsed > :not(.panel-head){ display:none !important; }
   .panel.collapsed .panel-head{ margin-bottom:0; }
 
-@media (max-width:700px){
+@media (max-width:700px) and (pointer:coarse){  /* mode téléphone : UNIQUEMENT écrans tactiles, jamais PC/appli */
   body{ font-size:13.5px; }
   .topbar{ padding:8px 10px; gap:8px; }
   .brand{ gap:7px; }
@@ -4448,6 +4448,7 @@ function init3D(){
     c.textAlign = "left";
     c.fillStyle = "#eef2e4"; c.font = "22px monospace";
     c.fillText("Mission : " + clip(state.mission || "(non définie)", 66), 36, 100);
+    let lastY = 296;
     const busyA = state.agents.filter(a => a.status === "busy");
     const pausedN = state.agents.filter(a => a.status === "paused").length;
     const apN = (state.apiStats || {}).count || 0;
@@ -4462,17 +4463,20 @@ function init3D(){
     if(busyA.length){
       busyA.slice(0, 3).forEach((a, i) => {
         c.fillText("• " + clip(a.name + " (" + (a.role || "polyvalent") + ")", 30) + " — " + clip(a.currentTask ? a.currentTask.text : "", 40), 36, 296 + i * 30);
+        lastY = 296 + i * 30;
       });
     } else {
       c.fillStyle = "#9aa38c";
       c.fillText("• Personne ne travaille en ce moment.", 36, 296);
     }
+    const actHeadY = Math.min(lastY + 48, 400);
     c.fillStyle = "#c6f542"; c.font = "bold 24px monospace";
-    c.fillText("DERNIÈRES ACTIVITÉS", 36, 404);
-    c.fillStyle = "#9aa38c"; c.font = "19px monospace";
-    (state.activity || []).slice(0, 2).forEach((l, i) => {
+    c.fillText("DERNIÈRES ACTIVITÉS", 36, actHeadY);
+    const actY0 = actHeadY + 34;
+    const maxActs = Math.max(1, Math.floor((492 - actY0) / 28));
+    (state.activity || []).slice(0, maxActs).forEach((l, i) => {
       const one = String(l.msg || "").replace(/<[^>]*>/g, "");
-      c.fillText("• " + clip(one, 76), 36, 438 + i * 28);
+      c.fillText("• " + clip(one, 80), 36, actY0 + i * 28);
     });
     boardTex.needsUpdate = true;
   }
@@ -4517,10 +4521,17 @@ function init3D(){
   drhChar.traverse(o => o.userData.drh = true);
   const drhBadge = new THREE.Mesh(new THREE.BoxGeometry(.14, .1, .04), screenMat(0xffb454, .9));
   drhBadge.position.set(0, .78, .18); drhChar.add(drhBadge);
+  const drhPlate = makeBadge("DRH", "ressources humaines");
+  drhPlate.position.set(0, 1.72, 0); drhChar.add(drhPlate);
   scene.add(drhDesk, drhLabel, drhChar);
 
-  const accent = new THREE.Mesh(new THREE.BoxGeometry(11, 3.6, .12), new THREE.MeshStandardMaterial({ color: 0x75604a, roughness: .9 }));
-  accent.position.set(0, 1.8, -9.94); scene.add(accent);
+  const accentMat = new THREE.MeshStandardMaterial({ color: 0x75604a, roughness: .9 });
+  const accent = new THREE.Mesh(new THREE.BoxGeometry(8.6, 3.6, .12), accentMat);
+  accent.position.set(-1.2, 1.8, -9.94); scene.add(accent);
+  const accentR = new THREE.Mesh(new THREE.BoxGeometry(.6, 3.6, .12), accentMat);
+  accentR.position.set(5.2, 1.8, -9.94); scene.add(accentR);
+  const accentLintel = new THREE.Mesh(new THREE.BoxGeometry(1.8, .8, .12), accentMat);
+  accentLintel.position.set(4, 3.2, -9.94); scene.add(accentLintel);
   const rugL = new THREE.Mesh(new THREE.BoxGeometry(11.2, .02, 10.2), new THREE.MeshStandardMaterial({ color: 0xbfb9ac, roughness: .95 }));
   rugL.position.set(-7.9, .012, 2.2); scene.add(rugL);
   const rugR = new THREE.Mesh(new THREE.BoxGeometry(9.2, .02, 10.2), new THREE.MeshStandardMaterial({ color: 0xc8c2b5, roughness: .95 }));
@@ -4534,6 +4545,8 @@ function init3D(){
   bossChar.position.set(0, 0, -7.4);
   const crown = new THREE.Mesh(new THREE.ConeGeometry(.13, .2, 8), screenMat(0xffb454, .9));
   crown.position.y = 1.24; bossChar.add(crown);
+  const bossPlate = makeBadge("LE PATRON", "votre chef");
+  bossPlate.position.set(0, 1.72, 0); bossChar.add(bossPlate);
   scene.add(bossGroup, bossLabel, bossChar);
 
   const pcGroup = makeDeskGroup({ w: 1.9, d: 1.05, sw: 1.15, sh: .68, screen: 0xc6f542, glow: .85 });
@@ -4947,7 +4960,7 @@ function init3D(){
     const dcLight = new THREE.PointLight(0xc6f542, .5, 16);
     dcLight.position.set(0, DY + 2.4, 20); sousGroup.add(dcLight);
     const dcLbl = makeLabel("DATACENTER", "baies serveurs — vos agents tournent ici");
-    dcLbl.position.set(0, DY + 2.8, 14.2); sousGroup.add(dcLbl);
+    dcLbl.position.set(0, DY + 3.0, 13.3); sousGroup.add(dcLbl);
     const upPad = new THREE.Mesh(new THREE.CylinderGeometry(.9, .9, .06, 20), new THREE.MeshBasicMaterial({ color: 0xc6f542 }));
     upPad.position.set(9.9, DY + .06, 24.5); sousGroup.add(upPad);
     const upLbl = makeLabel("REMONTÉE", "E pour remonter au rez-de-chaussée");
@@ -5037,6 +5050,7 @@ function init3D(){
   });
   document.addEventListener("pointerlockchange", ()=> setPrompt(nearTarget));
   const isTouch = window.matchMedia && matchMedia("(pointer: coarse)").matches;
+  if(isTouch) document.body.classList.add("touch");  /* téléphone uniquement — un PC n'a donc AUCUNE interface tactile */
   const touchMove = { x: 0, y: 0 };
   let moveTouchId = null, moveStart = null, lookTouchId = null, lookLast = null;
   dom.addEventListener("touchstart", e => {
