@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="build" content="b-20261119-1900">
+<meta name="build" content="b-20261119-2000">
 <title>Agent_IA — Centre de contrôle</title>
 <link rel="icon" type="image/png" href="logo.png">
 <link rel="apple-touch-icon" href="logo.png">
@@ -5532,7 +5532,9 @@ function init3D(){
       if(!open){
         for(const a of state.agents){
           const rec = agent3d.get(a.id);
-          if(rec && Math.hypot(rec.char.position.x - du.cx, rec.char.position.z - du.cz) < 1.6){ open = true; break; }
+          /* porte ouverte uniquement si l'agent marche réellement vers/à travers elle —
+             un agent assis à son poste n'ouvre plus rien */
+          if(rec && rec.walking && Math.hypot(rec.char.position.x - du.cx, rec.char.position.z - du.cz) < 2.2){ open = true; break; }
         }
       }
       du.t += ((open ? 1 : 0) - du.t) * .1;
@@ -5562,6 +5564,7 @@ function init3D(){
       const tx = ivSeat ? ivSeat[0] : (meetSeat ? meetSeat[0] : (paused ? slot.x : rec.home.x));
       const tz = ivSeat ? ivSeat[1] : (meetSeat ? meetSeat[1] : (paused ? slot.z : rec.home.z));
       const dw = Math.hypot(tx - rec.char.position.x, tz - rec.char.position.z);
+      rec.walking = dw > .05;
       if(dw > .05){
         const wp = navNextWaypoint(rec, tx, tz);
         const dxw = wp.x - rec.char.position.x, dzw = wp.z - rec.char.position.z;
@@ -5581,7 +5584,9 @@ function init3D(){
           ? Math.atan2(0 - rec.char.position.x, -21.2 - rec.char.position.z)
           : (meetSeat
           ? Math.atan2(-10 - rec.char.position.x, -7 - rec.char.position.z)
-          : (paused ? Math.atan2(coffeeTable.position.x - rec.char.position.x, coffeeTable.position.z - rec.char.position.z) : 0));
+          : (paused
+          ? Math.atan2(coffeeTable.position.x - rec.char.position.x, coffeeTable.position.z - rec.char.position.z)
+          : Math.atan2(rec.home.x - rec.char.position.x, (rec.home.z - .95) - rec.char.position.z)));
       }
     }
     bossChar.rotation.y = Math.sin(t * .8) * .25;
